@@ -77,7 +77,7 @@ export function mergePreset(preset,selected,enabled=true,remove=false,placement=
  for(const e of selected){const o=g.order.find(x=>x.identifier===e.identifier);if(o)o.enabled=enabled;else if(enabled){let at=g.order.findIndex(x=>x.identifier==='jailbreak');if(at<0)at=g.order.length;g.order.splice(at,0,{identifier:e.identifier,enabled:true});}}
  }}if(flat)p.prompt_order=groups[0].order;return p;
 }
-export function resolvePresetManager(W){const ctx=W.SillyTavern?.getContext?.();const pm=ctx?.getPresetManager?.('openai')||ctx?.getPresetManager?.();if(!pm||(pm.apiId&&pm.apiId!=='openai')||typeof pm.getPresetSettings!=='function'||typeof pm.savePreset!=='function')throw Error('宿主未提供兼容的聊天补全预设接口');return pm;}
+export function resolvePresetManager(W){const ctx=W.SillyTavern?.getContext?.();const pm=ctx?.getPresetManager?.('openai')||ctx?.getPresetManager?.();if(!pm||(pm.apiId&&pm.apiId!=='openai')||(typeof pm.getPresetSettings!=='function'&&typeof pm.getCompletionPresetByName!=='function')||typeof pm.savePreset!=='function')throw Error('宿主未提供兼容的聊天补全预设接口');return pm;}
 // Only accept complete snapshots; never manufacture missing native ordering.
 export function unwrapPreset(raw){
  for(const value of [raw,raw?.preset,raw?.settings,raw?.data,raw?.data?.preset,raw?.data?.settings]){
@@ -85,9 +85,12 @@ export function unwrapPreset(raw){
  }
  throw Error('未找到完整预设结构；请运行接口诊断或使用 JSON 备用方案');
 }
-export async function readPreset(pm,name){
- const raw=await pm.getPresetSettings(name);
- return unwrapPreset(raw);
+export async function readPreset(pm,name,report=null){
+ for(const method of ['getCompletionPresetByName','getPresetSettings']){
+  if(typeof pm[method]!=='function')continue;
+  try{const raw=await pm[method](name);if(report)report[method]={type:typeof raw,fields:Object.keys(raw??{}).filter(k=>['prompts','prompt_order','preset','settings','data'].includes(k))};const value=unwrapPreset(raw);if(report)report.source=method;return value;}catch{if(report&&!report[method])report[method]={failed:true};}
+ }
+ throw Error('按名称读取与活动设置均未返回完整预设，请查看接口诊断');
 }
 // Inspect descriptors only: never serialize values or invoke unknown methods/getters.
 function interfaceShape(obj, depth=0, seen=new WeakSet(), budget={left:180}){
@@ -107,9 +110,10 @@ function interfaceShape(obj, depth=0, seen=new WeakSet(), budget={left:180}){
  return {type:'object',fields,methods};
 }
 export async function presetDiagnostics(W){
- const report={version:'4.3.1-dev.4',context:false,manager:false,readable:false};
+ const report={version:'4.3.1-dev.5',context:false,manager:false,readable:false};
  try{const ctx=W.SillyTavern?.getContext?.();report.context=!!ctx;report.contextInterface=interfaceShape(ctx);const pm=ctx?.getPresetManager?.('openai')||ctx?.getPresetManager?.();report.manager=!!pm;report.managerInterface=interfaceShape(pm);if(!pm)return report;const name=pm.getSelectedPresetName?.();report.selected=!!name;
- if(typeof pm.getPresetSettings==='function'){const raw=await pm.getPresetSettings(name);report.returnInterface=interfaceShape(raw);try{unwrapPreset(raw);report.readable=true;}catch{}}
+ if(typeof pm.getPresetSettings==='function'){try{report.returnInterface=interfaceShape(await pm.getPresetSettings(name));}catch{}}
+ report.readPaths={};try{await readPreset(pm,name,report.readPaths);report.readable=true;}catch{}
  report.writeMethod=typeof pm.savePreset==='function';report.refreshMethod=typeof pm.selectPreset==='function';
  }catch{report.probeFailed=true;}
  return report;
