@@ -1,0 +1,16 @@
+export function mountCloud(content,shared,music){
+ const root=document.createElement('section');root.className='cap-backup';root.hidden=true;content.append(root);
+ const title=document.createElement('h4');title.textContent='声屿 · 云端曲库';root.append(title);
+ const bar=document.createElement('div'),note=document.createElement('p'),lists=document.createElement('div'),tracks=document.createElement('div');root.append(bar,note,lists,tracks);
+ let busy=false,selected=null,offset=0,rows=[],listOffset=0,identity='';
+ const button=(parent,label,fn)=>{const b=document.createElement('button');b.textContent=label;b.onclick=()=>run(fn);parent.append(b);return b};
+ const api=(p,m='GET',q={})=>shared.cloud.request('/playlist/'+p+'?'+new URLSearchParams(q),m);
+ async function run(fn){if(busy)return;busy=true;note.textContent='同步中…';try{await fn();note.textContent='已同步'}catch(e){note.textContent='同步失败：'+e.message+'。请刷新确认云端实际状态。'}finally{busy=false}}
+ function reset(){selected=null;rows=[];tracks.replaceChildren()}
+ async function refresh(more=false){if(!more){listOffset=0;lists.replaceChildren();reset()}const d=await api('list','GET',{offset:listOffset});if(identity&&identity!==d.uid&&more){identity='';return refresh()}identity=d.uid;listOffset+=d.lists.length;lists.querySelector('[data-more]')?.remove();for(const p of d.lists){button(lists,`${p.name} · ${p.count} 首${p.private?' · 私密':''}${p.owned?'':' · 收藏'}`,()=>open(p))}if(d.more&&d.lists.length){const b=button(lists,'更多歌单',()=>refresh(true));b.dataset.more='1'}}
+ async function open(p,more=false){if(!more){selected=p;offset=0;rows=[];tracks.replaceChildren()}const d=await api('tracks','GET',{id:p.id,offset});offset+=d.songs.length;rows.push(...d.songs);tracks.replaceChildren();const h=document.createElement('h4');h.textContent=p.name;tracks.append(h);const editable=d.owned&&!d.special;
+ if(editable){button(tracks,'改名',async()=>{const name=prompt('新歌单名称',p.name);if(name?.trim()){await api('rename','POST',{id:p.id,name});await refresh()}});button(tracks,'删除云端歌单',async()=>{if(confirm('从网易云永久删除「'+p.name+'」？')){await api('delete','POST',{id:p.id,confirm:p.id});await refresh()}});button(tracks,'搜索添加歌曲',async()=>{const q=prompt('歌曲名称或歌手');if(!q?.trim())return;const d=await shared.cloud.request('/music/search?q='+encodeURIComponent(q));const n=prompt(d.songs.map((t,i)=>`${i+1}. ${t.title} — ${t.artists.join('/')}`).join('\n'),'1');const t=d.songs[Number(n)-1];if(t&&confirm('添加 '+t.title+'？')){await api('change','POST',{id:p.id,op:'add',tracks:t.id});await open(p)}})}
+ for(const [i,t] of rows.entries()){const row=document.createElement('div');row.className='si-row';const label=document.createElement('span');label.textContent=t.title+' — '+t.artists.join('/');row.append(label);button(row,'▶',()=>music.playCloud(rows,i,p.name));if(editable)button(row,'移除',async()=>{if(confirm('从网易云歌单移除 '+t.title+'？')){await api('change','POST',{id:p.id,op:'del',tracks:t.id});await open(p)}});tracks.append(row)}if(d.more&&d.songs.length)button(tracks,'加载更多歌曲',()=>open(p,true));}
+ button(bar,'刷新账号歌单',()=>refresh());button(bar,'新建私密歌单',async()=>{const name=prompt('私密歌单名称');if(name?.trim()){await api('create','POST',{name});await refresh()}});
+ return {show(){root.hidden=false;void run(()=>refresh())},hide(){root.hidden=true;reset();lists.replaceChildren()},destroy(){root.remove()}};
+}

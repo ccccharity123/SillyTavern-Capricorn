@@ -34,6 +34,7 @@ export function mountNetease(settings, shared){
  auth.querySelector('[data-account]').onclick=()=>run(account);auth.querySelector('[data-logout]').onclick=()=>run(async(base,secret,signal,n)=>{await request('/auth/logout','POST',base,secret,signal);if(n===epoch)note.textContent='网关本地会话已清除'});
  const online=document.createElement('label');online.innerHTML='<input type="checkbox"> 启用网易云自动匹配（仅发送歌名和歌手）';box.append(online);const enabled=online.querySelector('input');enabled.checked=localStorage.getItem('capricorn_online')==='true';enabled.onchange=()=>localStorage.setItem('capricorn_online',String(enabled.checked));
  shared.online={ready:()=>enabled.checked&&!!key.value.trim()&&!!url.value.trim(),async get(path,timeout=25000){if(!this.ready())throw Error('请在设置启用网易云并填写密钥');const c=new AbortController();const timer=setTimeout(()=>c.abort(),timeout);try{return await request(path,'GET',endpoint(),key.value.trim(),c.signal)}finally{clearTimeout(timer)}}};
+ shared.cloud={request(path,method='GET'){const base=endpoint(),secret=key.value.trim();if(!secret)throw Error('请先保存连接');return request(path,method,base,secret,AbortSignal.timeout(90000))}};
  if(key.value.trim())void check(0);
- return ()=>{disposed=true;cancelCheck();delete shared.online;stop();key.value='';box.remove()};
+ return ()=>{disposed=true;cancelCheck();delete shared.online;delete shared.cloud;stop();key.value='';box.remove()};
 }

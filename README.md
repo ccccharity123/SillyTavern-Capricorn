@@ -52,3 +52,6 @@
 
 ## v2.1 Alpha
 拾忆侧边栏直接展示已归档摘要时间轴；支持结构化时间、标题、摘要及旧格式。按楼层读取原消息 BGM，重复歌曲可关联多个节点。缺失原消息时仅回退首次收录来源。管理与设置折叠。声屿移除时序入口。无需更新网关。未真机验证。
+
+## v2.2 Alpha
+Requires gateway v1.10. Cloud library refreshes on opening; private creation, rename, add/remove tracks, delete owned ordinary playlists. No automatic role upload yet. Real upstream behavior requires testing. Keep existing environment and encrypted session file. Back up gateway before replacing. Do not test deletion on important playlists.

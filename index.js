@@ -1,3 +1,4 @@
+import {mountCloud} from './cloud.js';
 import {mountNetease} from './netease.js';
 import {startMemory} from './memory.js';
 import {startMusic} from './music.js';
@@ -5,8 +6,8 @@ import {mountMobile} from './mobile.js';
 const W=window,D=document;
 W.__capricornExtension?.destroy?.();
 const flags={memory:true,music:true};try{const x=JSON.parse(W.localStorage.getItem('capricorn_modules')||'{}');for(const k of Object.keys(flags))if(typeof x[k]==='boolean')flags[k]=x[k]}catch{}
-const shared={messages:null,flags};let cleanupMobile,cleanupNetease,memory,music,timer,busy=false,dead=false,tab='';
-const root=D.createElement('div');root.id='capricorn-hub';root.innerHTML='<button class="cap-island" aria-expanded="false">♫ <span>声屿</span></button><nav hidden><header><strong>声屿</strong><button data-close aria-label="关闭">×</button></header><button data-tab="music">声屿</button><button data-tab="settings">设置</button><small></small><section class="cap-settings" hidden><label>外观 <select><option value="auto">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></section><main class="cap-content"></main></nav>';D.body.append(root);
+const shared={messages:null,flags};let cloud,cleanupMobile,cleanupNetease,memory,music,timer,busy=false,dead=false,tab='';
+const root=D.createElement('div');root.id='capricorn-hub';root.innerHTML='<button class="cap-island" aria-expanded="false">♫ <span>声屿</span></button><nav hidden><header><strong>声屿</strong><button data-close aria-label="关闭">×</button></header><button data-tab="music">声屿</button><button data-tab="cloud">云端曲库</button><button data-tab="settings">设置</button><small></small><section class="cap-settings" hidden><label>外观 <select><option value="auto">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></section><main class="cap-content"></main></nav>';D.body.append(root);
 const nav=root.querySelector('nav'), island=root.querySelector('.cap-island');
 const content=root.querySelector('.cap-content'), settings=root.querySelector('.cap-settings');
 const timeline=D.createElement('section');timeline.className='cap-timeline';
@@ -28,14 +29,14 @@ async function refreshTimeline(){const epoch=++timelineEpoch,key=scope();shownSc
 let theme='auto';try{theme=W.localStorage.getItem('capricorn_theme')||'auto'}catch{};
 const themeSelect=settings.querySelector('select');themeSelect.value=theme;root.dataset.theme=theme;
 themeSelect.onchange=()=>{root.dataset.theme=themeSelect.value;try{W.localStorage.setItem('capricorn_theme',themeSelect.value)}catch{}};
-function select(t){tab=t;root.dataset.tab=t;D.body.dataset.capricornTab=t;settings.hidden=t!=='settings';nav.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===t)));if(t==='music'&&flags.music)music?.show();else music?.hide();if(t==='memory'&&flags.memory)memory?.root?.classList.remove('shiyi-collapsed');}
+function select(t){tab=t;root.dataset.tab=t;D.body.dataset.capricornTab=t;settings.hidden=t!=='settings';if(t==='cloud')cloud?.show();else cloud?.hide();nav.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===t)));if(t==='music'&&flags.music)music?.show();else music?.hide();if(t==='memory'&&flags.memory)memory?.root?.classList.remove('shiyi-collapsed');}
 function close(){nav.hidden=true;island.setAttribute('aria-expanded','false');select('');}
 island.onclick=()=>{if(cleanupMobile?.consumeDrag())return;if(!nav.hidden){close();return;}nav.hidden=false;island.setAttribute('aria-expanded','true');select('music');};
 nav.querySelector('[data-close]').onclick=close;nav.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>select(b.dataset.tab));
 const api=(n,...a)=>{const f=W[n]||W.TavernHelper?.[n];if(typeof f!=='function')throw Error('缺少酒馆助手 API: '+n);return f(...a)};
 async function tick(){if(busy||dead)return;busy=true;try{const last=api('getLastMessageId');shared.messages=last>=0?api('getChatMessages',`0-${last}`,{role:'assistant',hide_state:'all'}):[];if(!Array.isArray(shared.messages))shared.messages=null;if(flags.music)await music?.tick(); // memory review may remain pending while user reads; do not block music polling
 Promise.resolve(memory?.tick()).catch(e=>console.warn('[Capricorn] memory scan',e));if(memoryOpen()&&shownScope!==scope())refreshTimeline();root.querySelector('.cap-island span').textContent=(music?.title()||'声屿');if(memory?.root){const b=memory.root.querySelector('#shiyi-expand');if(b)b.textContent=memory.pending()?`拾忆 · ${memory.pending()}`:'拾忆';};root.querySelector('small').textContent=`声屿 ${!flags.music?'暂停':music?'已启动':'未启动'}`;}catch(e){root.querySelector('small').textContent=e.message;}finally{shared.messages=null;busy=false;}}
-W.__capricornExtension={destroy(){dead=true;cleanupMobile?.destroy();cleanupNetease?.();clearInterval(timer);memory?.destroy();music?.destroy();root.remove();delete D.body.dataset.capricornTab;}};
+W.__capricornExtension={destroy(){dead=true;cleanupMobile?.destroy();cleanupNetease?.();cloud?.destroy();clearInterval(timer);memory?.destroy();music?.destroy();root.remove();delete D.body.dataset.capricornTab;}};
 D.body.dataset.capricornTab='';
 try{memory=await startMemory(shared)}catch(e){console.error('[Capricorn] memory',e)}
 try{music=await startMusic(shared)}catch(e){console.error('[Capricorn] music',e)}
@@ -47,5 +48,5 @@ for(const b of controls.querySelectorAll('[data-module]')){const k=b.dataset.mod
 controls.querySelector('[data-backup]').onclick=async()=>{try{const key=scope();const mem=await memory?.backup();if(key!==scope())throw Error('聊天已切换，请重试');const data={format:'capricorn-backup',version:1,created:new Date().toISOString(),music:music?.backup()??null,memory:mem??null,theme:themeSelect.value,flags:{...flags}};const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));const a=D.createElement('a');a.href=url;a.download='Capricorn-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);result('已导出音乐库、设置及当前聊天记忆副本；请妥善保管。')}catch(e){result('导出失败：'+e.message)}};
 const file=controls.querySelector('input[type=file]');controls.querySelector('[data-restore]').onclick=()=>file.click();file.onchange=async()=>{try{const f=file.files[0];if(!f)return;const x=JSON.parse(await f.text());if(x.format!=='capricorn-backup'||x.version!==1||!x.music||!music)throw Error('不支持的备份或音乐模块不可用');if(!W.confirm('替换全部音乐库及外观设置？记忆世界书不会被覆盖。'))return;music.restore(x.music);if(['auto','light','dark'].includes(x.theme)){themeSelect.value=x.theme;themeSelect.onchange()}result('音乐库已恢复；记忆副本请通过世界书管理手动核对。')}catch(e){result('恢复失败：'+e.message)}finally{file.value=''}};
 
-cleanupNetease=mountNetease(settings,shared);
+cleanupNetease=mountNetease(settings,shared);if(music)cloud=mountCloud(content,shared,music);
 cleanupMobile=mountMobile({root,island,nav,onResume:()=>void tick()});
