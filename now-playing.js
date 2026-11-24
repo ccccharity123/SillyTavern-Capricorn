@@ -21,6 +21,10 @@ const ICONS = Object.fromEntries(["prev","next","play","pause","stop","lyrics","
 export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
   const panel = D.createElement('section');
   panel.className = 'cap-full-player';
+  const android = /Android/i.test(W.navigator.userAgent);
+  if(android) panel.dataset.androidViewport='true';
+  function fitViewport(){if(!android || panel.hidden)return;const v=W.visualViewport;const w=v?.width||W.innerWidth;const h=v?.height||W.innerHeight;panel.style.setProperty('--cap-vw',w+'px');panel.style.setProperty('--cap-vh',h+'px');panel.style.setProperty('--cap-vx',(v?.offsetLeft||0)+'px');panel.style.setProperty('--cap-vy',(v?.offsetTop||0)+'px');}
+  if(android){W.addEventListener('resize',fitViewport);W.visualViewport?.addEventListener('resize',fitViewport);W.visualViewport?.addEventListener('scroll',fitViewport);}
   panel.hidden = true;
   panel.setAttribute('aria-label', '声屿全屏播放器');
   panel.innerHTML = `
@@ -80,7 +84,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   panel.dataset.size=size;
   const reduce=()=>W.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
   let closing=null;
-  function animateFrom(rect, target=panel){if(!rect||reduce()||!target.animate)return;const r=target.getBoundingClientRect();if(!r.width||!r.height)return;target.animate([{transformOrigin:'top left',transform:`translate(${rect.left-r.left}px,${rect.top-r.top}px) scale(${rect.width/r.width},${rect.height/r.height})`,opacity:.65},{transformOrigin:'top left',transform:'none',opacity:1}],{duration:340,easing:'cubic-bezier(.22,1,.36,1)'});}
+  function animateFrom(rect, target=panel){if(!rect||reduce()||!target.animate||android)return;const r=target.getBoundingClientRect();if(!r.width||!r.height)return;target.animate([{transformOrigin:'top left',transform:`translate(${rect.left-r.left}px,${rect.top-r.top}px) scale(${rect.width/r.width},${rect.height/r.height})`,opacity:.65},{transformOrigin:'top left',transform:'none',opacity:1}],{duration:340,easing:'cubic-bezier(.22,1,.36,1)'});}
   function setSize(){const before=q('.cap-art').getBoundingClientRect();size=sizes[(sizes.indexOf(size)+1)%sizes.length];panel.dataset.size=size;showTab(size==='large'?'lyrics':'');try{W.localStorage.setItem('capricorn_player_size',size)}catch{};animateFrom(before,q('.cap-art'));q('[data-size-switch]').title='当前：'+({compact:'悬浮卡片',half:'半屏',large:'大半屏'}[size]);}
   function closePanel(){closeQuality();if(panel.hidden)return;panel.hidden=true;shared.onPlayerClose?.();}
   function openAux(t){closePanel();shared.openPlayerAux?.(t);}
@@ -138,8 +142,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   for (const ev of events) audio.addEventListener(ev, refresh);
   emitIsland();
   return {
-    open() { if(!panel.hidden)return;const r=D.querySelector('#capricorn-hub .cap-island')?.getBoundingClientRect();panel.hidden=false;identity='';queueSignature='';manualScrollUntil=0;showTab(size==='large'?'lyrics':'');refresh();animateFrom(r); }, close:closePanel, isOpen:()=>!panel.hidden,
+    open() { if(!panel.hidden)return;const r=D.querySelector('#capricorn-hub .cap-island')?.getBoundingClientRect();panel.hidden=false;fitViewport();identity='';queueSignature='';manualScrollUntil=0;showTab(size==='large'?'lyrics':'');refresh();animateFrom(r); }, close:closePanel, isOpen:()=>!panel.hidden,
     refresh,
-    destroy() { dead = true; epoch++; for (const ev of events) audio.removeEventListener(ev, refresh); panel.remove(); }
+    destroy() { W.removeEventListener('resize',fitViewport);W.visualViewport?.removeEventListener('resize',fitViewport);W.visualViewport?.removeEventListener('scroll',fitViewport);dead = true; epoch++; for (const ev of events) audio.removeEventListener(ev, refresh); panel.remove(); }
   };
 }

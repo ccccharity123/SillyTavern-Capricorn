@@ -108,3 +108,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.7.5 Alpha
 移动端优先原生 HTMLAudioElement，避免 Web Audio 后台挂起；iOS 使用系统音量键。系统媒体会话同步歌曲、进度和控制，不发送角色或聊天名。后台播放与原生灵动岛由系统和 WebView 决定，强制退出不支持。
+
+## v2.7.6 Alpha
+Android 播放器使用可见视口定位，禁用坐标变形展开动画；iOS 和媒体引擎保持不变。
