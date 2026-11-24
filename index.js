@@ -1,3 +1,4 @@
+import { createRecall } from './recall.js';
 import { icon } from './icons.js';
 import { mountAppearance } from './appearance.js';
 import { mountCloud } from './cloud.js';
@@ -36,7 +37,7 @@ root.innerHTML = `
     </header>
     <div class="cap-tabs" role="tablist">
       <button data-tab="music" role="tab">播放</button>
-      <button data-tab="library" role="tab">曲库</button>
+      <button data-tab="library" role="tab">曲库</button><button data-tab="resonance" role="tab">共鸣</button>
     </div>
     <small></small>
     <section class="cap-settings" hidden>
@@ -97,13 +98,37 @@ const timeline = D.createElement('section');
 timeline.className = 'cap-timeline';
 
 let timelineEpoch = 0, shownScope = '';
+const resonance=D.createElement('section');resonance.className='cap-resonance';resonance.hidden=true;content.append(resonance);
+let resonanceEpoch=0;
+let recall;
+function unlockRecall(){shared.recallLocked=false;}
+async function showResonance(){
+ const epoch=++resonanceEpoch,key=scope();resonance.dataset.scope=key;resonance.replaceChildren();
+ const el=(tag,text,parent=resonance)=>{const n=D.createElement(tag);n.textContent=text;parent.append(n);return n;};
+ el('p','正在读取当前聊天的剧情原声…');
+ try{
+ const rows=(await memory?.timelineRows()||[]).sort((a,b)=>a.floor-b.floor),songs=music?.timelineSongs()||[];
+ if(epoch!==resonanceEpoch||key!==scope()||tab!=='resonance')return;
+ resonance.replaceChildren();el('h3','共鸣 · 剧情原声');el('button','回响 · 沉浸式回忆').onclick=()=>recall?.open();
+ const lock=el('button',shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）');lock.onclick=()=>{shared.recallLocked=!shared.recallLocked;lock.textContent=shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）';};
+ const q=el('input','');q.placeholder='搜索歌曲、歌手、剧情';const chapter=el('select','');for(const c of ['',...new Set(rows.map(r=>r.chapter).filter(Boolean))]){const o=el('option',c||'全部章节',chapter);o.value=c;}
+ const play=el('button','播放筛选原声带');const list=el('div','');
+ const valid=()=>key===scope()&&tab==='resonance';
+ function render(){list.replaceChildren();const grouped=new Map();for(const r of rows){if(chapter.value&&r.chapter!==chapter.value)continue;for(const t of songs.filter(t=>String(t.floor)===String(r.floor))){if(!`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter}`.toLowerCase().includes(q.value.trim().toLowerCase()))continue;const g=grouped.get(t.id)||{t,rows:[]};if(!g.rows.includes(r))g.rows.push(r);grouped.set(t.id,g);}}
+ play.disabled=![...grouped.values()].some(g=>g.t.playable);play.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([...grouped.values()].filter(g=>g.t.playable).map(g=>g.t.id),chapter.value||'剧情原声带');}};
+ if(!grouped.size)el('p','暂无匹配的已归档剧情音乐',list);
+ for(const {t,rows:matches} of grouped.values()){const d=el('details','',list);el('summary',`${t.title} · ${t.artist} (${matches.length})`,d);const b=el('button','播放此曲',d);b.disabled=!t.playable;b.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([t.id],t.title);}};for(const r of matches){el('p',`${r.chapter||''} ${r.title} · ${r.when}`,d);const j=el('button','查看剧情便签',d);j.onclick=()=>{if(!valid())return;close();memory.root.classList.remove('shiyi-collapsed');void refreshTimeline(r.floor);};}}
+ }q.oninput=render;chapter.onchange=render;render();
+ }catch(e){if(epoch===resonanceEpoch)resonance.textContent='读取失败：'+e.message;}
+}
+
 const scope = () => {
   const c = W.SillyTavern?.getContext?.() || {};
   return JSON.stringify([c.characterId ?? c.character_id, c.chatId ?? c.chatMetadata?.chat_id]);
 };
 const memoryOpen = () => memory?.root && !memory.root.classList.contains('shiyi-collapsed');
 
-async function refreshTimeline() {
+async function refreshTimeline(targetFloor) {
   const epoch = ++timelineEpoch, key = scope();
   shownScope = key;
   timeline.replaceChildren();
@@ -115,15 +140,16 @@ async function refreshTimeline() {
     const memories = await memory.timelineRows(), songs = music?.timelineSongs() || [];
     if (epoch !== timelineEpoch || key !== scope() || !memoryOpen()) return;
     note.textContent = memories.length ? `已归档 ${memories.length} 条剧情便签` : '暂无已归档摘要，请检测或导入历史。';
-    for (const m of memories.sort((a, b) => a.floor - b.floor)) {
+    const query=D.createElement('input');query.placeholder='搜索剧情便签';timeline.append(query);const cards=D.createElement('div');timeline.append(cards);let limit=targetFloor!=null?Math.max(40,memories.length):40;const more=D.createElement('button');more.textContent='加载更多';timeline.append(more);function render(){cards.replaceChildren();const filtered=memories.filter(m=>`${m.title} ${m.content} ${m.chapter} ${songs.filter(t=>String(t.floor)===String(m.floor)).map(t=>t.title+' '+t.artist).join(' ')}`.toLowerCase().includes(query.value.trim().toLowerCase()));more.hidden=filtered.length<=limit;
+    for (const m of filtered.sort((a, b) => a.floor - b.floor).slice(0,limit)) {
       const card = D.createElement('details');
-      card.className = 'cap-story';
+      card.className = 'cap-story';if(String(m.floor)===String(targetFloor)){card.open=true;requestAnimationFrame(()=>card.scrollIntoView({block:'center'}));}
       const head = D.createElement('summary');
       const field = n => m.content.match(new RegExp('<' + n + '>([\\s\\S]*?)</' + n + '>'))?.[1]?.trim();
       const tracks = songs.filter(t => String(t.floor) === String(m.floor));
       for (const [cls, value] of [
         ['cap-story-time', field('时间') || m.when],
-        ['cap-story-title', field('标题') || m.title.replace(/^记忆\d+｜/, '')],
+        ['cap-story-title', (m.star?'★ ':'')+(m.chapter?m.chapter+' · ':'')+(field('标题') || m.title.replace(/^记忆\d+｜/, ''))],
         ['cap-story-song', tracks.length ? '♫ ' + tracks.map(t => t.title + ' — ' + t.artist).join(' / ') : '暂无音乐记录']
       ]) {
         const el = D.createElement('span');
@@ -142,8 +168,8 @@ async function refreshTimeline() {
         button.onclick = () => { if (key === scope()) music.playTimeline(t.id); };
         card.append(button);
       }
-      timeline.append(card);
-    }
+      const jump=D.createElement('button');jump.textContent='查看原楼层';jump.onclick=()=>{if(key===scope()&&!memory.jump(m.floor))W.alert('请先加载该历史楼层');};card.append(jump);cards.append(card);
+    }}query.oninput=()=>{limit=40;render();};more.onclick=()=>{limit+=40;render();};render();
   } catch (e) {
     if (epoch === timelineEpoch) note.textContent = '读取失败：' + e.message;
   }
@@ -160,12 +186,13 @@ themeSelect.onchange = () => {
 };
 
 function select(t) {
+  if(t==='cloud'&&!shared.accountReady?.())t='library';
   tab = t;
   root.dataset.tab = t;
   D.body.dataset.capricornTab = t;
-  settings.hidden = t !== 'settings';
+  settings.hidden = t !== 'settings';resonance.hidden=t!=='resonance';if(t==='resonance')void showResonance();
   if (t === 'cloud') cloud?.show(); else cloud?.hide();
-  libraryNav.hidden = !['library','cloud'].includes(t);
+  libraryNav.hidden = !['library','cloud'].includes(t)||!shared.accountReady?.();
   nav.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
   if (['music','library'].includes(t) && flags.music) music?.show(); else music?.hide();
   if (t === 'memory' && flags.memory) memory?.root?.classList.remove('shiyi-collapsed');
@@ -194,6 +221,7 @@ const api = (n, ...a) => {
 };
 
 async function tick() {
+  recall?.check();
   if (busy || dead) return;
   busy = true;
   try {
@@ -202,7 +230,7 @@ async function tick() {
       musicBusy = true;
       Promise.resolve().then(()=>music.tick()).catch(e=>console.warn('[Capricorn] music scan',e)).finally(()=>{musicBusy=false;});
     }
-    if (memoryOpen() && shownScope !== scope()) refreshTimeline();
+    if (shownScope !== scope() && memoryOpen()) refreshTimeline();if(tab==='resonance'&&resonance.dataset.scope!==scope()){unlockRecall();resonance.dataset.scope=scope();void showResonance();}
     if (memory?.root) {
       const b = memory.root.querySelector('#shiyi-expand');
       if (b) {
@@ -227,6 +255,7 @@ async function tick() {
 
 W.__capricornExtension = {
   destroy() {
+    recall?.close();
     dead = true;
     for(const off of eventCleanup)off();
     appearanceApi?.destroy();
@@ -297,7 +326,9 @@ function mountMemorySide(dock, button) {
 }
 
 if (memory?.root) {
-  memory.onChange = () => { if (memoryOpen()) void refreshTimeline(); };
+  recall=createRecall({D,W,scope,memory,music,shared});
+  const recallButton=D.createElement("button");recallButton.textContent="回响";memory.root.querySelector("#shiyi-settings").before(recallButton);recallButton.onclick=()=>recall.open();
+  memory.onChange = () => { void recall?.refresh(); if (memoryOpen()) void refreshTimeline(); if(tab==='resonance')void showResonance(); };
   memory.root.classList.add('cap-memory-side');
 
   // 收起态：纯图标精致耳扣，彻底移除文字
@@ -433,6 +464,7 @@ file.onchange = async () => {
   } catch (e) { result('恢复失败：' + e.message); } finally { file.value = ''; }
 };
 
+shared.onAccountChange=()=>{if(tab==='cloud'&&!shared.accountReady?.())select('library');else libraryNav.hidden=!['library','cloud'].includes(tab)||!shared.accountReady?.();};
 cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });

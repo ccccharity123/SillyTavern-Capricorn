@@ -125,3 +125,24 @@ Android 播放器使用可见视口定位，禁用坐标变形展开动画；iOS
 - 销毁时移除新增事件监听并关闭拾忆弹窗；切档时关闭旧审核窗口。
 - 保留 v2.7.8 删除标记及世界书同步机制。仍使用全量校验，不宣称增量扫描或完整事务恢复。
 - 更新前备份世界书及聊天；先在测试存档验证删除、重 Roll、切档及提示词查看器。未真机验证。
+
+## v2.8.1 Alpha
+Manual full-history scan and explicit recovery of blocked summaries; default titles renumbered in source order, custom titles preserved. Full-text editor modal. No device testing.
+
+## v2.8.2 Alpha
+Keyword search and visual song picker for local playlist addition and manual online matching. Existing gateway search endpoint; no gateway update. Background matching unchanged. Device testing pending.
+
+## v2.8.3 Alpha
+Opt-in GD local music adapter (Netease source), no gateway credentials. Cloud tab requires verified login. Local role playlists retained. Search cover thumbnails unavailable in GD mode; playback cover lookup uses search metadata. No live API or device testing.
+
+## v2.9.0 Alpha
+拾忆档案：搜索、手动章节、星标、批量删除、回收站、编辑历史（每条最多20版）、楼层跳转及分批显示。回收恢复必须匹配当前正文哈希；不恢复失效正史。仅支持已加载楼层跳转。章节与星标为聊天变量元数据，不注入世界书。未真机测试。
+
+## v3.0.0 Alpha 共鸣
+新增声屿共鸣页：当前聊天有效归档摘要与当前正文 BGM 双向检索、章节筛选、临时原声带队列、音乐锁定、跳转便签。关联不使用过期歌曲来源回退；不删除歌曲库。锁定为会话内状态，不修改原跟随设置。尚无自动逐便签回忆模式、云端原声带同步或真机验证。无需更新网关。
+
+## v3.1.0 Alpha · 留痕
+新增拾忆管理菜单中的留痕档案：人物、关系、伏笔、事件、成长；手动创建、编辑、删除、搜索、关联多条正史记忆。从记忆整理可预填摘要，需人工确认。来源失效仅标记，不自动删除档案。档案存于当前聊天 archiveUI，不注入世界书。未实现 AI 自动提取、关系图或直接音乐关联；未真机测试。
+
+## v3.2.0 Alpha 回响
+Read-only immersive recall from resonance or memory dock. Chapter, star and linked person filters; manual swipe/keyboard, optional music and timed advance, local resume by source hash. Closing restores previous follow lock, not previous audio queue. Missing music leaves existing audio unchanged. Cover background only when track metadata includes a usable cover URL. No real-device testing.
