@@ -76,3 +76,7 @@
 
 ## 4.3.1-dev.1
 Explicit Chat Completion preset manager, save/reselect verification, individual and bulk removal, insertion before native post-history instructions. Real host verification pending.
+
+## 4.3.1-dev.2
+- 读取排序分组和条目，手动选择前后或首尾，插入并启用保存；支持平面及分组排序。
+- 未知宿主结构拒绝写入；提供复制提示词回退。iOSTT 实机未验证。
