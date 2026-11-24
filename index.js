@@ -1,3 +1,4 @@
+import {mountAppearance} from './appearance.js';
 import {mountCloud} from './cloud.js';
 import {mountNetease} from './netease.js';
 import {startMemory} from './memory.js';
@@ -6,7 +7,7 @@ import {mountMobile} from './mobile.js';
 const W=window,D=document;
 W.__capricornExtension?.destroy?.();
 const flags={memory:true,music:true};try{const x=JSON.parse(W.localStorage.getItem('capricorn_modules')||'{}');for(const k of Object.keys(flags))if(typeof x[k]==='boolean')flags[k]=x[k]}catch{}
-const shared={messages:null,flags};let cloud,cleanupMobile,cleanupNetease,memory,music,timer,busy=false,dead=false,tab='';
+const shared={messages:null,flags};let cleanupAppearance,cloud,cleanupMobile,cleanupNetease,memory,music,timer,busy=false,dead=false,tab='';
 const root=D.createElement('div');root.id='capricorn-hub';root.innerHTML='<button class="cap-island" aria-expanded="false">♫ <span>声屿</span></button><nav hidden><header><strong>声屿</strong><button data-close aria-label="关闭">×</button></header><button data-tab="music">声屿</button><button data-tab="cloud">云端曲库</button><button data-tab="settings">设置</button><small></small><section class="cap-settings" hidden><label>外观 <select><option value="auto">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label></section><main class="cap-content"></main></nav>';D.body.append(root);
 const nav=root.querySelector('nav'), island=root.querySelector('.cap-island');
 const content=root.querySelector('.cap-content'), settings=root.querySelector('.cap-settings');
@@ -36,7 +37,7 @@ nav.querySelector('[data-close]').onclick=close;nav.querySelectorAll('[data-tab]
 const api=(n,...a)=>{const f=W[n]||W.TavernHelper?.[n];if(typeof f!=='function')throw Error('缺少酒馆助手 API: '+n);return f(...a)};
 async function tick(){if(busy||dead)return;busy=true;try{const last=api('getLastMessageId');shared.messages=last>=0?api('getChatMessages',`0-${last}`,{role:'assistant',hide_state:'all'}):[];if(!Array.isArray(shared.messages))shared.messages=null;if(flags.music)await music?.tick(); // memory review may remain pending while user reads; do not block music polling
 Promise.resolve(memory?.tick()).catch(e=>console.warn('[Capricorn] memory scan',e));if(memoryOpen()&&shownScope!==scope())refreshTimeline();root.querySelector('.cap-island span').textContent=(music?.title()||'声屿');if(memory?.root){const b=memory.root.querySelector('#shiyi-expand');if(b)b.textContent=memory.pending()?`拾忆 · ${memory.pending()}`:'拾忆';};root.querySelector('small').textContent=`声屿 ${!flags.music?'暂停':music?'已启动':'未启动'}`;}catch(e){root.querySelector('small').textContent=e.message;}finally{shared.messages=null;busy=false;}}
-W.__capricornExtension={destroy(){dead=true;cleanupMobile?.destroy();cleanupNetease?.();cloud?.destroy();clearInterval(timer);memory?.destroy();music?.destroy();root.remove();delete D.body.dataset.capricornTab;}};
+W.__capricornExtension={destroy(){dead=true;cleanupAppearance?.();cleanupMobile?.destroy();cleanupNetease?.();cloud?.destroy();clearInterval(timer);memory?.destroy();music?.destroy();root.remove();delete D.body.dataset.capricornTab;}};
 D.body.dataset.capricornTab='';
 try{memory=await startMemory(shared)}catch(e){console.error('[Capricorn] memory',e)}
 try{music=await startMusic(shared)}catch(e){console.error('[Capricorn] music',e)}
@@ -50,3 +51,5 @@ const file=controls.querySelector('input[type=file]');controls.querySelector('[d
 
 cleanupNetease=mountNetease(settings,shared);if(music)cloud=mountCloud(content,shared,music);
 cleanupMobile=mountMobile({root,island,nav,onResume:()=>void tick()});
+
+cleanupAppearance=mountAppearance(settings,root,themeSelect);

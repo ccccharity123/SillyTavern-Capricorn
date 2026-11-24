@@ -61,3 +61,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## 2.3.1
 云端曲库 → 管理导入：不导入、选择性导入、全部导入；按网关及网易云 UID 保存。新建歌单与已绑定原声带始终显示。取消导入仅隐藏，不删除云端数据。网关无需升级。
+
+## v2.4 光与纸
+声屿设置顶部可选玻璃、磨砂、实色，原有外观选项控制日夜。拾忆独立日夜与纸张主题。自定义 CSS 为两个声明编辑器（不输入选择器、大括号或外部资源），例如侧栏 `--note-width: 360px; --note-bg: #f5eee1;`，便签 `--note-card: #fff8dc; --note-radius: 8px;`。本地保存，可恢复默认 CSS。无需更新网关。CSS 模拟材质，非原生 iOS API。实际设备视觉及兼容性待测试。
