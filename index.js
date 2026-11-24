@@ -169,15 +169,15 @@ function close() {
   select('');
 }
 
+shared.onPlayerClose=()=>island.setAttribute('aria-expanded','false');
+shared.openPlayerAux=t=>{nav.hidden=false;island.setAttribute('aria-expanded','true');select(t);};
 island.onclick = () => {
   if (cleanupMobile?.consumeDrag()) return;
-  if (!nav.hidden) { close(); return; }
-  nav.hidden = false;
-  island.setAttribute('aria-expanded', 'true');
-  select('music');
+  if(music?.isPlayerOpen()){music.closePlayer();return;}
+  close();music?.openPlayer();island.setAttribute('aria-expanded','true');
 };
-nav.querySelector('[data-close]').onclick = close;
-nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => select(b.dataset.tab));
+nav.querySelector('[data-close]').onclick = ()=>{close();music?.openPlayer();island.setAttribute('aria-expanded','true');};
+nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {if(b.dataset.tab==='music'){close();music?.openPlayer();}else select(b.dataset.tab);});
 
 const api = (n, ...a) => {
   const f = W[n] || W.TavernHelper?.[n];

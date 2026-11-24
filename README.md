@@ -70,3 +70,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## 2.5.2 Alpha
 修复脚本转义与截断，恢复基础样式，新增余音 · 银蓝手账主题。
+
+## 2.5.3 Alpha
+灵动岛直达播放器，三档尺寸按钮切换，音量常驻，共用主题。曲库与设置关闭后返回播放器。尺寸本地记忆。
