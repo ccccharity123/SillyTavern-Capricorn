@@ -64,3 +64,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.4 光与纸
 声屿设置顶部可选玻璃、磨砂、实色，原有外观选项控制日夜。拾忆独立日夜与纸张主题。自定义 CSS 为两个声明编辑器（不输入选择器、大括号或外部资源），例如侧栏 `--note-width: 360px; --note-bg: #f5eee1;`，便签 `--note-card: #fff8dc; --note-radius: 8px;`。本地保存，可恢复默认 CSS。无需更新网关。CSS 模拟材质，非原生 iOS API。实际设备视觉及兼容性待测试。
+
+## v2.5 留白
+基于用户 Alpha1，保留材质与纸张主题。播放/曲库分离，歌曲操作折叠，拾忆外观与 CSS 仅在拾忆菜单内。网关与数据键不变。

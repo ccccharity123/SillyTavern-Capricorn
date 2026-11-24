@@ -194,6 +194,27 @@ root.querySelector('[data-action="import"]').onclick=()=>root.querySelector('#si
 try{W.localStorage.setItem('sound_isle_before_import_backup',JSON.stringify({at:Date.now(),db}))}catch(e){status('无法保存导入前恢复快照：'+e.message+'；已取消导入');return}
 db={version:1,playlists:x.playlists,favorites:Array.isArray(x.favorites)?x.favorites:[],recent:Array.isArray(x.recent)?x.recent:[],processed:x.processed||{},settings:x.settings||{}};selected='';save();status('导入成功');render()}catch(err){status('导入失败：'+err.message)}};
 let rm=root.querySelector('[data-action="remove-playlist"]');if(rm)rm.onclick=()=>{if(W.confirm('确定删除这个自建歌单？')){delete db.playlists[selected];selected=current;save();render()}};
+// Preserve original action handlers while reducing the visible controls.
+const panel=root.querySelector('.si-panel');
+const sections=[...panel.children];
+const libraryStart=sections.findIndex(e=>e.classList.contains('si-section'));
+const library=D.createElement('div');library.className='cap-local-library';
+for(const el of sections.slice(libraryStart)) library.append(el);
+panel.append(library);
+const group=(nodes,label,parent=library)=>{const d=D.createElement('details');d.className='cap-action-menu';const h=D.createElement('summary');h.textContent=label;d.append(h);nodes[0]?.before(d);if(!d.parentNode)parent.append(d);for(const n of nodes)d.append(n);return d};
+for(const row of library.querySelectorAll('.si-track')){
+ const play=row.querySelector('[data-play]'), text=row.querySelector('.si-grow');
+ if(play&&text){const b=D.createElement('button');b.className='cap-track-title';b.append(...text.childNodes);b.onclick=play.onclick;text.replaceWith(b);play.remove();}
+ const actions=[...row.querySelectorAll('button.si-btn')];if(actions.length){const d=group(actions,'⋯',row);d.querySelector('summary').setAttribute('aria-label','歌曲操作');}
+}
+const newRow=library.querySelector('#si-playlist-name')?.parentElement;if(newRow)group([newRow],'＋ 新建歌单');
+const addTitle=library.querySelector('#si-song-title')?.parentElement,addArtist=library.querySelector('#si-song-artist')?.parentElement;
+if(addTitle&&addArtist){const heading=addTitle.previousElementSibling;if(heading?.classList.contains('si-section'))heading.remove();group([addTitle,addArtist],'＋ 添加歌曲');}
+const advanced=library.querySelector('[data-action="batch-meta"]')?.parentElement;
+if(advanced)group([advanced,...library.querySelectorAll('[data-action="remove-playlist"]')],'歌单管理');
+const footer=library.querySelector('.si-footer');if(footer){footer.lastElementChild?.remove();panel.append(footer);}
+const volume=panel.querySelector('#si-volume')?.parentElement;if(volume)group([volume],'音量',panel);
+
 }
 // 拖动悬浮岛：只在移动超过阈值时视为拖动；展开后面板跟随。
 let start=null;root.addEventListener('pointerdown',e=>{if(!e.target.closest('.si-island'))return;start={x:e.clientX,y:e.clientY,left:root.getBoundingClientRect().left,top:root.getBoundingClientRect().top};drag=false});

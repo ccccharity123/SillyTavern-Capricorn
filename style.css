@@ -944,3 +944,17 @@ body[data-cap-paper] #shiyi-dock .cap-memory-tools summary {
     transition: none !important;
   }
 }
+
+/* v2.5: interaction layout only; Alpha1 materials and paper themes retained. */
+body[data-capricorn-tab="library"] #capricorn-hub #sound-isle-root {display:block!important;position:static!important;width:100%!important;max-width:100%!important;margin:0!important;transform:none!important;}
+body[data-capricorn-tab="music"] #capricorn-hub .cap-local-library {display:none!important;}
+body[data-capricorn-tab="library"] #capricorn-hub .si-panel > :not(.cap-local-library):not(.si-footer) {display:none!important;}
+#capricorn-hub [hidden], #shiyi-dock [hidden] {display:none!important;}
+#capricorn-hub .cap-action-menu summary, #capricorn-hub details > summary {cursor:pointer;padding:8px 4px;}
+#capricorn-hub .si-track {display:flex;align-items:flex-start;flex-wrap:wrap;}
+#capricorn-hub .cap-track-title {flex:1;min-width:0;text-align:left;background:transparent!important;border:0!important;box-shadow:none!important;color:inherit!important;white-space:normal;overflow-wrap:anywhere;}
+#capricorn-hub .si-track .cap-action-menu {max-width:100%;}
+#capricorn-hub .si-track .cap-action-menu[open] {flex-basis:100%;}
+#capricorn-hub .si-track .cap-action-menu button {margin:3px;}
+#capricorn-hub nav > small:empty {display:none;}
+#capricorn-hub nav > header [data-tab="settings"] {margin-left:auto;}

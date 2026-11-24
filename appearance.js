@@ -118,6 +118,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
 
   const boxes = [];
   const mainBox = buildForm(false);
+  mainBox.querySelectorAll('.cap-appearance-grid, .cap-css-editor').forEach(el => el.remove());
   settings.prepend(mainBox);
   boxes.push(mainBox);
 
@@ -249,7 +250,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         setStatus(`已应用“${btn.textContent}”模板`);
       };
     }
-    box.querySelector('[data-save]').onclick = () => {
+    if (box.querySelector('[data-save]')) box.querySelector('[data-save]').onclick = () => {
       try {
         const side = declarations(box.querySelector('[data-css="side"]').value);
         const note = declarations(box.querySelector('[data-css="note"]').value);
@@ -262,7 +263,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         setStatus(e.message);
       }
     };
-    box.querySelector('[data-reset]').onclick = () => {
+    if (box.querySelector('[data-reset]')) box.querySelector('[data-reset]').onclick = () => {
       p = { ...p, side: '', note: '', custom: '' };
       save(null);
       setStatus('已恢复默认 CSS');
@@ -274,6 +275,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   apply(p);
 
   const api = {
+    closeInlineDrawer() { if (inlineDrawer) inlineDrawer.hidden = true; apply(p); },
     toggleInlineDrawer() {
       if (inlineDrawer) inlineDrawer.hidden = !inlineDrawer.hidden;
     },

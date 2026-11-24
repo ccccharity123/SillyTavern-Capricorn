@@ -26,12 +26,11 @@ root.innerHTML = `
   <nav hidden>
     <header>
       <strong>声屿</strong>
-      <button data-close aria-label="关闭">×</button>
+      <button data-tab="settings" aria-label="声屿设置">⚙</button><button data-close aria-label="关闭">×</button>
     </header>
     <div class="cap-tabs" role="tablist">
-      <button data-tab="music" role="tab">声屿</button>
-      <button data-tab="cloud" role="tab">云端曲库</button>
-      <button data-tab="settings" role="tab">设置</button>
+      <button data-tab="music" role="tab">播放</button>
+      <button data-tab="library" role="tab">曲库</button>
     </div>
     <small></small>
     <section class="cap-settings" hidden>
@@ -50,6 +49,13 @@ D.body.append(root);
 
 const nav = root.querySelector('nav'), island = root.querySelector('.cap-island');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
+const libraryNav = D.createElement('div');
+libraryNav.hidden = true;
+libraryNav.className = 'cap-tabs';
+for (const [key,label] of [['library','本地 / 角色'],['cloud','网易云']]) {
+  const b = D.createElement('button'); b.textContent = label; b.dataset.tab = key; libraryNav.append(b);
+}
+content.before(libraryNav);
 const timeline = D.createElement('section');
 timeline.className = 'cap-timeline';
 
@@ -122,8 +128,9 @@ function select(t) {
   D.body.dataset.capricornTab = t;
   settings.hidden = t !== 'settings';
   if (t === 'cloud') cloud?.show(); else cloud?.hide();
+  libraryNav.hidden = !['library','cloud'].includes(t);
   nav.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-  if (t === 'music' && flags.music) music?.show(); else music?.hide();
+  if (['music','library'].includes(t) && flags.music) music?.show(); else music?.hide();
   if (t === 'memory' && flags.memory) memory?.root?.classList.remove('shiyi-collapsed');
 }
 
@@ -164,7 +171,7 @@ async function tick() {
       const b = memory.root.querySelector('#shiyi-expand');
       if (b) b.textContent = memory.pending() ? `拾忆 · ${memory.pending()}` : '拾忆';
     }
-    root.querySelector('small').textContent = `声屿 ${!flags.music ? '暂停' : music ? '已启动' : '未启动'}`;
+    root.querySelector('small').textContent = !flags.music ? '自动收录已暂停' : !music ? '播放器未启动' : ''; 
   } catch (e) {
     root.querySelector('small').textContent = e.message;
   } finally {
@@ -201,19 +208,24 @@ if (memory?.root) {
     const styleBtn = D.createElement('button');
     styleBtn.type = 'button';
     styleBtn.className = 'cap-note-style-btn';
-    styleBtn.textContent = '样式 / CSS';
+    styleBtn.textContent = '外观 / CSS';
     styleBtn.title = '切换便签主题与自定义 CSS';
     styleBtn.onclick = () => appearanceApi?.toggleInlineDrawer();
     brand.after(styleBtn);
+    styleBtn.hidden = true;
   }
   const tools = memory.root.querySelector('#shiyi-scan').parentElement;
   const more = D.createElement('details');
   more.className = 'cap-memory-tools';
   const label = D.createElement('summary');
-  label.textContent = '记忆管理与设置';
+  label.textContent = '⋯';
+  label.setAttribute('aria-label','拾忆管理与设置');
   more.append(label);
   tools.before(timeline, more);
   more.append(tools);
+  const appearanceButton = memory.root.querySelector('.cap-note-style-btn');
+  if (appearanceButton) { appearanceButton.hidden = false; tools.append(appearanceButton); }
+  more.addEventListener('toggle', () => { if (!more.open) appearanceApi?.closeInlineDrawer(); });
   memory.root.querySelector('#shiyi-expand').addEventListener('click', refreshTimeline);
   const refresh = memory.root.querySelector('#shiyi-timeline');
   refresh.textContent = '刷新时间轴';
@@ -273,3 +285,11 @@ cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
 appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
+for (const [node,label] of [[controls,'数据与自动收录'],[settings.querySelector('.cap-backup:not(.cap-backup:first-child)'),'账号与连接']]) {
+  if (!node || node.parentElement !== settings || node.closest('details')) continue;
+  const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = label; d.append(h); node.before(d); d.append(node);
+}
+for (const node of [...settings.children]) {
+  if (!node.matches('section.cap-backup')) continue;
+  const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = '账号与连接'; d.append(h); node.before(d); d.append(node);
+}
