@@ -84,3 +84,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 - 官方 Phosphor Core 2.1.1 CDN SVG（Light / Fill），加载失败保留本地图标；非离线内置官方库。
 - 双层专辑背景预加载及 720ms 交叉渐变。
 - 音量独立于过渡增益，切歌淡出 320ms、淡入 650ms，暂停与恢复也采用淡变。实际设备可能限制媒体音量控制。
+
+## 2.6.3
+专辑背景双层 1200ms 过渡；音量拖动保护。原生音量不可写时，尝试已授权跨域音源的 Web Audio 增益；不支持时使用系统音量键。实际客户端兼容性待测试。

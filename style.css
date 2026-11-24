@@ -1382,3 +1382,11 @@ body[data-cap-cover-shape]:not([data-cap-cover-shape="auto"]) .cap-full-player[d
 .cap-ambient-layer{position:absolute;inset:0;transition:opacity 720ms ease;will-change:opacity}.cap-ambient-layer img{display:block;width:100%;height:100%;object-fit:cover}.cap-ambient::after{z-index:2}@media(prefers-reduced-motion:reduce){.cap-ambient-layer{transition:none}}
 
 .cap-ph-icon{display:inline-flex;position:relative;vertical-align:middle;flex-shrink:0;pointer-events:none}.cap-ph-mask{display:none;position:absolute;inset:0;background:currentColor;mask:var(--cap-ph-url) center/contain no-repeat;-webkit-mask:var(--cap-ph-url) center/contain no-repeat}.cap-ph-ready .cap-ph-mask{display:block}.cap-ph-ready>.cap-icon{visibility:hidden}
+
+/* 2.6.3: independent artwork compositing */
+.cap-full-player .cap-ambient-layer{transition:opacity 1200ms ease;position:absolute;inset:0;pointer-events:none}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-ambient{opacity:var(--cap-player-bg-opacity,.82);display:block;isolation:isolate;z-index:0}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-ambient-layer img{opacity:1;transition:none}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-fp-shell{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;z-index:3}
+.cap-full-player .cap-volume input{touch-action:pan-y;pointer-events:auto;position:relative;z-index:4}
+@media(prefers-reduced-motion:reduce){.cap-full-player .cap-ambient-layer{transition:none}}
