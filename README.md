@@ -76,3 +76,11 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.5.4 Alpha
 本地原创几何 SVG 控件，参考统一细线风格；未下载或打包 Lucide 官方资源。播放器、曲库快捷操作和拾忆入口统一图标，保留文字管理操作。
+
+## 2.6.1 Alpha
+新增切换聊天时音乐跟随、精简主题选择、专辑背景及封面设置。自动播放受系统限制。保留旧记忆逻辑。
+
+### v2.6.2 流光
+- 官方 Phosphor Core 2.1.1 CDN SVG（Light / Fill），加载失败保留本地图标；非离线内置官方库。
+- 双层专辑背景预加载及 720ms 交叉渐变。
+- 音量独立于过渡增益，切歌淡出 320ms、淡入 650ms，暂停与恢复也采用淡变。实际设备可能限制媒体音量控制。

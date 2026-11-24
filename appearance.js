@@ -14,6 +14,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     material: 'frost',
     playerTheme: 'default',
     playerBgColor: '',
+    bgSource: 'auto', coverShape: 'auto', coverRadius: 18, coverBorder: 0, coverBorderColor: '#ffffff', coverBorderStyle: 'solid', coverShadow: 0, bgSaturation: 100, bgShade: 15,
     playerBgOpacity: 82,
     playerBgBlur: 24,
     playerIslandCss: '',
@@ -21,10 +22,10 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     playerCustomCss: '',
     sharedFontId: '',
     noteFontId: 'shared',
-    paper: 'warm',
+    paper: 'white',
     paperMode: 'auto',
-    paperPattern: 'dots',
-    noteDecor: 'tape',
+    paperPattern: 'none',
+    noteDecor: 'minimal',
     side: '',
     note: '',
     custom: ''
@@ -96,20 +97,19 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         </label>
         <label>播放器主题
           <select data-pref="playerTheme">
-            <option value="default">经典原生</option>
+            <option value="default">白 · 原生</option>
+            <option value="black">黑 · 原生</option>
             <option value="silverblue">余音 · 银蓝手账</option>
-            <option value="mist">晨雾白瓷</option>
-            <option value="ocean">深海靛蓝</option>
-            <option value="sunset">落日琥珀</option>
-            <option value="sakura">樱雾浅粉</option>
-            <option value="forest">森系青岚</option>
-            <option value="gold">暗夜黑金</option>
-            <option value="cyber">星云紫韵</option>
           </select>
         </label>
       </div>
 
-      <div class="cap-bg-customizer">
+      <details class="cap-bg-customizer"><summary>背景与封面</summary>
+<label>背景来源<select data-pref="bgSource"><option value="auto">主题默认 / 已导入图片</option><option value="album">专辑封面铺满</option><option value="color">专辑取色</option><option value="custom">自定义图片</option></select></label>
+<label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
+<label>边框样式<select data-pref="coverBorderStyle"><option value="solid">实线</option><option value="dashed">虚线</option><option value="double">双线</option></select></label>
+<label>边框颜色<input type="color" data-cover-color></label>
+<label>圆角 (<span data-val="coverRadius"></span>)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label><label>边框宽度 (<span data-val="coverBorder"></span>)<input type="range" min="0" max="8" data-pref-range="coverBorder"></label><label>阴影 (<span data-val="coverShadow"></span>)<input type="range" min="0" max="40" data-pref-range="coverShadow"></label><label>背景饱和度 (<span data-val="bgSaturation"></span>)<input type="range" min="0" max="200" data-pref-range="bgSaturation"></label><label>明暗遮罩 (<span data-val="bgShade"></span>)<input type="range" min="0" max="100" data-pref-range="bgShade"></label>
         <label>自定义背景色 / 渐变（留空使用主题默认）
           <div class="cap-color-row">
             <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
@@ -125,13 +125,13 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         </div>
         <div class="cap-appearance-grid">
           <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
-            <input type="range" min="20" max="100" step="1" data-pref-range="playerBgOpacity">
+            <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
           </label>
           <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
-            <input type="range" min="0" max="40" step="1" data-pref-range="playerBgBlur">
+            <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
           </label>
         </div>
-      </div>
+      </details>
 
       <div class="cap-font-manager">
         <label>自定义字体（与拾忆互通 · 支持 .ttf）
@@ -199,12 +199,6 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         </label>
         <label>便签主题
           <select data-pref="paper">
-            <option value="warm">暖白手账</option>
-            <option value="yellow">经典黄便签</option>
-            <option value="cream">奶油信纸</option>
-            <option value="sage">鼠尾草绿</option>
-            <option value="sakura">樱粉便签</option>
-            <option value="sky">晴空蓝笺</option>
             <option value="white">极简纯白</option>
             <option value="ink">暗夜墨笺</option>
           </select>
@@ -381,11 +375,16 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     b.dataset.capPaperMode = draft.paperMode === 'auto' ? (media.matches ? 'dark' : 'light') : draft.paperMode;
     b.dataset.capPaperPattern = draft.paperPattern;
     b.dataset.capNoteDecor = draft.noteDecor;
-    b.dataset.capHasPlayerBg = bgImageUrl ? '1' : '0';
+    b.dataset.capHasPlayerBg = bgImageUrl && ['auto','custom'].includes(draft.bgSource) ? '1' : '0';
+    b.dataset.capBgSource = draft.bgSource;
+    b.dataset.capCoverShape = draft.coverShape;
+    const vars = {'cover-radius':Number(draft.coverRadius)+'px','cover-border':Number(draft.coverBorder)+'px','cover-color':/^#[0-9a-f]{6}$/i.test(draft.coverBorderColor)?draft.coverBorderColor:'#ffffff','cover-style':['solid','dashed','double'].includes(draft.coverBorderStyle)?draft.coverBorderStyle:'solid','cover-shadow':Number(draft.coverShadow)+'px','bg-saturation':Number(draft.bgSaturation)+'%','bg-shade':Number(draft.bgShade)/100};
+    for(const [k,v] of Object.entries(vars)) D.documentElement.style.setProperty('--cap-'+k,v);
+    if(draft.playerTheme==='black')b.dataset.capLook='dark';
 
     const bgColor = safeBgColor(draft.playerBgColor);
-    const opacity = Math.min(1, Math.max(0.2, Number(draft.playerBgOpacity ?? 82) / 100));
-    const blur = Math.min(40, Math.max(0, Number(draft.playerBgBlur ?? 24)));
+    const opacity = Math.min(1, Math.max(0, Number(draft.playerBgOpacity ?? 82) / 100));
+    const blur = Math.min(60, Math.max(0, Number(draft.playerBgBlur ?? 24)));
 
     D.documentElement.style.setProperty('--cap-player-bg-image', bgImageUrl ? `url("${bgImageUrl}")` : 'none');
     D.documentElement.style.setProperty('--cap-player-bg-opacity', String(opacity));
@@ -428,6 +427,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     }
   }
 
+  const cc=playerBox.querySelector('[data-cover-color]');cc.value=p.coverBorderColor;cc.oninput=()=>{p.coverBorderColor=cc.value;save()};
   // Player background controls
   const bgText = playerBox.querySelector('[data-pref-text="playerBgColor"]');
   const bgPicker = playerBox.querySelector('[data-bg-picker]');

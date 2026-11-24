@@ -314,6 +314,7 @@ const controls = D.createElement('div');
 controls.className = 'cap-backup';
 controls.innerHTML = '<h4>模块与数据</h4><p>暂停音乐自动收录，不删除数据。</p><label><input type="checkbox" data-module="music"> 声屿自动收录</label><button data-backup>导出统一备份</button><button data-restore>恢复音乐库与外观设置</button><input type="file" accept=".json,application/json" hidden><p data-result></p>';
 settings.append(controls);
+const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');controls.append(followLabel);
 const result = msg => controls.querySelector('[data-result]').textContent = msg;
 for (const b of controls.querySelectorAll('[data-module]')) {
   const k = b.dataset.module;

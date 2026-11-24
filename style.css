@@ -1365,3 +1365,20 @@ body .cap-full-player[data-size] .cap-scrubber input::-webkit-slider-thumb{backg
 .cap-full-player .cap-transport button:active,.cap-full-player .cap-fp-tools button:active,.cap-full-player .cap-fp-tabs button:active{transform:scale(.92)}
 .cap-full-player .cap-volume .cap-icon{opacity:.75}
 .cap-action-menu summary .cap-icon,.cap-memory-tools summary .cap-icon{vertical-align:middle}
+
+/* 2.6.1 shared artwork treatment */
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-ambient{display:block;inset:0;opacity:1;}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-ambient img{opacity:var(--cap-player-bg-opacity);filter:blur(var(--cap-player-bg-blur)) saturate(var(--cap-bg-saturation));transform:scale(1.06);}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-ambient::after{background:rgba(0,0,0,var(--cap-bg-shade));}
+body[data-cap-bg-source="album"] .cap-full-player[data-size] .cap-fp-shell{background:transparent;backdrop-filter:none;}
+body[data-cap-bg-source="color"] .cap-full-player[data-size]{background:linear-gradient(150deg,var(--cap-art-color,#8397ad),var(--glass-bg));}
+body[data-cap-bg-source="color"] .cap-full-player[data-size] .cap-ambient{display:none;}
+body[data-cap-cover-shape="square"] .cap-full-player[data-size] .cap-art img{border-radius:0;}
+body[data-cap-cover-shape="rounded"] .cap-full-player[data-size] .cap-art img{border-radius:var(--cap-cover-radius);}
+body[data-cap-cover-shape="circle"] .cap-full-player[data-size] .cap-art img{border-radius:50%;}
+body[data-cap-cover-shape]:not([data-cap-cover-shape="auto"]) .cap-full-player[data-size] .cap-art img{border:var(--cap-cover-border) var(--cap-cover-style) var(--cap-cover-color);box-shadow:0 4px var(--cap-cover-shadow) #0004;box-sizing:border-box;}
+.cap-fp-tools button,.cap-fp-tabs button{min-width:44px;min-height:44px;}
+
+.cap-ambient-layer{position:absolute;inset:0;transition:opacity 720ms ease;will-change:opacity}.cap-ambient-layer img{display:block;width:100%;height:100%;object-fit:cover}.cap-ambient::after{z-index:2}@media(prefers-reduced-motion:reduce){.cap-ambient-layer{transition:none}}
+
+.cap-ph-icon{display:inline-flex;position:relative;vertical-align:middle;flex-shrink:0;pointer-events:none}.cap-ph-mask{display:none;position:absolute;inset:0;background:currentColor;mask:var(--cap-ph-url) center/contain no-repeat;-webkit-mask:var(--cap-ph-url) center/contain no-repeat}.cap-ph-ready .cap-ph-mask{display:block}.cap-ph-ready>.cap-icon{visibility:hidden}
