@@ -16,7 +16,10 @@ export async function startMemory(shared) {
   const safe = s=>String(s??'').replace(/[<>"&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;','&':'&amp;'}[c]));
   const settingsDefault={start:'<摩羯纪要>',end:'</摩羯纪要>',keep:5,storyYear:''};
   const vars=()=>api('getVariables',{type:'chat'})||{};
-  const saveVars=patch=>api('insertOrAssignVariables',{shiyi_v01:patch},{type:'chat'});
+  const saveVars=patch=>api('replaceVariables',{...vars(),shiyi_v01:patch},{type:'chat'});
+  const blocked=key=>!!vars().shiyi_v01?.deletedKeys?.[key];
+  const markDeleted=(keys)=>{const d=vars().shiyi_v01||{};saveVars({...d,deletedKeys:{...d.deletedKeys,...Object.fromEntries(keys.map(k=>[k,true]))}});};
+  const changed=()=>state.onChange?.();
   const config=()=>({ ...settingsDefault,...(vars().shiyi_v01?.settings||{}) });
   const records=()=>vars().shiyi_v01?.records||{};
   const context=()=>hostWindow.SillyTavern?.getContext?.()||window.SillyTavern?.getContext?.()||{};
@@ -36,7 +39,7 @@ export async function startMemory(shared) {
   function hash(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16).toUpperCase().padStart(8,'0');}
   const notice=(msg)=>{console.info('[拾忆]',msg); const el=$('#shiyi-status',state.root);if(el)el.textContent=msg;};
   const error=(e)=>{console.error('[拾忆]',e);notice('操作失败：'+(e?.message||e));};
-  function getMessages(){ if(shared?.messages)return shared.messages; const last=api('getLastMessageId');return last>=0?api('getChatMessages',`0-${last}`,{role:'assistant',hide_state:'all'}):[]; }
+  function getMessages(){ const last=api('getLastMessageId');if(!Number.isInteger(last)||last < -1)throw Error('聊天尚未就绪');const list=last>=0?api('getChatMessages',`0-${last}`,{role:'assistant',hide_state:'all'}):[];if(!Array.isArray(list))throw Error('聊天读取失败');return list; }
   function extract(str){const {start,end}=config();if(!start||!end)return null;const a=str.lastIndexOf(start);if(a<0)return null;const b=str.indexOf(end,a+start.length);if(b<0)return null;return str.slice(a+start.length,b).trim();}
   // 剧情日期解析：支持年月日、月日、中文上午/中午/下午、起止范围和跨日。
   // 缺少年份时仅使用用户在设置中确认的剧情年份，不以现实年份填充。
@@ -84,7 +87,7 @@ export async function startMemory(shared) {
       const overlay=hostDocument.createElement('div');overlay.className='shiyi-overlay';
       overlay.innerHTML=`<div class="shiyi-dialog" role="dialog" aria-modal="true"><h3>${safe(title)}</h3><div class="shiyi-body"></div><div class="shiyi-actions"></div></div>`;
       $('.shiyi-body',overlay).append(body);
-      const finish=(v)=>{overlay.remove();state.open=false;resolve(v);};
+      const finish=(v)=>{overlay.remove();state.open=false;state.closeModal=null;resolve(v);};state.closeModal=()=>finish('cancel');
       buttons.forEach(({label,value,kind})=>{const b=hostDocument.createElement('button');b.textContent=label;if(kind)b.className=kind;b.onclick=()=>finish(value);$('.shiyi-actions',overlay).append(b);});
       hostDocument.body.append(overlay);state.open=true;
     });
@@ -93,7 +96,7 @@ export async function startMemory(shared) {
   // 使用串行队列，避免扫描和确认归档同时修改全局列表。
   function syncGlobalBook(target, expectedChat){
     const run=async()=>{
-      if(expectedChat && identity()!==expectedChat) return;
+      if(state.disposed||(expectedChat && identity()!==expectedChat)) return;
       const active=api('getGlobalWorldbookNames')||[];
       const keep=active.filter(x=>!String(x).startsWith('拾忆｜'));
       if(target){
@@ -102,7 +105,7 @@ export async function startMemory(shared) {
       }
       if(active.length===keep.length && active.every((x,i)=>x===keep[i])) return;
       // 写入前二次核对聊天，避免异步切档时把旧存档重新挂载。
-      if(expectedChat && identity()!==expectedChat) return;
+      if(state.disposed||(expectedChat && identity()!==expectedChat)) return;
       await api('rebindGlobalWorldbooks',keep);
       notice(target?'已全局启用当前存档记忆：'+target:'已停用其他存档的拾忆记忆书');
     };
@@ -112,7 +115,7 @@ export async function startMemory(shared) {
   }
   const characterKey=()=>{const c=context();return c.groupId!=null?'group:'+c.groupId:String(c.characters?.[c.characterId]?.avatar||c.characterId||c.name2||'');};
   const bookName=()=>`拾忆｜角色｜${hash(characterKey())}`;
-  const check=id=>{if(identity()!==id)throw Error('聊天已切换，请重试');};
+  const check=id=>{if(state.disposed||identity()!==id)throw Error('聊天已切换，请重试');};
   const formatRows=rows=>Object.values(rows).sort((a,b)=>a.sourceMessage-b.sourceMessage).map(r=>`【${r.storyTime||'日期未识别'}｜${r.title}】\n${r.content}`).join('\n\n');
   let writes=Promise.resolve();
   function serial(fn){const task=writes.then(fn,fn);writes=task.catch(()=>{});return task;}
@@ -126,19 +129,22 @@ export async function startMemory(shared) {
       rows={};for(const e of entries.filter(e=>e.extra?.shiyi_key)){const k=e.extra.shiyi_key,r=data.records?.[k]||{};rows[k]={...r,title:r.title||e.name,content:e.content,sourceMessage:r.sourceMessage??e.extra.shiyi_message_id,storyTime:parseStoryTime(e.content),sourceHash:k.split(':').slice(1).join(':')};}
     }
     if(!(api('getWorldbookNames')||[]).includes(name)){
+      if(data.archiveVersion===2){markDeleted(Object.keys(rows));rows={};saveVars({...vars().shiyi_v01,records:rows});changed();}
       if(!create&&!Object.keys(rows).length)return null;
       check(id);if(!await api('createWorldbook',name,[]))throw Error('世界书创建失败');
     }
     check(id);let entries=await api('getWorldbook',name);check(id);
     if(entries.some(e=>e.extra?.shiyi_owner!==owner))throw Error('角色世界书标识冲突，请检查');
     let entry=entries.find(e=>e.extra?.shiyi_chat===id);
-    if(!entry&&(create||Object.keys(rows).length)){
+    if(!entry&&data.archiveVersion===2&&Object.keys(rows).length){markDeleted(Object.keys(rows));rows={};saveVars({...vars().shiyi_v01,records:rows});changed();}
+    if(!entry&&(create||(data.archiveVersion!==2&&Object.keys(rows).length))){
       const result=await api('createWorldbookEntries',name,[{name:chatLabel(),content:formatRows(rows),enabled:false,strategy:{type:'constant',keys:[]},probability:100,extra:{shiyi_owner:owner,shiyi_chat:id,shiyi_rows:rows}}]);
       entry=result?.new_entries?.[0];if(!entry)throw Error('创建聊天条目失败');
     }
     check(id);
-    if(entry){rows=entry.extra?.shiyi_rows||rows;rows=Object.fromEntries(Object.entries(rows).map(([k,r])=>[k,{...r,uid:entry.uid,book:name}]));}
-    if(entry||data.archiveVersion===2)saveVars({...data,book:name,archiveVersion:2,records:rows});
+    if(entry&& !String(entry.content||'').trim()&&Object.keys(entry.extra?.shiyi_rows||{}).length){const keys=Object.keys(entry.extra.shiyi_rows);markDeleted(keys);await api('updateWorldbookWith',name,all=>all.map(e=>e.uid===entry.uid?{...e,extra:{...e.extra,shiyi_rows:{}}}:e));check(id);entry={...entry,extra:{...entry.extra,shiyi_rows:{}}};}
+    if(entry){const authoritative=entry.extra?.shiyi_rows||rows;const removed=Object.keys(rows).filter(k=>!Object.prototype.hasOwnProperty.call(authoritative,k));if(removed.length)markDeleted(removed);rows=authoritative;rows=Object.fromEntries(Object.entries(rows).map(([k,r])=>[k,{...r,uid:entry.uid,book:name}]));}
+    if(entry||data.archiveVersion===2){const latest=vars().shiyi_v01||{};if(JSON.stringify(latest.records||{})!==JSON.stringify(rows)||latest.archiveVersion!==2){saveVars({...latest,book:name,archiveVersion:2,records:rows});changed();}}
     if(old&&api('getChatWorldbookName','current')===old){check(id);await api('rebindChatWorldbook','current',null);}
     check(id);
     if(entries.some(e=>e.enabled!== (e.extra?.shiyi_chat===id))||entry&&!entry.enabled){await api('updateWorldbookWith',name,all=>all.map(e=>({...e,enabled:e.extra?.shiyi_chat===id})));}
@@ -149,10 +155,10 @@ export async function startMemory(shared) {
     const entries=await api('getWorldbook',book);check(id);const entry=entries.find(e=>e.extra?.shiyi_chat===id);if(!entry)throw Error('聊天条目不存在');
     rows=Object.fromEntries(Object.entries(rows).map(([k,r])=>[k,{...r,uid:entry.uid,book}]));
     await api('updateWorldbookWith',book,all=>all.map(e=>e.uid===entry.uid?{...e,content:formatRows(rows),extra:{...e.extra,shiyi_rows:rows}}:e));
-    check(id);saveVars({...vars().shiyi_v01,book,archiveVersion:2,records:rows});
+    check(id);saveVars({...vars().shiyi_v01,book,archiveVersion:2,records:rows});changed();
   }
   async function addMemory(candidate,title,content){return serial(async()=>{
-    const id=candidate.chat;check(id);const source=getMessages().find(m=>m.message_id===candidate.id);
+    const id=candidate.chat;check(id);if(blocked(candidate.key))throw Error('该版本摘要已删除');const source=getMessages().find(m=>m.message_id===candidate.id);
     if(!source||hash(String(source.message??''))!==candidate.key.split(':').slice(1).join(':'))throw Error('原始正文已改变，请重新审核');
     await ensureWorldbook(id,true);check(id);const rows={...records()};
     if(rows[candidate.key])return notice('这条摘要已经归档');
@@ -161,7 +167,7 @@ export async function startMemory(shared) {
     await writeRows(id,rows);await syncGlobalBook(bookName(),id);state.seen.add(candidate.key);notice('已更新当前聊天记忆');
   });}
   async function review(candidate){
-    if(state.disposed||identity()!==candidate.chat)return;
+    if(state.disposed||identity()!==candidate.chat||blocked(candidate.key))return;
     const wrap=hostDocument.createElement('div');
     wrap.innerHTML=`<p class="shiyi-muted">来源：第 ${candidate.id} 楼 · 注入前请核对正史</p><label>记忆标题<input id="shiyi-title" maxlength="40" value="剧情摘要 ${candidate.id}"></label><label>记忆内容<textarea id="shiyi-content" rows="10"></textarea></label>`;
     $('#shiyi-content',wrap).value=candidate.content;
@@ -170,22 +176,28 @@ export async function startMemory(shared) {
       const title=$('#shiyi-title',wrap).value.trim()||`剧情摘要 ${candidate.id}`;
       const content=$('#shiyi-content',wrap).value.trim();
       if(!content){notice('摘要为空，未注入');return;}
-      try{await addMemory(candidate,title,content);}catch(e){error(e);state.queue.unshift(candidate);}
-    } else if(choice==='reject'){state.deferred.set(candidate.id,null);state.seen.add(candidate.key);notice('已拒绝，本次运行不再提示该摘要');}
-    else {state.deferred.set(candidate.id,candidate);state.seen.add(candidate.key);notice('已暂缓：本楼层不会自动重复弹窗，可点击「待审核」手动处理');}
+      try{await addMemory(candidate,title,content);}catch(e){error(e);if(!state.disposed&&identity()===candidate.chat&&!blocked(candidate.key)&&getMessages().some(m=>m.message_id===candidate.id&&`${m.message_id}:${hash(String(m.message??''))}`===candidate.key))state.queue.unshift(candidate);}
+    } else if(choice==='reject'){if(identity()===candidate.chat)markDeleted([candidate.key]);state.seen.add(candidate.key);notice('已拒绝，本次运行不再提示该摘要');}
+    else if(choice==='later'&&identity()===candidate.chat&&!state.disposed){state.deferred.set(candidate.id,candidate);state.seen.add(candidate.key);notice('已暂缓：本楼层不会自动重复弹窗，可点击「待审核」手动处理');}
   }
-  async function verifyGlobal(){const id=identity();if(!id)return;await serial(async()=>{check(id);const target=await ensureWorldbook(id,false);check(id);await syncGlobalBook(target,id);});}
+  async function verifyGlobal(){const id=identity();if(!id)return;await serial(async()=>{check(id);getMessages();const target=await ensureWorldbook(id,false);check(id);const messages=getMessages();
+    if(Array.isArray(messages)){const current=new Map(messages.map(m=>[m.message_id,hash(String(m.message??''))]));const rows={...records()};const stale=Object.keys(rows).filter(k=>{const r=rows[k];return Number.isInteger(r.sourceMessage)&&(!current.has(r.sourceMessage)||current.get(r.sourceMessage)!==k.split(':').slice(1).join(':'));});if(stale.length){markDeleted(stale);for(const k of stale)delete rows[k];await writeRows(id,rows);notice('已撤销 '+stale.length+' 条失效记忆');}}
+    await syncGlobalBook(target,id);});}
   async function scan(){
-    if(state.busy||state.open||state.disposed)return;
+    if(state.busy||state.disposed)return;
     const id=identity();if(!id)return;
-    if(id!==state.current){state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];}
+    if(id!==state.current){state.closeModal?.();state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];}
     state.busy=true;try{await verifyGlobal();}catch(e){error(e);return;}finally{state.busy=false;}
     if(id!==identity())return;
-    if(shared?.flags?.memory===false)return;
+    if(shared?.flags?.memory===false||state.open)return;
     state.busy=true;
     try{
       const existing=records();
       const messages=getMessages();
+      const live=new Map(messages.map(m=>[m.message_id,`${m.message_id}:${hash(String(m.message??''))}`]));
+      state.queue=state.queue.filter(q=>q.chat===id&&live.get(q.id)===q.key&&!blocked(q.key));
+      for(const [floor,q] of state.deferred)if(q.chat!==id||live.get(floor)!==q.key||blocked(q.key))state.deferred.delete(floor);
+      for(const floor of state.stability.keys())if(!live.has(floor))state.stability.delete(floor);
       for(const m of messages){
         const idNum=m.message_id;
         const text=String(m.message??'');
@@ -197,7 +209,7 @@ export async function startMemory(shared) {
         if(now-prev.since<8000)continue;
         const key=`${idNum}:${digest}`;
         // 稍后处理以楼层为单位抑制；避免流式输出造成不同哈希重复弹窗。
-        if(state.deferred.has(idNum)||existing[key]||state.seen.has(key)||state.queue.some(x=>x.id===idNum))continue;
+        if(blocked(key)||state.deferred.has(idNum)||existing[key]||state.seen.has(key)||state.queue.some(x=>x.id===idNum))continue;
         // 已归档的同一楼层不再自动审核后续文本变化。
 
         state.seen.add(key);
@@ -216,7 +228,7 @@ export async function startMemory(shared) {
       candidates=getMessages().map(m=>{
         const id=m.message_id, message=String(m.message??''), content=extract(message);
         return content?{id,key:`${id}:${hash(message)}`,content,chat}:null;
-      }).filter(x=>x&&!saved[x.key]).sort((a,b)=>a.id-b.id);
+      }).filter(x=>x&&!saved[x.key]&&!blocked(x.key)).sort((a,b)=>a.id-b.id);
     }catch(e){return error(e);}
     if(!candidates.length)return notice('未发现尚未归档的历史摘要');
     const box=hostDocument.createElement('div');
@@ -317,7 +329,7 @@ export async function startMemory(shared) {
       const row=hostDocument.createElement('div');row.className='shiyi-row';
       const label=hostDocument.createElement('span');label.textContent=r.title;
       const edit=hostDocument.createElement('button');edit.textContent='编辑';edit.onclick=async()=>{const content=hostWindow.prompt('修改记忆内容',r.content);if(content===null||!content.trim())return;try{await serial(async()=>{check(id);const rows={...records()};if(!rows[key])throw Error('摘要不存在');rows[key]={...rows[key],content,storyTime:parseStoryTime(content)};await writeRows(id,rows);});r.content=content;notice('修改成功');}catch(e){error(e);}};
-      const del=hostDocument.createElement('button');del.textContent='删除';del.onclick=async()=>{if(!hostWindow.confirm('删除此摘要？原始聊天不删除。'))return;try{await serial(async()=>{check(id);const rows={...records()};delete rows[key];await writeRows(id,rows);});state.seen.add(key);row.remove();notice('记忆已删除');}catch(e){error(e);}};
+      const del=hostDocument.createElement('button');del.textContent='删除';del.onclick=async()=>{if(!hostWindow.confirm('删除此摘要？原始聊天不删除。'))return;try{await serial(async()=>{check(id);const rows={...records()};delete rows[key];markDeleted([key]);await writeRows(id,rows);state.queue=state.queue.filter(q=>q.key!==key);state.deferred.delete(r.sourceMessage);});state.seen.add(key);row.remove();notice('记忆已删除');}catch(e){error(e);}};
       const source=hostDocument.createElement('button');source.textContent='溯源';source.onclick=()=>{if(identity()===id)hostWindow.alert(String(getMessages().find(m=>m.message_id===r.sourceMessage)?.message||'原始楼层已不存在'));};
       row.append(label,source,edit,del);container.append(row);
     }
@@ -374,7 +386,7 @@ export async function startMemory(shared) {
     $('#shiyi-manage',state.root).onclick=()=>manage();
     $('#shiyi-settings',state.root).onclick=()=>settings();
   }
-  state.destroy=()=>{state.disposed=true;clearInterval(state.timer);state.root?.remove();state.style?.remove();};
+  state.destroy=()=>{state.disposed=true;state.closeModal?.();clearInterval(state.timer);state.root?.remove();state.style?.remove();};
   try { ui(); } catch(e) { console.error('[拾忆] UI 初始化失败',e); try { hostWindow.alert('拾忆 v0.7 启动失败：'+e.message); } catch(_) {} }
   // 备用入口：酒馆助手脚本按钮，即使悬浮层被主题遮挡也能打开诊断。
   try {
@@ -386,7 +398,7 @@ export async function startMemory(shared) {
     }
   } catch(e) { console.warn('[拾忆] 脚本按钮绑定失败',e); }
   // 轮询比依赖某个版本的事件常量更稳健。仅检查已完成且带闭合标签的消息。
-  state.tick=()=>scan().catch(error); state.pending=()=>state.queue.length+state.deferred.size;
+  state.validate=()=>verifyGlobal();state.tick=()=>scan().catch(error); state.pending=()=>state.queue.length+state.deferred.size;
   scan().catch(error);
   console.info('[拾忆] v0.5 已加载；自动切换拾忆全局世界书，不修改其他全局世界书，仅在手动确认后隐藏正文，可恢复。');
 

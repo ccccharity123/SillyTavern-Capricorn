@@ -17,7 +17,7 @@ try {
 const SHIYI_ICONS = {bookmark:icon("note",20),palette:icon("palette",18),refresh:icon("refresh",18),close:icon("right",18),note:icon("music",18)};
 
 const shared = { messages: null, flags, onIslandUpdate: null };
-let cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
+let musicBusy = false, eventCleanup = [], cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
@@ -197,11 +197,11 @@ async function tick() {
   if (busy || dead) return;
   busy = true;
   try {
-    const last = api('getLastMessageId');
-    shared.messages = last >= 0 ? api('getChatMessages', `0-${last}`, { role: 'assistant', hide_state: 'all' }) : [];
-    if (!Array.isArray(shared.messages)) shared.messages = null;
-    if (flags.music) await music?.tick();
     Promise.resolve(memory?.tick()).catch(e => console.warn('[Capricorn] memory scan', e));
+    if (flags.music && music && !musicBusy) {
+      musicBusy = true;
+      Promise.resolve().then(()=>music.tick()).catch(e=>console.warn('[Capricorn] music scan',e)).finally(()=>{musicBusy=false;});
+    }
     if (memoryOpen() && shownScope !== scope()) refreshTimeline();
     if (memory?.root) {
       const b = memory.root.querySelector('#shiyi-expand');
@@ -228,6 +228,7 @@ async function tick() {
 W.__capricornExtension = {
   destroy() {
     dead = true;
+    for(const off of eventCleanup)off();
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
     cleanupMemorySide?.();
@@ -296,6 +297,7 @@ function mountMemorySide(dock, button) {
 }
 
 if (memory?.root) {
+  memory.onChange = () => { if (memoryOpen()) void refreshTimeline(); };
   memory.root.classList.add('cap-memory-side');
 
   // 收起态：纯图标精致耳扣，彻底移除文字
@@ -373,6 +375,15 @@ if (memory?.root) {
 }
 
 if (music?.root) { content.append(music.root); }
+if (!dead) {
+  const c=W.SillyTavern?.getContext?.()||{}, src=c.eventSource, types=c.eventTypes||c.event_types||{};
+  const bind=(key,fn)=>{const name=types[key];if(name&&src?.on){src.on(name,fn);eventCleanup.push(()=>{if(src.removeListener)src.removeListener(name,fn);else src.off?.(name,fn);});}};
+  const validate=async()=>{if(dead)return;try{await memory?.validate?.();}catch(e){console.warn('[Capricorn] memory validation',e);root.querySelector('small').textContent='拾忆校验失败：'+e.message;}};
+  bind('GENERATION_STARTED',validate);
+  bind('GENERATION_AFTER_COMMANDS',validate);
+  for(const key of ['CHAT_CHANGED','MESSAGE_SWIPED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_ENDED'])bind(key,async()=>{try{await validate();if(!dead)void tick();}catch(e){console.warn('[Capricorn] event validation',e);}});
+  const resume=()=>{if(!D.hidden&&!dead)void tick();};D.addEventListener('visibilitychange',resume);eventCleanup.push(()=>D.removeEventListener('visibilitychange',resume));
+}
 if (!dead) { timer = setInterval(() => { if (!D.hidden) void tick(); }, 4000); tick(); }
 
 const controls = D.createElement('div');
