@@ -23,10 +23,7 @@ const root = D.createElement('div');
 root.id = 'capricorn-hub';
 root.innerHTML = `
   <button class="cap-island" aria-expanded="false" data-playing="false" aria-label="声屿音乐播放器" title="声屿">
-    <span class="cap-island-orb" aria-hidden="true">
-      ${SHIYI_ICONS.note}
-      <span class="cap-island-bars"><i></i><i></i><i></i></span>
-    </span>
+    <span class="cap-island-colors" aria-hidden="true"></span>
     <span class="cap-island-lyric-wrap">
       <span class="cap-island-lyric">声屿</span>
     </span>
@@ -59,7 +56,17 @@ const nav = root.querySelector('nav'), island = root.querySelector('.cap-island'
 const islandLyric = root.querySelector('.cap-island-lyric');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
 
-shared.onIslandUpdate = ({ playing, text, title }) => {
+let islandCover='', islandColorEpoch=0;
+function colorIsland(url){
+  if(url===islandCover)return; islandCover=url; const epoch=++islandColorEpoch;
+  const host=island.querySelector('.cap-island-colors');
+  function show(background){if(epoch!==islandColorEpoch)return;const old=Array.from(host.children);const layer=D.createElement('span');layer.style.background=background;host.append(layer);void layer.offsetWidth;requestAnimationFrame(()=>{if(epoch!==islandColorEpoch){layer.remove();return;}layer.style.opacity='1';for(const el of old){el.style.opacity='0';setTimeout(()=>el.remove(),1250);}});}
+  if(!url){show('transparent');return;}
+  let u;try{u=new URL(url);if(!['https:','http:'].includes(u.protocol))throw Error();}catch{show('transparent');return;}
+  const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{try{const c=D.createElement('canvas');c.width=c.height=24;const x=c.getContext('2d');x.drawImage(img,0,0,24,24);const d=x.getImageData(0,0,24,24).data;const bins=new Map();for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const rgb=[d[i],d[i+1],d[i+2]];const k=rgb.map(v=>v>>5).join(',');const v=bins.get(k)||[0,0,0,0];v[0]+=rgb[0];v[1]+=rgb[1];v[2]+=rgb[2];v[3]++;bins.set(k,v);}const colors=[...bins.values()].sort((a,b)=>b[3]-a[3]).slice(0,3).map(v=>'rgb('+v.slice(0,3).map(n=>Math.round(n/v[3])).join(',')+')');if(!colors.length)throw Error();show('linear-gradient(135deg,'+[colors[0],colors[1]||colors[0],colors[2]||colors[0]].join(',')+')');}catch{show('transparent');}};img.onerror=()=>show('transparent');img.src=u.href;
+}
+shared.onIslandUpdate = ({ playing, text, title, coverUrl }) => {
+  colorIsland(coverUrl||'');
   island.dataset.playing = playing ? 'true' : 'false';
   island.title = playing ? `${title || '正在播放'} · 点击展开声屿` : '声屿（点击打开播放器）';
   if (playing && text) {

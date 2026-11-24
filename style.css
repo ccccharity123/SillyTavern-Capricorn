@@ -1422,3 +1422,14 @@ body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric{font-s
 body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active{opacity:1;transform:none;}
 body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric small{font-size:.55em;line-height:1.5;}
 @media(max-height:500px){body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-shell{overflow-y:auto;}body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-detail{min-height:100px;}}
+/* 2.6.7: iconless material-aware island */
+body[data-cap-look] #capricorn-hub .cap-island[data-playing] {position:relative;isolation:isolate;background:var(--glass-bg);color:var(--glass-fg);border:1px solid var(--glass-line);backdrop-filter:var(--glass-filter);-webkit-backdrop-filter:var(--glass-filter);box-shadow:inset 0 1px 3px var(--glass-highlight),0 6px 20px #0002;}
+body[data-cap-material="glass"] #capricorn-hub .cap-island[data-playing] {background:rgba(255,255,255,.13);backdrop-filter:blur(4px) saturate(150%);-webkit-backdrop-filter:blur(4px) saturate(150%);}
+body[data-cap-material="glass"][data-cap-look="dark"] #capricorn-hub .cap-island[data-playing] {background:rgba(0,0,0,.22);}
+body[data-cap-player-theme="silverblue"] #capricorn-hub .cap-island[data-playing] {border-color:rgba(151,184,222,.55);box-shadow:inset 0 1px 4px #c8e2ff99,0 6px 20px #5376a333;}
+#capricorn-hub .cap-island .cap-island-colors {position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.32;overflow:hidden;border-radius:inherit;}
+#capricorn-hub .cap-island .cap-island-colors > span {position:absolute;inset:0;opacity:0;transition:opacity 1.2s ease;}
+body[data-cap-material="glass"] #capricorn-hub .cap-island .cap-island-colors {opacity:.22;}
+body[data-cap-material="solid"] #capricorn-hub .cap-island .cap-island-colors {opacity:.45;}
+#capricorn-hub .cap-island[data-playing="true"] {padding:0 16px;gap:0;}
+#capricorn-hub .cap-island[data-playing="false"] {width:var(--island-orb-size);max-width:var(--island-orb-size);}
