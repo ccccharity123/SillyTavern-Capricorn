@@ -73,3 +73,6 @@
 ## v4.3.0-dev.8
 - Bounded context-only third retrieval pass for weak or limited evidence; no new factual anchor.
 - Node regression: 50/50 passed.
+
+## 4.3.1-dev.1
+Explicit Chat Completion preset manager, save/reselect verification, individual and bulk removal, insertion before native post-history instructions. Real host verification pending.

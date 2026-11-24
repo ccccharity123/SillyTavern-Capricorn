@@ -1,6 +1,6 @@
 {
   "name": "capricorn-tavern-extension",
-  "version": "4.3.0-dev.10",
+  "version": "4.3.1-dev.1",
   "private": true,
   "type": "module",
   "scripts": {
