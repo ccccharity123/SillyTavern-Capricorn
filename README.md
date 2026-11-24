@@ -105,3 +105,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## 2.7.1
 音质胶囊可选择网易云音质，保存偏好并按所选档位向下尝试，切换时尝试恢复进度。更新本地 SVG 控件，不增加外部请求。
+
+## v2.7.5 Alpha
+移动端优先原生 HTMLAudioElement，避免 Web Audio 后台挂起；iOS 使用系统音量键。系统媒体会话同步歌曲、进度和控制，不发送角色或聊天名。后台播放与原生灵动岛由系统和 WebView 决定，强制退出不支持。
