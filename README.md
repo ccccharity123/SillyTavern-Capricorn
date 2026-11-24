@@ -73,3 +73,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## 2.5.3 Alpha
 灵动岛直达播放器，三档尺寸按钮切换，音量常驻，共用主题。曲库与设置关闭后返回播放器。尺寸本地记忆。
+
+## v2.5.4 Alpha
+本地原创几何 SVG 控件，参考统一细线风格；未下载或打包 Lucide 官方资源。播放器、曲库快捷操作和拾忆入口统一图标，保留文字管理操作。

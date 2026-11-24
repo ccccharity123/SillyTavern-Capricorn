@@ -110,48 +110,56 @@ export async function startMemory(shared) {
     state.globalSync=task.catch(e=>{error(e);});
     return task;
   }
-  async function ensureWorldbook(){
-    const id=identity();if(!id)throw Error('无法读取聊天存档标识，请先打开实际聊天');
-    const data=vars().shiyi_v01||{};
-    let name=data.book;
-    const bound=api('getChatWorldbookName','current');
-    if(name){
-      if(!(api('getWorldbookNames')||[]).includes(name))throw Error('原专属世界书不存在，请手动检查');
-      // v0.4 已绑定的聊天世界书不解除，避免破坏历史存档；同时全局挂载。
-      await syncGlobalBook(name,id);
-      return name;
+  const characterKey=()=>{const c=context();return c.groupId!=null?'group:'+c.groupId:String(c.characters?.[c.characterId]?.avatar||c.characterId||c.name2||'');};
+  const bookName=()=>`拾忆｜角色｜${hash(characterKey())}`;
+  const check=id=>{if(identity()!==id)throw Error('聊天已切换，请重试');};
+  const formatRows=rows=>Object.values(rows).sort((a,b)=>a.sourceMessage-b.sourceMessage).map(r=>`【${r.storyTime||'日期未识别'}｜${r.title}】\n${r.content}`).join('\n\n');
+  let writes=Promise.resolve();
+  function serial(fn){const task=writes.then(fn,fn);writes=task.catch(()=>{});return task;}
+  async function ensureWorldbook(id,create=false){
+    check(id);const data=vars().shiyi_v01||{}, name=bookName(), owner=characterKey();
+    const legacy=data.book&&data.book!==name?data.book:api('getChatWorldbookName','current');
+    const old=legacy&&legacy!==name&&legacy.startsWith('拾忆｜')?legacy:null;
+    let rows={...(data.records||{})};
+    if(old&&data.archiveVersion!==2){
+      const entries=await api('getWorldbook',old);check(id);
+      rows={};for(const e of entries.filter(e=>e.extra?.shiyi_key)){const k=e.extra.shiyi_key,r=data.records?.[k]||{};rows[k]={...r,title:r.title||e.name,content:e.content,sourceMessage:r.sourceMessage??e.extra.shiyi_message_id,storyTime:parseStoryTime(e.content),sourceHash:k.split(':').slice(1).join(':')};}
     }
-    if(bound && bound.startsWith('拾忆｜')){
-      saveVars({...data,book:bound});
-      await syncGlobalBook(bound,id);
-      return bound;
+    if(!(api('getWorldbookNames')||[]).includes(name)){
+      if(!create&&!Object.keys(rows).length)return null;
+      check(id);if(!await api('createWorldbook',name,[]))throw Error('世界书创建失败');
     }
-    // 不占用聊天世界书绑定槽位，保护已有的非拾忆聊天世界书。
-    name=chatLabel();
-    if((api('getWorldbookNames')||[]).includes(name))name+='｜'+Date.now().toString(36).slice(-5);
-    const made=await api('createWorldbook',name,[]);
-    if(!made)throw Error('世界书创建失败');
-    saveVars({...data,book:name});
-    await syncGlobalBook(name,id);
-    return name;
+    check(id);let entries=await api('getWorldbook',name);check(id);
+    if(entries.some(e=>e.extra?.shiyi_owner!==owner))throw Error('角色世界书标识冲突，请检查');
+    let entry=entries.find(e=>e.extra?.shiyi_chat===id);
+    if(!entry&&(create||Object.keys(rows).length)){
+      const result=await api('createWorldbookEntries',name,[{name:chatLabel(),content:formatRows(rows),enabled:false,strategy:{type:'constant',keys:[]},probability:100,extra:{shiyi_owner:owner,shiyi_chat:id,shiyi_rows:rows}}]);
+      entry=result?.new_entries?.[0];if(!entry)throw Error('创建聊天条目失败');
+    }
+    check(id);
+    if(entry){rows=entry.extra?.shiyi_rows||rows;rows=Object.fromEntries(Object.entries(rows).map(([k,r])=>[k,{...r,uid:entry.uid,book:name}]));}
+    if(entry||data.archiveVersion===2)saveVars({...data,book:name,archiveVersion:2,records:rows});
+    if(old&&api('getChatWorldbookName','current')===old){check(id);await api('rebindChatWorldbook','current',null);}
+    check(id);
+    if(entries.some(e=>e.enabled!== (e.extra?.shiyi_chat===id))||entry&&!entry.enabled){await api('updateWorldbookWith',name,all=>all.map(e=>({...e,enabled:e.extra?.shiyi_chat===id})));}
+    check(id);return name;
   }
-  async function addMemory(candidate,title,content){
-    if(identity()!==candidate.chat)throw Error('聊天已切换，请返回原聊天再审核');
-    const source=(getMessages()||[]).find(m=>m.message_id===candidate.id);
-    if(!source||hash(String(source.message??''))!==candidate.key.split(':').slice(1).join(':'))throw Error('原始正文已改变，请重新检测并审核摘要');
-    const data=vars().shiyi_v01||{};
-    if(data.records?.[candidate.key])return notice('这条摘要已经归档');
-    const book=await ensureWorldbook();
-    const existing=await api('getWorldbook',book);
-    const n=existing.filter(x=>x.name?.startsWith('记忆')).length+1;
-    const entry={name:`记忆${String(n).padStart(3,'0')}｜${title.slice(0,40)}`,content:content.trim(),enabled:true,strategy:{type:'constant',keys:[]},probability:100,extra:{shiyi_key:candidate.key,shiyi_message_id:candidate.id}};
-    const result=await api('createWorldbookEntries',book,[entry]);
-    const added=result?.new_entries?.[0];if(!added||!Number.isInteger(added.uid))throw Error('世界书写入返回异常；请检查是否已创建条目，避免重复确认');
-    const updated=vars().shiyi_v01||{};
-    const all={...(updated.records||{})};all[candidate.key]={uid:added.uid,book,title,content,sourceMessage:candidate.id,sourceHash:candidate.key.split(':').slice(1).join(':'),storyTime:parseStoryTime(content),createdAt:new Date().toISOString()};
-    saveVars({...updated,records:all});
-    state.seen.add(candidate.key);notice('已归档到：'+book);
+  async function writeRows(id,rows){
+    check(id);const book=await ensureWorldbook(id,true);check(id);
+    const entries=await api('getWorldbook',book);check(id);const entry=entries.find(e=>e.extra?.shiyi_chat===id);if(!entry)throw Error('聊天条目不存在');
+    rows=Object.fromEntries(Object.entries(rows).map(([k,r])=>[k,{...r,uid:entry.uid,book}]));
+    await api('updateWorldbookWith',book,all=>all.map(e=>e.uid===entry.uid?{...e,content:formatRows(rows),extra:{...e.extra,shiyi_rows:rows}}:e));
+    check(id);saveVars({...vars().shiyi_v01,book,archiveVersion:2,records:rows});
   }
+  async function addMemory(candidate,title,content){return serial(async()=>{
+    const id=candidate.chat;check(id);const source=getMessages().find(m=>m.message_id===candidate.id);
+    if(!source||hash(String(source.message??''))!==candidate.key.split(':').slice(1).join(':'))throw Error('原始正文已改变，请重新审核');
+    await ensureWorldbook(id,true);check(id);const rows={...records()};
+    if(rows[candidate.key])return notice('这条摘要已经归档');
+    for(const [k,r] of Object.entries(rows))if(r.sourceMessage===candidate.id)delete rows[k];
+    rows[candidate.key]={title,content,sourceMessage:candidate.id,sourceHash:candidate.key.split(':').slice(1).join(':'),storyTime:parseStoryTime(content),createdAt:new Date().toISOString()};
+    await writeRows(id,rows);await syncGlobalBook(bookName(),id);state.seen.add(candidate.key);notice('已更新当前聊天记忆');
+  });}
   async function review(candidate){
     if(state.disposed||identity()!==candidate.chat)return;
     const wrap=hostDocument.createElement('div');
@@ -166,23 +174,13 @@ export async function startMemory(shared) {
     } else if(choice==='reject'){state.deferred.set(candidate.id,null);state.seen.add(candidate.key);notice('已拒绝，本次运行不再提示该摘要');}
     else {state.deferred.set(candidate.id,candidate);state.seen.add(candidate.key);notice('已暂缓：本楼层不会自动重复弹窗，可点击「待审核」手动处理');}
   }
-  async function verifyGlobal(){
-    const id=identity();if(!id)return;
-    const target=vars().shiyi_v01?.book || null;
-    const active=api('getGlobalWorldbookNames')||[];
-    const ours=active.filter(n=>String(n).startsWith('拾忆｜'));
-    if(ours.length!==(target?1:0)||(target&&ours[0]!==target))await syncGlobalBook(target,id);
-  }
+  async function verifyGlobal(){const id=identity();if(!id)return;await serial(async()=>{check(id);const target=await ensureWorldbook(id,false);check(id);await syncGlobalBook(target,id);});}
   async function scan(){
     if(state.busy||state.open||state.disposed)return;
-    const id=identity();if(!id){notice('界面已启动；尚未识别聊天，打开角色卡聊天后重试');return;}
-    if(id!==state.current){state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];try{
-      const legacy=api('getChatWorldbookName','current');
-      const book=vars().shiyi_v01?.book || (legacy?.startsWith('拾忆｜')?legacy:null);
-      if(book){await syncGlobalBook(book,id);notice('已切换全局拾忆世界书：'+book);}
-      else {await syncGlobalBook(null,id);notice('当前聊天尚无拾忆世界书，首次确认时自动创建');}
-    }catch(e){error(e);}}
-    try{await verifyGlobal();}catch(e){error(e);}
+    const id=identity();if(!id)return;
+    if(id!==state.current){state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];}
+    state.busy=true;try{await verifyGlobal();}catch(e){error(e);return;}finally{state.busy=false;}
+    if(id!==identity())return;
     if(shared?.flags?.memory===false)return;
     state.busy=true;
     try{
@@ -201,7 +199,7 @@ export async function startMemory(shared) {
         // 稍后处理以楼层为单位抑制；避免流式输出造成不同哈希重复弹窗。
         if(state.deferred.has(idNum)||existing[key]||state.seen.has(key)||state.queue.some(x=>x.id===idNum))continue;
         // 已归档的同一楼层不再自动审核后续文本变化。
-        if(Object.values(existing).some(r=>r.sourceMessage===idNum))continue;
+
         state.seen.add(key);
         state.queue.push({key,id:idNum,content,chat:id});
       }
@@ -314,29 +312,13 @@ export async function startMemory(shared) {
     if(state.open)return;
     const book=vars().shiyi_v01?.book;
     if(!book){notice('当前聊天还没有归档记忆');return;}
-    let entries;try{entries=(await api('getWorldbook',book)).filter(e=>e.extra?.shiyi_key);}catch(e){error(e);return;}
-    const container=hostDocument.createElement('div');
-    container.className='shiyi-manage';
-    if(!entries.length)container.textContent='暂无已归档记忆';
-    for(const entry of entries){
+    const id=identity();const container=hostDocument.createElement('div');container.className='shiyi-manage';
+    for(const [key,r] of Object.entries(records())){
       const row=hostDocument.createElement('div');row.className='shiyi-row';
-      const label=hostDocument.createElement('span');label.textContent=entry.name;
-      const edit=hostDocument.createElement('button');edit.textContent='编辑';
-      edit.onclick=async()=>{const content=hostWindow.prompt('修改记忆内容（取消则不保存）',entry.content);if(content===null)return;try{await api('updateWorldbookWith',book,all=>all.map(x=>x.uid===entry.uid?{...x,content}:x));notice('修改成功');}catch(e){error(e);}};
-      const del=hostDocument.createElement('button');del.textContent='删除';
-      del.onclick=async()=>{if(!hostWindow.confirm(`确定删除「${entry.name}」吗？此操作不删除原始聊天。`))return;try{await api('deleteWorldbookEntries',book,x=>x.uid===entry.uid);const d=vars().shiyi_v01||{};const rec={...(d.records||{})};for(const [k,v] of Object.entries(rec))if(v.uid===entry.uid&&v.book===book)delete rec[k];saveVars({...d,records:rec});row.remove();notice('记忆已删除');}catch(e){error(e);}};
-      const source=hostDocument.createElement('button');source.textContent='溯源';
-      source.onclick=async()=>{
-        const r=Object.entries(records()).find(([k,v])=>v.uid===entry.uid&&v.book===book);
-        const sourceId=r?.[1]?.sourceMessage??entry.extra?.shiyi_message_id;
-        let m;try{m=getMessages().find(x=>x.message_id===sourceId);}catch(e){return error(e);}
-        const box=hostDocument.createElement('div');const text=String(m?.message??'原始楼层已不存在');
-        const originalHash=r?.[0]?.split(':').slice(1).join(':');
-        const changed=originalHash&&m&&hash(text)!==originalHash;
-        box.innerHTML=`<p>来源：第 ${safe(sourceId)} 楼 ${changed?'⚠ 原文已修改，请重新审核':'· 原文对照'}</p>`;
-        const pre=hostDocument.createElement('textarea');pre.readOnly=true;pre.rows=13;pre.value=text;box.append(pre);
-        await modal('拾忆 · 记忆溯源',box,[{label:'关闭',value:'close'}]);
-      };
+      const label=hostDocument.createElement('span');label.textContent=r.title;
+      const edit=hostDocument.createElement('button');edit.textContent='编辑';edit.onclick=async()=>{const content=hostWindow.prompt('修改记忆内容',r.content);if(content===null||!content.trim())return;try{await serial(async()=>{check(id);const rows={...records()};if(!rows[key])throw Error('摘要不存在');rows[key]={...rows[key],content,storyTime:parseStoryTime(content)};await writeRows(id,rows);});r.content=content;notice('修改成功');}catch(e){error(e);}};
+      const del=hostDocument.createElement('button');del.textContent='删除';del.onclick=async()=>{if(!hostWindow.confirm('删除此摘要？原始聊天不删除。'))return;try{await serial(async()=>{check(id);const rows={...records()};delete rows[key];await writeRows(id,rows);});state.seen.add(key);row.remove();notice('记忆已删除');}catch(e){error(e);}};
+      const source=hostDocument.createElement('button');source.textContent='溯源';source.onclick=()=>{if(identity()===id)hostWindow.alert(String(getMessages().find(m=>m.message_id===r.sourceMessage)?.message||'原始楼层已不存在'));};
       row.append(label,source,edit,del);container.append(row);
     }
     await modal('拾忆 · 记忆管理',container,[{label:'关闭',value:'close'}]);
@@ -408,15 +390,7 @@ export async function startMemory(shared) {
   scan().catch(error);
   console.info('[拾忆] v0.5 已加载；自动切换拾忆全局世界书，不修改其他全局世界书，仅在手动确认后隐藏正文，可恢复。');
 
-state.timelineRows=async()=>{
- const scope=identity(); if(!scope)return [];
- const rows=Object.values(records()).filter(r=>Number.isInteger(r.sourceMessage));
- const book=vars().shiyi_v01?.book;
- if(!book)return [];
- const entries=await api('getWorldbook',book);
- if(scope!==identity())throw Error('聊天已切换，请刷新');
- return rows.filter(r=>r.book===book).flatMap(r=>{const e=entries.find(e=>e.uid===r.uid);return e?[{floor:r.sourceMessage,title:e.name,content:e.content,when:parseStoryTime(e.content)||'日期未识别',sourceHash:r.sourceHash}]:[]});
-};
+state.timelineRows=async()=>Object.values(records()).filter(r=>Number.isInteger(r.sourceMessage)).map(r=>({floor:r.sourceMessage,title:r.title,content:r.content,when:r.storyTime||parseStoryTime(r.content)||'日期未识别',sourceHash:r.sourceHash}));
 state.backup=async()=>{const id=identity();if(!id)return null;const data=JSON.parse(JSON.stringify(vars().shiyi_v01||{}));const entries=data.book?await api('getWorldbook',data.book):[];if(id!==identity())throw Error('聊天已切换');return {scope:id,data,entries};};
 return state;
 }

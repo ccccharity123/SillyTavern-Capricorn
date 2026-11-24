@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 import { mountAppearance } from './appearance.js';
 import { mountCloud } from './cloud.js';
 import { mountNetease } from './netease.js';
@@ -13,13 +14,7 @@ try {
   for (const k of Object.keys(flags)) if (typeof x[k] === 'boolean') flags[k] = x[k];
 } catch {}
 
-const SHIYI_ICONS = {
-  bookmark: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2h9A2.5 2.5 0 0 1 19 4.5v16.3a.7.7 0 0 1-1.1.57L12 17.2l-5.9 4.17A.7.7 0 0 1 5 20.8V4.5z"/><path d="M12 6.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8.8-1.9z" fill="currentColor" stroke="none"/></svg>`,
-  palette: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".8" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor"/><path d="M12 2a10 10 0 0 0 0 20c1.4 0 2-.9 2-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7H17a5 5 0 0 0 5-5c0-4.9-4.5-9-10-9z"/></svg>`,
-  refresh: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>`,
-  close: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`,
-  note: `<svg class="cap-island-note-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`
-};
+const SHIYI_ICONS = {bookmark:icon("note",20),palette:icon("palette",18),refresh:icon("refresh",18),close:icon("right",18),note:icon("music",18)};
 
 const shared = { messages: null, flags, onIslandUpdate: null };
 let appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
@@ -39,7 +34,7 @@ root.innerHTML = `
   <nav hidden>
     <header>
       <strong>声屿</strong>
-      <button data-tab="settings" aria-label="声屿设置">⚙</button><button data-close aria-label="关闭">×</button>
+      <button data-tab="settings" aria-label="声屿设置">${icon("settings")}</button><button data-close aria-label="关闭">${icon("close")}</button>
     </header>
     <div class="cap-tabs" role="tablist">
       <button data-tab="music" role="tab">播放</button>
@@ -298,7 +293,7 @@ if (memory?.root) {
   const more = D.createElement('details');
   more.className = 'cap-memory-tools';
   const label = D.createElement('summary');
-  label.textContent = '⋯';
+  label.innerHTML = icon('more');
   label.setAttribute('aria-label', '拾忆管理与设置');
   more.append(label);
   tools.before(timeline, more);

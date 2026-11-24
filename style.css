@@ -1357,3 +1357,11 @@ body[data-cap-player-theme="silverblue"] .cap-full-player[data-size] .cap-art im
 body .cap-full-player[data-size] .cap-scrubber input{background:linear-gradient(to right,currentColor var(--cap-progress,0%),#8885 var(--cap-progress,0%));}
 body .cap-full-player[data-size] .cap-scrubber input::-webkit-slider-thumb{background:currentColor;}
 @media(prefers-reduced-motion:reduce){body .cap-full-player[data-size],body .cap-full-player[data-size] .cap-art{transition:none!important;}}
+
+/* Unified local vector controls */
+.cap-icon{display:inline-block;vertical-align:middle;flex-shrink:0;pointer-events:none;color:inherit}
+.cap-full-player .cap-fp-tools button,.cap-full-player .cap-fp-pill,.cap-full-player .cap-fp-tabs button,.cap-full-player .cap-transport button{display:inline-flex;align-items:center;justify-content:center;box-shadow:none;min-width:40px;min-height:40px;}
+.cap-full-player .cap-fp-tabs button[aria-selected="true"]{background:rgba(128,128,128,.15);border-radius:14px}
+.cap-full-player .cap-transport button:active,.cap-full-player .cap-fp-tools button:active,.cap-full-player .cap-fp-tabs button:active{transform:scale(.92)}
+.cap-full-player .cap-volume .cap-icon{opacity:.75}
+.cap-action-menu summary .cap-icon,.cap-memory-tools summary .cap-icon{vertical-align:middle}
