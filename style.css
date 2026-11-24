@@ -1409,3 +1409,16 @@ body[data-cap-bg-source="color"] .cap-full-player[data-size][data-color-status="
 body[data-cap-bg-source="color"] .cap-full-player[data-color-status="fallback"] .cap-color-note{display:block}
 .cap-volume input{touch-action:pan-y;pointer-events:auto}
 body[data-cap-cover-shape] .cap-full-player[data-size] .cap-art img,body[data-cap-player-theme="silverblue"] .cap-full-player[data-size] .cap-art img{position:relative;inset:auto;width:100%;height:100%;border:0;box-shadow:none;border-radius:inherit}
+
+/* 2.6.6: immersive lyrics, scoped to large player only */
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-shell{overflow:hidden;gap:6px;position:relative;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-art{position:absolute;top:48px;left:18px;width:min(64px,var(--cap-cover-size,64px));height:auto;aspect-ratio:1;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-meta{padding-left:78px;min-height:64px;box-sizing:border-box;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-current-lyric{display:none;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-detail{order:0;flex:1 1 0;min-height:0;max-height:none;box-sizing:border-box;overflow-y:auto;touch-action:pan-y;padding:18px 5px;scrollbar-width:none;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-detail::-webkit-scrollbar{display:none;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] :is(.cap-scrubber,.cap-transport,.cap-volume,.cap-volume-note,.cap-color-note,.cap-fp-tabs){order:1;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric{font-size:clamp(21px,5.7vw,30px);font-weight:700;line-height:1.45;padding:12px 5px;opacity:.38;white-space:normal;overflow-wrap:anywhere;box-shadow:none;background:transparent;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active{opacity:1;transform:none;}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric small{font-size:.55em;line-height:1.5;}
+@media(max-height:500px){body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-shell{overflow-y:auto;}body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-fp-detail{min-height:100px;}}
