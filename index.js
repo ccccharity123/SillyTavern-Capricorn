@@ -1,3 +1,4 @@
+import { mountPersonalLook } from './personal-look.js';
 import { mountAppearance } from './appearance.js';
 import { mountCloud } from './cloud.js';
 import { mountNetease } from './netease.js';
@@ -14,12 +15,12 @@ try {
 } catch {}
 
 const shared = { messages: null, flags };
-let appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
+let cleanupLook, islandTimer, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
 root.innerHTML = `
-  <button class="cap-island" aria-expanded="false">
+  <button class="cap-island" aria-expanded="false" aria-label="打开声屿">
     <span class="cap-island-eq" aria-hidden="true">♫</span>
     <span>声屿</span>
   </button>
@@ -166,10 +167,10 @@ async function tick() {
     if (flags.music) await music?.tick();
     Promise.resolve(memory?.tick()).catch(e => console.warn('[Capricorn] memory scan', e));
     if (memoryOpen() && shownScope !== scope()) refreshTimeline();
-    root.querySelector('.cap-island span:last-child').textContent = music?.title() || '声屿';
+
     if (memory?.root) {
       const b = memory.root.querySelector('#shiyi-expand');
-      if (b) b.textContent = memory.pending() ? `拾忆 · ${memory.pending()}` : '拾忆';
+      if (b) b.dataset.pending = String(!!memory.pending());
     }
     root.querySelector('small').textContent = !flags.music ? '自动收录已暂停' : !music ? '播放器未启动' : ''; 
   } catch (e) {
@@ -183,6 +184,7 @@ async function tick() {
 W.__capricornExtension = {
   destroy() {
     dead = true;
+    clearInterval(islandTimer); cleanupLook?.();
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
     cleanupNetease?.();
@@ -201,7 +203,7 @@ try { music = await startMusic(shared); } catch (e) { console.error('[Capricorn]
 
 if (memory?.root) {
   memory.root.classList.add('cap-memory-side');
-  memory.root.querySelector('#shiyi-expand').textContent = '拾忆';
+  memory.root.querySelector('#shiyi-expand').innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>';
   const brand = memory.root.querySelector('.shiyi-brand');
   if (brand) {
     brand.textContent = '拾忆便签';
@@ -285,6 +287,8 @@ cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
 appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
+cleanupLook = mountPersonalLook(settings, memory?.root, root);
+islandTimer = setInterval(()=>{const x=music?.islandState();const playing=!!x?.playing;const changed=island.dataset.playing!==String(playing);island.dataset.playing=String(playing);island.lastElementChild.textContent=playing?x.text:'';if(changed)cleanupMobile?.fit?.();},200);
 for (const [node,label] of [[controls,'数据与自动收录'],[settings.querySelector('.cap-backup:not(.cap-backup:first-child)'),'账号与连接']]) {
   if (!node || node.parentElement !== settings || node.closest('details')) continue;
   const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = label; d.append(h); node.before(d); d.append(node);
