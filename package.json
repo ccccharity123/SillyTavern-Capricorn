@@ -1,0 +1,17 @@
+{
+  "name": "capricorn-tavern-extension",
+  "version": "4.3.0-dev.10",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.mjs",
+    "test:stress": "node tests/stress.mjs",
+    "test:recall-scale": "node tests/recall-corpus.mjs --large",
+    "test:browser": "python tests/browser.py",
+    "test:player": "python tests/player-browser.py",
+    "test:host-fixture": "python tests/host-fixture.py self-test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

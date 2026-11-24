@@ -1,9 +1,20 @@
+import { createScheduler } from './scheduler.js';
+import { mountPresetControls } from './preset.js';
+import { createGenerationLifecycle } from './generation-lifecycle.js';
+import { getChatIdentity, getHostContext } from './host-context.js';
+import {
+  createBackup, parseBackup, readStoredMemory, readStoredMusic, restoreAppearanceBackup,
+  restoreStoredMemory, restoreStoredMusic,
+} from './backup.js';
+import { clearIndex } from './index-store.js';
+import { clearLexicalCache } from './lexical-store.js';
+import {fuzzy} from './traces.js';
 import { createRecall } from './recall.js';
 import { icon } from './icons.js';
 import { mountAppearance } from './appearance.js';
 import { mountCloud } from './cloud.js';
 import { mountNetease } from './netease.js';
-import { startMemory } from './memory.js';
+import { detachDisabledMemory, startMemory } from './memory.js';
 import { startMusic } from './music.js';
 import { mountMobile } from './mobile.js';
 
@@ -17,8 +28,14 @@ try {
 
 const SHIYI_ICONS = {bookmark:icon("note",20),palette:icon("palette",18),refresh:icon("refresh",18),close:icon("right",18),note:icon("music",18)};
 
-const shared = { messages: null, flags, onIslandUpdate: null };
-let musicBusy = false, eventCleanup = [], cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
+const context = () => getHostContext(W);
+const chatIdentity = () => getChatIdentity(context());
+const scope = () => chatIdentity().scope;
+const shared = { flags, onIslandUpdate: null, scope, chatIdentity };
+let nativeControlsCleanup;
+let cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, dead = false, tab = '';
+let memoryStartup;
+let lastGeneration = '尚未生成';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
@@ -59,21 +76,43 @@ const islandLyric = root.querySelector('.cap-island-lyric');
 const islandTranslation = root.querySelector('.cap-island-translation');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
 
-let islandCover='', islandColorEpoch=0;
+let islandCover='', islandColorEpoch=0, islandImage, islandFrame;
+function stopIslandArtwork() {
+  ++islandColorEpoch;
+  if (islandImage) {
+    islandImage.onload = islandImage.onerror = null;
+    islandImage.removeAttribute('src');
+    islandImage = null;
+  }
+  if (islandFrame != null) cancelAnimationFrame(islandFrame);
+  islandFrame = null;
+}
 function colorIsland(url){
-  if(url===islandCover)return; islandCover=url; const epoch=++islandColorEpoch;
+  if(url===islandCover)return;
+  stopIslandArtwork();
+  islandCover=url; const epoch=islandColorEpoch;
   const host=island.querySelector('.cap-island-colors');
-  function show(background){if(epoch!==islandColorEpoch)return;const old=Array.from(host.children);const layer=D.createElement('span');layer.style.background=background;host.append(layer);void layer.offsetWidth;requestAnimationFrame(()=>{if(epoch!==islandColorEpoch){layer.remove();return;}layer.style.opacity='1';for(const el of old){el.style.opacity='0';setTimeout(()=>el.remove(),1250);}});}
+  function show(background){
+    if(epoch!==islandColorEpoch)return;
+    const layer=D.createElement('span');
+    layer.style.background=background;
+    host.replaceChildren(layer);
+    islandFrame=requestAnimationFrame(()=>{
+      islandFrame=null;
+      if(epoch===islandColorEpoch)layer.style.opacity='1';
+    });
+  }
   host.replaceChildren(); if(!url)return;
   let u;try{u=new URL(url);if(!['https:','http:'].includes(u.protocol))throw Error();}catch{show('transparent');return;}
-  const img=new Image();img.crossOrigin='anonymous';img.onload=()=>{try{const c=D.createElement('canvas');c.width=c.height=24;const x=c.getContext('2d');x.drawImage(img,0,0,24,24);const d=x.getImageData(0,0,24,24).data;const bins=new Map();for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const rgb=[d[i],d[i+1],d[i+2]];const k=rgb.map(v=>v>>5).join(',');const v=bins.get(k)||[0,0,0,0];v[0]+=rgb[0];v[1]+=rgb[1];v[2]+=rgb[2];v[3]++;bins.set(k,v);}const colors=[...bins.values()].sort((a,b)=>b[3]-a[3]).slice(0,3).map(v=>'rgb('+v.slice(0,3).map(n=>Math.round(n/v[3])).join(',')+')');if(!colors.length)throw Error();show('linear-gradient(135deg,'+[colors[0],colors[1]||colors[0],colors[2]||colors[0]].join(',')+')');}catch{show('transparent');}};img.onerror=()=>show('transparent');img.src=u.href;
+  const img=new Image();islandImage=img;img.crossOrigin='anonymous';img.onload=()=>{try{const c=D.createElement('canvas');c.width=c.height=24;const x=c.getContext('2d');x.drawImage(img,0,0,24,24);const d=x.getImageData(0,0,24,24).data;const bins=new Map();for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const rgb=[d[i],d[i+1],d[i+2]];const k=rgb.map(v=>v>>5).join(',');const v=bins.get(k)||[0,0,0,0];v[0]+=rgb[0];v[1]+=rgb[1];v[2]+=rgb[2];v[3]++;bins.set(k,v);}const colors=[...bins.values()].sort((a,b)=>b[3]-a[3]).slice(0,3).map(v=>'rgb('+v.slice(0,3).map(n=>Math.round(n/v[3])).join(',')+')');if(!colors.length)throw Error();show('linear-gradient(135deg,'+[colors[0],colors[1]||colors[0],colors[2]||colors[0]].join(',')+')');}catch{show('transparent');}};img.onerror=()=>show('transparent');img.src=u.href;
 }
 shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
+  if (dead) return;
   colorIsland(coverUrl||'');
   island.dataset.playing = playing ? 'true' : 'false';
   island.title = playing ? `${title || '正在播放'} · 点击展开声屿` : '声屿（点击打开播放器）';
   const translated = playing ? (translation || '') : '';
-  islandTranslation.textContent = translated;
+  if (islandTranslation.textContent !== translated) islandTranslation.textContent = translated;
   islandTranslation.hidden = !translated;
   island.dataset.bilingual = String(!!translated);
   if (playing && text) {
@@ -97,24 +136,44 @@ content.before(libraryNav);
 const timeline = D.createElement('section');
 timeline.className = 'cap-timeline';
 
-let timelineEpoch = 0, shownScope = '';
+let timelineEpoch = 0, shownScope = '', memoryViewFrame;
 const resonance=D.createElement('section');resonance.className='cap-resonance';resonance.hidden=true;content.append(resonance);
 let resonanceEpoch=0;
 let recall;
 function unlockRecall(){shared.recallLocked=false;}
+function refreshMemoryViews() {
+  if (dead || memoryViewFrame != null) return;
+  memoryViewFrame = requestAnimationFrame(() => {
+    memoryViewFrame = null;
+    void recall?.refresh();
+    if (memoryOpen()) void refreshTimeline();
+    if (tab === 'resonance') void showResonance();
+  });
+}
+function tracksByFloor(songs) {
+  const byFloor = new Map();
+  for (const song of songs) {
+    const floor = String(song.floor);
+    const tracks = byFloor.get(floor) ?? [];
+    tracks.push(song);
+    byFloor.set(floor, tracks);
+  }
+  return byFloor;
+}
 async function showResonance(){
  const epoch=++resonanceEpoch,key=scope();resonance.dataset.scope=key;resonance.replaceChildren();
  const el=(tag,text,parent=resonance)=>{const n=D.createElement(tag);n.textContent=text;parent.append(n);return n;};
  el('p','正在读取当前聊天的剧情原声…');
  try{
- const rows=(await memory?.timelineRows()||[]).sort((a,b)=>a.floor-b.floor),songs=music?.timelineSongs()||[];
+ const rows=(await memory?.timelineRows()||[]).sort((a,b)=>a.floor-b.floor);
+ const songs=tracksByFloor(music?.timelineSongs()||[]);
  if(epoch!==resonanceEpoch||key!==scope()||tab!=='resonance')return;
  resonance.replaceChildren();el('h3','共鸣 · 剧情原声');el('button','回响 · 沉浸式回忆').onclick=()=>recall?.open();
  const lock=el('button',shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）');lock.onclick=()=>{shared.recallLocked=!shared.recallLocked;lock.textContent=shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）';};
  const q=el('input','');q.placeholder='搜索歌曲、歌手、剧情';const chapter=el('select','');for(const c of ['',...new Set(rows.map(r=>r.chapter).filter(Boolean))]){const o=el('option',c||'全部章节',chapter);o.value=c;}
  const play=el('button','播放筛选原声带');const list=el('div','');
  const valid=()=>key===scope()&&tab==='resonance';
- function render(){list.replaceChildren();const grouped=new Map();for(const r of rows){if(chapter.value&&r.chapter!==chapter.value)continue;for(const t of songs.filter(t=>String(t.floor)===String(r.floor))){if(!`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter}`.toLowerCase().includes(q.value.trim().toLowerCase()))continue;const g=grouped.get(t.id)||{t,rows:[]};if(!g.rows.includes(r))g.rows.push(r);grouped.set(t.id,g);}}
+ function render(){list.replaceChildren();const grouped=new Map();for(const r of rows){if(chapter.value&&r.chapter!==chapter.value)continue;for(const t of songs.get(String(r.floor))??[]){if(q.value&&!fuzzy(`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter} ${r.traceText||''}`,q.value))continue;const g=grouped.get(t.id)||{t,rows:[]};if(g.rows.at(-1)!==r)g.rows.push(r);grouped.set(t.id,g);}}
  play.disabled=![...grouped.values()].some(g=>g.t.playable);play.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([...grouped.values()].filter(g=>g.t.playable).map(g=>g.t.id),chapter.value||'剧情原声带');}};
  if(!grouped.size)el('p','暂无匹配的已归档剧情音乐',list);
  for(const {t,rows:matches} of grouped.values()){const d=el('details','',list);el('summary',`${t.title} · ${t.artist} (${matches.length})`,d);const b=el('button','播放此曲',d);b.disabled=!t.playable;b.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([t.id],t.title);}};for(const r of matches){el('p',`${r.chapter||''} ${r.title} · ${r.when}`,d);const j=el('button','查看剧情便签',d);j.onclick=()=>{if(!valid())return;close();memory.root.classList.remove('shiyi-collapsed');void refreshTimeline(r.floor);};}}
@@ -122,10 +181,6 @@ async function showResonance(){
  }catch(e){if(epoch===resonanceEpoch)resonance.textContent='读取失败：'+e.message;}
 }
 
-const scope = () => {
-  const c = W.SillyTavern?.getContext?.() || {};
-  return JSON.stringify([c.characterId ?? c.character_id, c.chatId ?? c.chatMetadata?.chat_id]);
-};
 const memoryOpen = () => memory?.root && !memory.root.classList.contains('shiyi-collapsed');
 
 async function refreshTimeline(targetFloor) {
@@ -137,16 +192,24 @@ async function refreshTimeline(targetFloor) {
   note.textContent = '正在读取剧情便签…';
   timeline.append(note);
   try {
-    const memories = await memory.timelineRows(), songs = music?.timelineSongs() || [];
+    const memories = (await memory.timelineRows()).sort((a,b)=>a.floor-b.floor);
+    const songs = tracksByFloor(music?.timelineSongs() || []);
     if (epoch !== timelineEpoch || key !== scope() || !memoryOpen()) return;
     note.textContent = memories.length ? `已归档 ${memories.length} 条剧情便签` : '暂无已归档摘要，请检测或导入历史。';
-    const query=D.createElement('input');query.placeholder='搜索剧情便签';timeline.append(query);const cards=D.createElement('div');timeline.append(cards);let limit=targetFloor!=null?Math.max(40,memories.length):40;const more=D.createElement('button');more.textContent='加载更多';timeline.append(more);function render(){cards.replaceChildren();const filtered=memories.filter(m=>`${m.title} ${m.content} ${m.chapter} ${songs.filter(t=>String(t.floor)===String(m.floor)).map(t=>t.title+' '+t.artist).join(' ')}`.toLowerCase().includes(query.value.trim().toLowerCase()));more.hidden=filtered.length<=limit;
-    for (const m of filtered.sort((a, b) => a.floor - b.floor).slice(0,limit)) {
+    const query=D.createElement('input');query.placeholder='搜索剧情便签';timeline.append(query);const cards=D.createElement('div');timeline.append(cards);
+    const pageSize=40, targetIndex=memories.findIndex(m=>m.floor===targetFloor);
+    let offset=targetIndex<0?0:Math.floor(targetIndex/pageSize)*pageSize, jumpToTarget=targetIndex>=0;
+    let filtered=memories;
+    const previous=D.createElement('button');previous.textContent='上一页';timeline.append(previous);
+    const more=D.createElement('button');more.textContent='下一页';timeline.append(more);
+    function render(){cards.replaceChildren();
+    previous.hidden=offset===0;more.hidden=filtered.length<=offset+pageSize;
+    for (const m of filtered.slice(offset,offset+pageSize)) {
       const card = D.createElement('details');
-      card.className = 'cap-story';if(String(m.floor)===String(targetFloor)){card.open=true;requestAnimationFrame(()=>card.scrollIntoView({block:'center'}));}
+      card.className = 'cap-story';if(jumpToTarget&&m.floor===targetFloor){card.open=true;requestAnimationFrame(()=>{if(card.isConnected)card.scrollIntoView({block:'center'});});}
       const head = D.createElement('summary');
       const field = n => m.content.match(new RegExp('<' + n + '>([\\s\\S]*?)</' + n + '>'))?.[1]?.trim();
-      const tracks = songs.filter(t => String(t.floor) === String(m.floor));
+      const tracks = songs.get(String(m.floor)) ?? [];
       for (const [cls, value] of [
         ['cap-story-time', field('时间') || m.when],
         ['cap-story-title', (m.star?'★ ':'')+(m.chapter?m.chapter+' · ':'')+(field('标题') || m.title.replace(/^记忆\d+｜/, ''))],
@@ -169,7 +232,18 @@ async function refreshTimeline(targetFloor) {
         card.append(button);
       }
       const jump=D.createElement('button');jump.textContent='查看原楼层';jump.onclick=()=>{if(key===scope()&&!memory.jump(m.floor))W.alert('请先加载该历史楼层');};card.append(jump);cards.append(card);
-    }}query.oninput=()=>{limit=40;render();};more.onclick=()=>{limit+=40;render();};render();
+    }
+    jumpToTarget=false;
+    }
+    query.oninput=()=>{
+      const text=query.value.trim();
+      filtered=text?memories.filter(m=>fuzzy(`${m.title} ${m.content} ${m.chapter} ${m.traceText||''} ${(songs.get(String(m.floor))??[]).map(t=>t.title+' '+t.artist).join(' ')}`,text)):memories;
+      offset=0;
+      render();
+    };
+    previous.onclick=()=>{offset-=pageSize;render();};
+    more.onclick=()=>{offset+=pageSize;render();};
+    render();
   } catch (e) {
     if (epoch === timelineEpoch) note.textContent = '读取失败：' + e.message;
   }
@@ -186,6 +260,7 @@ themeSelect.onchange = () => {
 };
 
 function select(t) {
+  if(t==='resonance'&&(!memory||!music))t='settings';
   if(t==='cloud'&&!shared.accountReady?.())t='library';
   tab = t;
   root.dataset.tab = t;
@@ -214,23 +289,20 @@ island.onclick = () => {
 nav.querySelector('[data-close]').onclick = ()=>{close();music?.openPlayer();island.setAttribute('aria-expanded','true');};
 nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {if(b.dataset.tab==='music'){close();music?.openPlayer();}else select(b.dataset.tab);});
 
-const api = (n, ...a) => {
-  const f = W[n] || W.TavernHelper?.[n];
-  if (typeof f !== 'function') throw Error('缺少酒馆助手 API: ' + n);
-  return f(...a);
-};
-
-async function tick() {
-  recall?.check();
-  if (busy || dead) return;
-  busy = true;
+const maintenance=createScheduler(W,()=>D.hidden);
+function tick() {
+  if (dead) return;
   try {
-    Promise.resolve(memory?.tick()).catch(e => console.warn('[Capricorn] memory scan', e));
-    if (flags.music && music && !musicBusy) {
-      musicBusy = true;
-      Promise.resolve().then(()=>music.tick()).catch(e=>console.warn('[Capricorn] music scan',e)).finally(()=>{musicBusy=false;});
+    generation.bind();
+    recall?.check();
+    if (music) maintenance.enqueue('声屿', () => music.tick());
+    if (memory) maintenance.enqueue('拾忆', () => memory.tick(), 1);
+    const key = scope();
+    if (shownScope !== key && memoryOpen()) void refreshTimeline();
+    if (tab === 'resonance' && resonance.dataset.scope !== key) {
+      unlockRecall();
+      void showResonance();
     }
-    if (shownScope !== scope() && memoryOpen()) refreshTimeline();if(tab==='resonance'&&resonance.dataset.scope!==scope()){unlockRecall();resonance.dataset.scope=scope();void showResonance();}
     if (memory?.root) {
       const b = memory.root.querySelector('#shiyi-expand');
       if (b) {
@@ -244,20 +316,51 @@ async function tick() {
         }
       }
     }
-    root.querySelector('small').textContent = !flags.music ? '自动收录已暂停' : !music ? '播放器未启动' : '';
   } catch (e) {
     root.querySelector('small').textContent = e.message;
-  } finally {
-    shared.messages = null;
-    busy = false;
   }
 }
 
+const generation = createGenerationLifecycle({
+  context, scope, flags,
+  ready: () => memoryStartup,
+  memory: () => memory,
+  async disableMemory() {
+    const worldbooks = W.TavernHelper?.getGlobalWorldbookNames || W.getGlobalWorldbookNames;
+    if (typeof worldbooks === 'function') await detachDisabledMemory(shared);
+    else context().setExtensionPrompt?.('capricorn_weave', '', 1, 4, false, 0);
+  },
+  report({ type, result, enabled, error }) {
+    const status = root.querySelector('small');
+    if (error) {
+      lastGeneration = '已停止本轮生成，拾忆校验失败：' + error.message;
+      status.textContent = lastGeneration;
+      W.toastr?.error?.(lastGeneration);
+      return;
+    }
+    const label = type || 'normal';
+    lastGeneration = enabled
+      ? `${result?.content ? '已注入' : '本轮无动态注入'}（${label}）`
+      : '拾忆已停用';
+    status.textContent = '';
+  },
+  refresh: tick,
+});
+W.capricornPrepareGeneration = generation.prepare;
+
 W.__capricornExtension = {
   destroy() {
-    recall?.close();
+    if (dead) return;
     dead = true;
-    for(const off of eventCleanup)off();
+    if (W.capricornPrepareGeneration === generation.prepare) delete W.capricornPrepareGeneration;
+    generation.destroy();
+    stopIslandArtwork();
+    if (memoryViewFrame != null) cancelAnimationFrame(memoryViewFrame);
+    ++timelineEpoch;
+    ++resonanceEpoch;
+    recall?.close();
+    maintenance.close();
+    D.removeEventListener('visibilitychange', resume);
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
     cleanupMemorySide?.();
@@ -266,14 +369,31 @@ W.__capricornExtension = {
     clearInterval(timer);
     memory?.destroy();
     music?.destroy();
+    nativeControlsCleanup?.();
     root.remove();
     delete D.body.dataset.capricornTab;
   }
 };
 
+function resume() {
+  if (D.hidden || dead) return;
+  maintenance.resume();
+  tick();
+}
+
+async function boot() {
 D.body.dataset.capricornTab = '';
-try { memory = await startMemory(shared); } catch (e) { console.error('[Capricorn] memory', e); }
-try { music = await startMusic(shared); } catch (e) { console.error('[Capricorn] music', e); }
+generation.bind();
+memoryStartup = flags.memory ? startMemory(shared).then(module => {
+  if (dead) module.destroy();
+  else memory = module;
+}).catch(e => console.error('[Capricorn] memory', e)) : Promise.resolve();
+const musicStartup = flags.music ? startMusic(shared).then(module => {
+  if (dead) module.destroy();
+  else music = module;
+}).catch(e => console.error('[Capricorn] music', e)) : Promise.resolve();
+await Promise.all([memoryStartup, musicStartup]);
+if (dead) return;
 
 // Independent viewport geometry for the memory tab and panel.
 function mountMemorySide(dock, button) {
@@ -328,7 +448,7 @@ function mountMemorySide(dock, button) {
 if (memory?.root) {
   recall=createRecall({D,W,scope,memory,music,shared});
   const recallButton=D.createElement("button");recallButton.textContent="回响";memory.root.querySelector("#shiyi-settings").before(recallButton);recallButton.onclick=()=>recall.open();
-  memory.onChange = () => { void recall?.refresh(); if (memoryOpen()) void refreshTimeline(); if(tab==='resonance')void showResonance(); };
+  memory.onChange = refreshMemoryViews;
   memory.root.classList.add('cap-memory-side');
 
   // 收起态：纯图标精致耳扣，彻底移除文字
@@ -365,7 +485,7 @@ if (memory?.root) {
   refreshIconBtn.innerHTML = SHIYI_ICONS.refresh;
   refreshIconBtn.title = '刷新时间轴';
   refreshIconBtn.setAttribute('aria-label', '刷新时间轴');
-  refreshIconBtn.onclick = refreshTimeline;
+  refreshIconBtn.onclick = () => void refreshTimeline();
 
   const styleBtn = D.createElement('button');
   styleBtn.type = 'button';
@@ -397,77 +517,188 @@ if (memory?.root) {
   tools.before(timeline, more);
   more.append(tools);
   more.addEventListener('toggle', () => { if (!more.open) appearanceApi?.closeInlineDrawer(); });
-  expandBtn?.addEventListener('click', refreshTimeline);
+  expandBtn?.addEventListener('click', () => void refreshTimeline());
   const refresh = memory.root.querySelector('#shiyi-timeline');
   if (refresh) {
     refresh.textContent = '刷新时间轴';
-    refresh.onclick = refreshTimeline;
+    refresh.onclick = () => void refreshTimeline();
   }
 }
 
 if (music?.root) { content.append(music.root); }
-if (!dead) {
-  const c=W.SillyTavern?.getContext?.()||{}, src=c.eventSource, types=c.eventTypes||c.event_types||{};
-  const bind=(key,fn)=>{const name=types[key];if(name&&src?.on){src.on(name,fn);eventCleanup.push(()=>{if(src.removeListener)src.removeListener(name,fn);else src.off?.(name,fn);});}};
-  const validate=async()=>{if(dead)return;try{await memory?.validate?.();}catch(e){console.warn('[Capricorn] memory validation',e);root.querySelector('small').textContent='拾忆校验失败：'+e.message;}};
-  bind('GENERATION_STARTED',validate);
-  bind('GENERATION_AFTER_COMMANDS',validate);
-  for(const key of ['CHAT_CHANGED','MESSAGE_SWIPED','MESSAGE_DELETED','MESSAGE_EDITED','GENERATION_ENDED'])bind(key,async()=>{try{await validate();if(!dead)void tick();}catch(e){console.warn('[Capricorn] event validation',e);}});
-  const resume=()=>{if(!D.hidden&&!dead)void tick();};D.addEventListener('visibilitychange',resume);eventCleanup.push(()=>D.removeEventListener('visibilitychange',resume));
-}
-if (!dead) { timer = setInterval(() => { if (!D.hidden) void tick(); }, 4000); tick(); }
+D.addEventListener('visibilitychange',resume);
+timer = setInterval(() => { if (!D.hidden) tick(); }, 4000);
+tick();
 
 const controls = D.createElement('div');
 controls.className = 'cap-backup';
-controls.innerHTML = '<h4>模块与数据</h4><p>暂停音乐自动收录，不删除数据。</p><label><input type="checkbox" data-module="music"> 声屿自动收录</label><button data-backup>导出统一备份</button><button data-restore>恢复音乐库与外观设置</button><input type="file" accept=".json,application/json" hidden><p data-result></p>';
+controls.innerHTML = '<h4>模块与数据</h4><button data-backup>导出统一备份</button><button data-restore>从备份恢复</button><button data-cache>重建聊天检索索引</button><input type="file" accept=".json,application/json" hidden><p data-result role="status"></p>';
 settings.append(controls);
+const health=D.createElement('details');health.innerHTML='<summary>运行诊断</summary><pre style="white-space:pre-wrap"></pre><button type="button">刷新诊断</button>';controls.append(health);
+const updateHealth=()=>{
+  const m=maintenance.status();
+  const moduleInfo = [memory?.diagnostics?.(), music?.diagnostics?.()].flatMap(info =>
+    typeof info === 'string' ? [info] : Object.entries(info || {}).map(([k,v])=>`${k}：${v}`));
+  health.querySelector('pre').textContent=[
+    `拾忆：${memory?'已启动':'未启动'}`,
+    `声屿：${music?'已启动':'未启动'}`,
+    `生成注入：${lastGeneration}`,
+    `后台维护：${m.running?'执行中':'空闲'} / 等待 ${m.pending}`,
+    ...moduleInfo,
+    ...Object.entries(m.stats).map(([k,v])=>`${k}：${v.runs} 次 / 异常 ${v.errors} / 最近 ${v.lastMs}ms`),
+  ].join('\n');
+};
+health.querySelector('button').onclick=updateHealth;
+health.addEventListener('toggle',()=>{if(health.open)updateHealth();});
+
+island.hidden=!flags.music;
+nav.querySelector('[data-tab="resonance"]').hidden=!(flags.music&&flags.memory);
+if(!flags.music){for(const b of nav.querySelectorAll('[data-tab="music"],[data-tab="library"]'))b.hidden=true;nav.querySelector('[data-close]').onclick=close;}
+
 const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');controls.append(followLabel);
 const result = msg => controls.querySelector('[data-result]').textContent = msg;
-for (const b of controls.querySelectorAll('[data-module]')) {
-  const k = b.dataset.module;
-  b.checked = flags[k];
-  b.onchange = () => {
-    flags[k] = b.checked;
-    W.localStorage.setItem('capricorn_modules', JSON.stringify(flags));
-    result('已保存自动收录开关');
-  };
-}
-controls.querySelector('[data-backup]').onclick = async () => {
+let changingModule = false;
+async function setModule(k, value) {
+  if (changingModule) return false;
+  changingModule = true;
   try {
+    if(k==='memory'&&!value&&memory){
+      await memory.restoreAutoHidden?.();
+      await memory.detach?.();
+    }
+    const next = {...flags, [k]: value};
+    W.localStorage.setItem('capricorn_modules', JSON.stringify(next));
+    Object.assign(flags,next);
+    W.location.reload();
+    return true;
+  } catch (error) {
+    W.alert('无法更新模块设置：'+error.message);
+    return false;
+  } finally {
+    changingModule = false;
+  }
+}
+function mountNativeControls(){
+  const panel=D.createElement('div'); panel.id='capricorn-native-settings'; panel.className='inline-drawer';
+  panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content" style="display:none"><p>独立模块开关 · 修改后刷新页面，保留数据。</p><div data-switches></div></div>';
+  const body=panel.querySelector('.inline-drawer-content');
+  const menu=D.createElement('div');menu.id='capricorn-native-menu';
+  function switches(host){
+    for(const [k,name] of [['music','声屿'],['memory','拾忆']]){
+      const label=D.createElement('label');label.style.cssText='display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer';
+      const input=D.createElement('input');input.type='checkbox';input.dataset.capModule=k;input.checked=flags[k];
+      input.addEventListener('change',async()=>{if(!await setModule(k,input.checked))input.checked=flags[k];});
+      label.append(input, name);host.append(label);
+    }
+  }
+  switches(panel.querySelector('[data-switches]'));switches(menu);
+  mountPresetControls(body,W,D);
+  const open=D.createElement('button');open.className='menu_button';open.textContent='更多设置';open.onclick=()=>{nav.hidden=false;select('settings');};body.append(open);
+  function attach(){
+    if (!panel.isConnected) {
+      const ext=D.querySelector('#extensions_settings2')||D.querySelector('#extensions_settings');
+      ext?.append(panel);
+    }
+    if (!menu.isConnected) D.querySelector('#extensionsMenu')?.append(menu);
+  }
+  attach();const observer=new MutationObserver(attach);observer.observe(D.body,{childList:true,subtree:true});
+  return ()=>{observer.disconnect();panel.remove();menu.remove();};
+}
+nativeControlsCleanup=mountNativeControls();
+const backupButton = controls.querySelector('[data-backup]');
+const restoreButton = controls.querySelector('[data-restore]');
+const cacheButton = controls.querySelector('[data-cache]');
+let dataOperation = false;
+async function withDataOperation(action) {
+  if (dataOperation) return;
+  dataOperation = true;
+  const buttons = [backupButton, restoreButton, cacheButton];
+  for (const button of buttons) button.disabled = true;
+  try {
+    await action();
+  } catch (error) {
+    result(error.message);
+  } finally {
+    for (const button of buttons) button.disabled = false;
+    dataOperation = false;
+  }
+}
+backupButton.onclick = () => withDataOperation(async () => {
     const key = scope();
-    const mem = await memory?.backup();
+    const mem = await (memory ? memory.backup() : readStoredMemory(W));
     if (key !== scope()) throw Error('聊天已切换，请重试');
-    const data = {
-      format: 'capricorn-backup', version: 1, created: new Date().toISOString(),
-      music: music?.backup() ?? null, memory: mem ?? null,
-      theme: themeSelect.value, flags: { ...flags },
-      appearance: JSON.parse(W.localStorage.getItem('capricorn_appearance_v1') || 'null')
-    };
+    const data = createBackup({
+      music: music ? music.backup() : readStoredMusic(W.localStorage),
+      memory: mem ?? null,
+      theme: themeSelect.value,
+      appearance: JSON.parse(W.localStorage.getItem('capricorn_appearance_v1') || 'null'),
+    });
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = D.createElement('a'); a.href = url; a.download = 'Capricorn-backup.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 3000);
-    result('已导出音乐库、外观设置及当前聊天记忆副本。');
-  } catch (e) { result('导出失败：' + e.message); }
-};
+    const areas = [
+      data.memory && '当前聊天记忆', data.music && '音乐库',
+      (data.appearance || data.theme) && '外观设置',
+    ].filter(Boolean);
+    result(`已导出${areas.join('、')}。`);
+});
 const file = controls.querySelector('input[type=file]');
-controls.querySelector('[data-restore]').onclick = () => file.click();
-file.onchange = async () => {
-  try {
-    const f = file.files[0]; if (!f) return;
-    const x = JSON.parse(await f.text());
-    if (x.format !== 'capricorn-backup' || x.version !== 1 || !x.music || !music) throw Error('不支持的备份或音乐模块不可用');
-    if (!W.confirm('替换全部音乐库及外观设置？记忆世界书不会被覆盖。')) return;
-    music.restore(x.music);
-    if (x.appearance) W.localStorage.setItem('capricorn_appearance_v1', JSON.stringify(x.appearance));
-    if (['auto', 'light', 'dark'].includes(x.theme)) { themeSelect.value = x.theme; themeSelect.onchange(); }
-    result('音乐库与外观已恢复（若外观未刷新请重载页面）。');
-  } catch (e) { result('恢复失败：' + e.message); } finally { file.value = ''; }
-};
+restoreButton.onclick = () => file.click();
+file.onchange = () => withDataOperation(async () => {
+  const source = file.files[0];
+  file.value = '';
+  if (!source) return;
+  const requestedScope = scope();
+  const backup = parseBackup(await source.text());
+  if (requestedScope !== scope()) throw Error('聊天已切换，请重试');
+  const areas = [
+    backup.memory && ['聊天记忆', async () => {
+      if (requestedScope !== scope()) throw Error('聊天已切换');
+      const report = await (memory ? memory.restoreBackup(backup.memory) : restoreStoredMemory(W, backup.memory));
+      const conflicts = report?.conflicts ? `，保留 ${report.conflicts} 项当前记录` : '';
+      return report?.changed ? `已补齐 ${report.recordsAdded ?? 0} 条摘要${conflicts}` : `无需补齐${conflicts}`;
+    }],
+    backup.music && ['音乐库', async () => {
+      await (music ? music.restoreBackup(backup.music) : restoreStoredMusic(W.localStorage, backup.music));
+      return '已保留现有条目并补齐缺项';
+    }],
+    (backup.appearance || backup.theme) && ['外观', async () => {
+      const report = restoreAppearanceBackup(W.localStorage, backup);
+      if (report.theme) {
+        themeSelect.value = report.theme;
+        root.dataset.theme = report.theme;
+      }
+      return report.changed ? '已补齐缺项，刷新后应用全部样式' : '无需补齐';
+    }],
+  ].filter(Boolean);
+  if (!areas.length) throw Error('备份中没有可恢复的数据');
+  if (!W.confirm(`恢复${areas.map(([name])=>name).join('、')}？现有记录优先，缺失项目将从备份补入。`)) return;
+  const messages = [];
+  for (const [name, apply] of areas) {
+    try {
+      messages.push(`${name}：${await apply()}`);
+    } catch (error) {
+      messages.push(`${name}恢复失败：${error.message}`);
+    }
+  }
+  result(messages.join('。'));
+  tick();
+});
+cacheButton.onclick = () => withDataOperation(async () => {
+  const key = scope();
+  if (!key) throw Error('请先打开一个聊天');
+  const rebuilt = memory?.clearDerivedCaches
+    ? await memory.clearDerivedCaches()
+    : (await Promise.all([clearIndex(key), clearLexicalCache(key)])).every(Boolean);
+  if (rebuilt === false) throw Error('当前无法清理浏览器索引，请重试');
+  result('已清理当前聊天的派生索引。后续检索时会自动重建。');
+  tick();
+});
 
 shared.onAccountChange=()=>{if(tab==='cloud'&&!shared.accountReady?.())select('library');else libraryNav.hidden=!['library','cloud'].includes(tab)||!shared.accountReady?.();};
-cleanupNetease = mountNetease(settings, shared);
+if(flags.music) cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
-cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
+if(flags.music) cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
 appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
 for (const [node,label] of [[controls,'数据与自动收录'],[settings.querySelector('.cap-backup:not(.cap-backup:first-child)'),'账号与连接']]) {
   if (!node || node.parentElement !== settings || node.closest('details')) continue;
@@ -477,3 +708,9 @@ for (const node of [...settings.children]) {
   if (!node.matches('section.cap-backup')) continue;
   const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = '账号与连接'; d.append(h); node.before(d); d.append(node);
 }
+}
+
+void boot().catch(error => {
+  if (!dead) root.querySelector('small').textContent = '摩羯座启动失败：' + error.message;
+  console.error('[Capricorn] startup', error);
+});

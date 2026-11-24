@@ -1,10 +1,11 @@
 {
   "display_name": "摩羯座 · Capricorn",
-  "loading_order": 90,
+  "loading_order": 110,
   "requires": [],
   "optional": [],
   "js": "index.js",
+  "generate_interceptor": "capricornPrepareGeneration",
   "css": "style.css",
   "author": "Capricorn",
-  "version": "3.2.0-alpha"
+  "version": "4.3.0-dev.10"
 }
