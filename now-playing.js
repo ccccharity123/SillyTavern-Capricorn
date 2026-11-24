@@ -77,155 +77,22 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   const img = q('.cap-art img');
   const bgImg = q('.cap-ambient img');
   const seek = q('[data-seek]');
-  let tab = 'lyrics', identity = '', epoch = 0, lines = [], translations = [], active = -1, dead = false, dragging = false, queueSignature = '';
+  let tab = 'lyrics', identity = '', lyricIdentity = '', epoch = 0;
+  let lines = [], translations = [], active = -1, dead = false, dragging = false, queueSignature = '';
+  let lastIslandSig = '';
 
-  const clock = n => Number.isFinite(n) ? `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}` : '0:00';
-  function button(label, fn) { const b = D.createElement('button'); b.textContent = label; b.onclick = fn; return b; }
-
-  function updateTabState() {
-    q('[data-lyrics]').setAttribute('aria-selected', String(tab === 'lyrics'));
-    q('[data-queue]').setAttribute('aria-selected', String(tab === 'queue'));
-  }
-
-  function drawQueue() {
-    const { queue, queueIndex } = state();
-    const sig = JSON.stringify([queue.map(t => [t.id, t.title, t.artist]), queueIndex]);
-    if (sig === queueSignature) return;
-    queueSignature = sig;
-    detail.replaceChildren();
-    queue.forEach((t, i) => {
-      const row = D.createElement('div');
-      row.className = 'cap-queue-row' + (i === queueIndex ? ' is-current' : '');
-      const name = button((i === queueIndex ? '♫ ' : '') + t.title + ' — ' + t.artist, () => play(i));
-      row.append(name, button('↑', () => move(i, i - 1)), button('↓', () => move(i, i + 1)));
-      const del = button('×', () => remove(i));
-      del.disabled = i === queueIndex;
-      row.append(del);
-      detail.append(row);
-    });
-    if (!queue.length) detail.innerHTML = '<div class="cap-fp-empty">播放队列为空</div>';
-  }
-
-  function drawLyrics() {
-    detail.replaceChildren();
-    active = -1;
-    if (!lines.length) {
-      detail.innerHTML = '<div class="cap-fp-empty">暂无同步歌词</div>';
-      return;
-    }
-    for (const l of lines) {
-      const b = button(l.text, () => {
-        if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(audio.duration, l.time);
-      });
-      b.className = 'cap-lyric';
-      const tr = translations.find(t => Math.abs(t.time - l.time) < 0.15);
-      if (tr) {
-        const small = D.createElement('small');
-        small.textContent = tr.text;
-        b.append(small);
-      }
-      detail.append(b);
-    }
-    updateTime();
-  }
-
-  async function loadLyrics() {
-    const n = ++epoch;
-    lines = []; translations = []; active = -1;
-    if (tab === 'lyrics') detail.innerHTML = '<div class="cap-fp-empty">正在读取歌词…</div>';
-    const t = state().playing;
-    if (!t?.neteaseId || !shared.online?.ready()) {
-      if (tab === 'lyrics') detail.innerHTML = '<div class="cap-fp-empty">未关联网易云或服务未连接</div>';
-      return;
-    }
-    try {
-      const d = await shared.online.get('/music/lyric?id=' + encodeURIComponent(t.neteaseId));
-      if (dead || n !== epoch) return;
-      lines = parseLrc(d.lyric);
-      translations = parseLrc(d.translation);
-      if (tab === 'lyrics') drawLyrics();
-    } catch {
-      if (!dead && n === epoch && tab === 'lyrics') {
-        detail.innerHTML = '<div class="cap-fp-empty">歌词读取失败，可重新点击歌词重试</div>';
-      }
-    }
-  }
-
-  function updateTime() {
-    if (panel.hidden) return;
-    const time = audio.currentTime || 0;
-    const dur = Number.isFinite(audio.duration) ? audio.duration : 0;
-    seek.max = dur;
-    if (!dragging) seek.value = time;
-    const pct = dur > 0 ? Math.min(100, Math.max(0, (time / dur) * 100)) : 0;
-    seek.style.setProperty('--cap-progress', pct + '%');
-    q('[data-elapsed]').textContent = clock(time);
-    q('[data-duration]').textContent = clock(audio.duration);
-    if (tab !== 'lyrics' || !lines.length) return;
-    let i = -1;
-    for (let j = 0; j < lines.length && lines[j].time <= time; j++) i = j;
-    if (i === active) return;
-    detail.children[active]?.classList.remove('active');
-    active = i;
-    const el = detail.children[i];
-    if (el) {
-      el.classList.add('active');
-      detail.scrollTo({
-        top: el.offsetTop - detail.offsetTop - detail.clientHeight / 2 + el.offsetHeight / 2,
-        behavior: 'smooth'
-      });
-    }
-  }
-
-  function refresh() {
-    if (dead || panel.hidden) return;
-    const { playing: t, actualQuality, resolving, started, statusText } = state();
-    q('[data-heading]').textContent = resolving ? '正在加载' : started && !audio.paused ? '正在播放' : '声屿';
-    q('[data-status]').textContent = statusText || '';
-    q('h2').textContent = t?.title || '尚未播放';
-    q('[data-artist]').textContent = t?.artist || '选择一首歌曲';
-    q('[data-quality]').textContent = actualQuality || '标准音质';
-    q('[data-toggle]').innerHTML = resolving ? ICONS.stop : audio.paused ? ICONS.play : ICONS.pause;
-    panel.dataset.playing = String(!audio.paused);
-
-    const id = JSON.stringify([t?.id, t?.neteaseId, t?.coverUrl]);
-    if (id !== identity) {
-      identity = id;
-      img.hidden = true; img.removeAttribute('src');
-      bgImg.hidden = true; bgImg.removeAttribute('src');
-      panel.style.removeProperty('--cap-art-color');
-      try {
-        const u = new URL(t?.coverUrl);
-        if (u.protocol === 'https:' || u.protocol === 'http:') {
-          img.src = u.href; img.hidden = false;
-          bgImg.src = u.href; bgImg.hidden = false;
-        }
-      } catch {}
-      if (tab === 'lyrics') void loadLyrics();
-      else { epoch++; lines = []; translations = []; }
-    }
-    if (tab === 'queue') drawQueue();
-    updateTime();
-  }
-
-  img.onerror = () => { img.hidden = true; bgImg.hidden = true; img.alt = '封面加载失败'; };
-  img.onload = () => {
-    try {
-      const c = D.createElement('canvas'); c.width = c.height = 1;
-      const x = c.getContext('2d'); x.drawImage(img, 0, 0, 1, 1);
-      const [r, g, b] = x.getImageData(0, 0, 1, 1).data;
-      panel.style.setProperty('--cap-art-color', `rgb(${r},${g},${b})`);
+  const clock = n => Number.isFinite(n) ? `${Math.floor(n / 60)}:${String(Math.floor(n \% 60)).padStart(2, '0')}` : '0:00'; function button(label, fn) { const b = D.createElement('button'); b.textContent = label; b.onclick = fn; return b; }  function currentLyricIndex(time) { let i = -1; for (let j = 0; j < lines.length && lines[j].time <= time; j++) i = j; return i; }  function emitIsland() { if (dead \vert{}\vert{} typeof shared.onIslandUpdate !== 'function') return; const t = state().playing; const isPlaying = !audio.paused && !audio.ended && !!t; const idx = isPlaying && lines.length ? currentLyricIndex(audio.currentTime \vert{}\vert{} 0) : -1; const lyric = idx >= 0 ? lines[idx].text : ''; const fallback = t ? (t.artist ? `${t.title} · ${t.artist}` : t.title) : '声屿'; const text = lyric \vert{}\vert{} fallback; const sig = `${isPlaying ? 1 : 0}|${text}`; if (sig === lastIslandSig) return; lastIslandSig = sig; shared.onIslandUpdate({ playing: isPlaying, lyric, title: t?.title \vert{}\vert{} '声屿', artist: t?.artist \vert{}\vert{} '', text }); }  function updateTabState() { q('[data-lyrics]').setAttribute('aria-selected', String(tab === 'lyrics')); q('[data-queue]').setAttribute('aria-selected', String(tab === 'queue')); }  function drawQueue() { const { queue, queueIndex } = state(); const sig = JSON.stringify([queue.map(t => [t.id, t.title, t.artist]), queueIndex]); if (sig === queueSignature) return; queueSignature = sig; detail.replaceChildren(); queue.forEach((t, i) => { const row = D.createElement('div'); row.className = 'cap-queue-row' + (i === queueIndex ? ' is-current' : ''); const name = button((i === queueIndex ? '♫ ' : '') + t.title + ' — ' + t.artist, () => play(i)); row.append(name, button('↑', () => move(i, i - 1)), button('↓', () => move(i, i + 1))); const del = button('×', () => remove(i)); del.disabled = i === queueIndex; row.append(del); detail.append(row); }); if (!queue.length) detail.innerHTML = '<div class="cap-fp-empty">播放队列为空</div>'; }  function drawLyrics() { if (panel.hidden \vert{}\vert{} tab !== 'lyrics') return; detail.replaceChildren(); active = -1; if (!lines.length) { detail.innerHTML = '<div class="cap-fp-empty">暂无同步歌词</div>'; return; } for (const l of lines) { const b = button(l.text, () => { if (Number.isFinite(audio.duration)) audio.currentTime = Math.min(audio.duration, l.time); }); b.className = 'cap-lyric'; const tr = translations.find(t => Math.abs(t.time - l.time) < 0.15); if (tr) { const small = D.createElement('small'); small.textContent = tr.text; b.append(small); } detail.append(b); } updateTime(); }  async function loadLyrics(force = false) { const t = state().playing; const key = t ? `${t.id || ''}|${t.neteaseId \vert{}\vert{} ''}` : ''; if (!force && key && key === lyricIdentity && lines.length) { drawLyrics(); emitIsland(); return; } lyricIdentity = key; const n = ++epoch; lines = []; translations = []; active = -1; emitIsland(); if (!panel.hidden && tab === 'lyrics') detail.innerHTML = '<div class="cap-fp-empty">正在读取歌词…</div>'; if (!t?.neteaseId \vert{}\vert{} !shared.online?.ready()) { if (!panel.hidden && tab === 'lyrics') detail.innerHTML = '<div class="cap-fp-empty">未关联网易云或服务未连接</div>'; return; } try { const d = await shared.online.get('/music/lyric?id=' + encodeURIComponent(t.neteaseId)); if (dead \vert{}\vert{} n !== epoch) return; lines = parseLrc(d.lyric); translations = parseLrc(d.translation); drawLyrics(); emitIsland(); } catch { if (!dead && n === epoch && !panel.hidden && tab === 'lyrics') { detail.innerHTML = '<div class="cap-fp-empty">歌词读取失败，可重新点击歌词重试</div>'; } } }  function updateTime() { emitIsland(); if (panel.hidden) return; const time = audio.currentTime \vert{}\vert{} 0; const dur = Number.isFinite(audio.duration) ? audio.duration : 0; seek.max = dur; if (!dragging) seek.value = time; const pct = dur > 0 ? Math.min(100, Math.max(0, (time / dur) * 100)) : 0; seek.style.setProperty('--cap-progress', pct + '\%'); q('[data-elapsed]').textContent = clock(time); q('[data-duration]').textContent = clock(audio.duration); if (tab !== 'lyrics' \vert{}\vert{} !lines.length) return; const i = currentLyricIndex(time); if (i === active) return; detail.children[active]?.classList.remove('active'); active = i; const el = detail.children[i]; if (el) { el.classList.add('active'); detail.scrollTo({ top: el.offsetTop - detail.offsetTop - detail.clientHeight / 2 + el.offsetHeight / 2, behavior: 'smooth' }); } }  function refresh() { if (dead) return; const { playing: t, actualQuality, resolving, started, statusText } = state(); const key = t ? `${t.id || ''}|${t.neteaseId \vert{}\vert{} ''}` : ''; if (key !== lyricIdentity && (!audio.paused \vert{}\vert{} !panel.hidden)) { void loadLyrics(); } emitIsland(); if (panel.hidden) return;  q('[data-heading]').textContent = resolving ? '正在加载' : started && !audio.paused ? '正在播放' : '声屿'; q('[data-status]').textContent = statusText \vert{}\vert{} ''; q('h2').textContent = t?.title \vert{}\vert{} '尚未播放'; q('[data-artist]').textContent = t?.artist \vert{}\vert{} '选择一首歌曲'; q('[data-quality]').textContent = actualQuality \vert{}\vert{} '标准音质'; q('[data-toggle]').innerHTML = resolving ? ICONS.stop : audio.paused ? ICONS.play : ICONS.pause; panel.dataset.playing = String(!audio.paused);  const id = JSON.stringify([t?.id, t?.neteaseId, t?.coverUrl]); if (id !== identity) { identity = id; img.hidden = true; img.removeAttribute('src'); bgImg.hidden = true; bgImg.removeAttribute('src'); panel.style.removeProperty('--cap-art-color'); try { const u = new URL(t?.coverUrl); if (u.protocol === 'https:' \vert{}\vert{} u.protocol === 'http:') { img.src = u.href; img.hidden = false; bgImg.src = u.href; bgImg.hidden = false; } } catch {} if (tab === 'lyrics') void loadLyrics(); } if (tab === 'queue') drawQueue(); updateTime(); }  img.onerror = () => { img.hidden = true; bgImg.hidden = true; img.alt = '封面加载失败'; }; img.onload = () => { try { const c = D.createElement('canvas'); c.width = c.height = 1; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 1, 1); const [r, g, b] = x.getImageData(0, 0, 1, 1).data; panel.style.setProperty('--cap-art-color', `rgb(${r},${g},${b})`);
     } catch {}
   };
 
   q('[data-diagnostic]').onclick = () => W.prompt('复制播放诊断', state().diagnostic());
   for (const el of panel.querySelectorAll('[data-close]')) {
-    el.onclick = () => { panel.hidden = true; epoch++; identity = ''; };
+    el.onclick = () => { panel.hidden = true; identity = ''; };
   }
   q('[data-toggle]').onclick = toggle;
   q('[data-prev]').onclick = () => next(-1);
   q('[data-next]').onclick = () => next(1);
-  q('[data-lyrics]').onclick = () => { tab = 'lyrics'; updateTabState(); void loadLyrics(); };
+  q('[data-lyrics]').onclick = () => { tab = 'lyrics'; updateTabState(); void loadLyrics(true); };
   q('[data-queue]').onclick = () => { tab = 'queue'; updateTabState(); queueSignature = ''; drawQueue(); };
   seek.oninput = () => {
     dragging = true;
@@ -239,8 +106,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   };
   seek.onpointercancel = () => { dragging = false; };
 
-  const events = ['timeupdate', 'durationchange', 'play', 'pause', 'loadedmetadata'];
+  const events = ['timeupdate', 'durationchange', 'play', 'pause', 'ended', 'loadedmetadata'];
   for (const ev of events) audio.addEventListener(ev, refresh);
+  emitIsland();
   return {
     open() { panel.hidden = false; identity = ''; queueSignature = ''; updateTabState(); refresh(); },
     refresh,

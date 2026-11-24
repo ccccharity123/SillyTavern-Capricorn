@@ -1,972 +1,343 @@
 /* =========================================================
-   Capricorn 美化样式 · Apple Music 播放器 + 拾忆便签系统
+   v2.6 新增：玻璃球灵动岛 + 实时歌词 + 播放器主题/背景 + 共享字体 + 纯图标拾忆
    ========================================================= */
 
-/* ---------- 1. Apple Music 基础视觉变量 ---------- */
-body[data-cap-look] {
-  --am-accent: #fa243c;
-  --am-accent-soft: rgba(250, 36, 60, 0.13);
-  --glass-bg: rgba(250, 250, 252, 0.78);
-  --glass-solid: #f7f7f9;
-  --glass-card: rgba(255, 255, 255, 0.72);
-  --glass-fg: #1d1d1f;
-  --glass-muted: #6e6e73;
-  --glass-line: rgba(60, 60, 67, 0.14);
-  --glass-control: rgba(120, 120, 128, 0.12);
-  --glass-control-hover: rgba(120, 120, 128, 0.2);
-  --glass-highlight: rgba(255, 255, 255, 0.78);
-  --glass-filter: blur(34px) saturate(180%);
+/* 1. 共享自定义 TTF 字体变量生效 */
+body[data-cap-has-player-font="1"] #capricorn-hub,
+body[data-cap-has-player-font="1"] .cap-full-player {
+  font-family: var(--cap-player-font) !important;
 }
-body[data-cap-look="dark"] {
-  --am-accent: #ff375f;
-  --am-accent-soft: rgba(255, 55, 95, 0.18);
-  --glass-bg: rgba(28, 28, 30, 0.8);
-  --glass-solid: #1c1c1e;
-  --glass-card: rgba(44, 44, 46, 0.68);
-  --glass-fg: #f5f5f7;
-  --glass-muted: #a1a1a6;
-  --glass-line: rgba(255, 255, 255, 0.14);
-  --glass-control: rgba(255, 255, 255, 0.1);
-  --glass-control-hover: rgba(255, 255, 255, 0.18);
-  --glass-highlight: rgba(255, 255, 255, 0.18);
-}
-body[data-cap-material="glass"] { --glass-filter: blur(20px) saturate(190%); }
-body[data-cap-material="glass"][data-cap-look="light"] { --glass-bg: rgba(252, 252, 255, 0.56); }
-body[data-cap-material="glass"][data-cap-look="dark"] { --glass-bg: rgba(24, 24, 28, 0.54); }
-body[data-cap-material="solid"] { --glass-bg: var(--glass-solid); --glass-filter: none; }
-
-/* ---------- 2. 悬浮胶囊与主面板 (#capricorn-hub) ---------- */
-#capricorn-hub {
-  --cap-bg: var(--glass-bg, rgba(245, 246, 250, 0.88));
-  --cap-fg: var(--glass-fg, #1d1d1f);
-  --cap-line: var(--glass-line, rgba(60, 60, 67, 0.14));
-  position: fixed;
-  top: max(10px, env(safe-area-inset-top));
-  right: 10px;
-  z-index: 2147481000;
-  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", system-ui, sans-serif;
-  color: var(--cap-fg);
-  -webkit-font-smoothing: antialiased;
-}
-#capricorn-hub button { font: inherit; color: inherit; cursor: pointer; }
-#capricorn-hub [hidden], #capricorn-hub nav[hidden] { display: none !important; }
-#capricorn-hub:has(nav:not([hidden])) {
-  left: auto !important;
-  right: max(10px, env(safe-area-inset-right)) !important;
-  top: max(10px, env(safe-area-inset-top)) !important;
+body[data-cap-has-note-font="1"] #shiyi-dock.cap-memory-side {
+  font-family: var(--cap-note-font) !important;
 }
 
-/* 灵动岛风格音乐胶囊 */
+/* 2. 8 套播放器主题预设 */
+body[data-cap-player-theme="mist"] {
+  --am-accent: #4a6cf7;
+  --glass-bg: rgba(244, 247, 255, 0.82);
+  --glass-card: rgba(255, 255, 255, 0.78);
+}
+body[data-cap-player-theme="ocean"][data-cap-look="dark"] {
+  --am-accent: #38bdf8;
+  --glass-bg: rgba(15, 28, 46, 0.82);
+  --glass-card: rgba(25, 44, 70, 0.7);
+}
+body[data-cap-player-theme="ocean"][data-cap-look="light"] {
+  --am-accent: #0284c7;
+  --glass-bg: rgba(232, 245, 255, 0.82);
+}
+body[data-cap-player-theme="sunset"] {
+  --am-accent: #f97316;
+  --glass-bg: rgba(255, 244, 234, 0.82);
+}
+body[data-cap-player-theme="sunset"][data-cap-look="dark"] {
+  --glass-bg: rgba(42, 25, 20, 0.82);
+  --glass-card: rgba(62, 36, 28, 0.72);
+}
+body[data-cap-player-theme="sakura"] {
+  --am-accent: #ec4899;
+  --glass-bg: rgba(255, 240, 246, 0.84);
+}
+body[data-cap-player-theme="sakura"][data-cap-look="dark"] {
+  --glass-bg: rgba(42, 22, 34, 0.84);
+  --glass-card: rgba(62, 32, 48, 0.72);
+}
+body[data-cap-player-theme="forest"] {
+  --am-accent: #10b981;
+  --glass-bg: rgba(236, 250, 244, 0.84);
+}
+body[data-cap-player-theme="forest"][data-cap-look="dark"] {
+  --glass-bg: rgba(16, 36, 30, 0.84);
+  --glass-card: rgba(24, 52, 44, 0.72);
+}
+body[data-cap-player-theme="gold"] {
+  --am-accent: #d4a038;
+  --glass-bg: rgba(24, 22, 18, 0.88);
+  --glass-card: rgba(38, 34, 26, 0.78);
+  --glass-fg: #f6eedc;
+  --glass-muted: #b8aa8e;
+}
+body[data-cap-player-theme="cyber"] {
+  --am-accent: #a855f7;
+  --glass-bg: rgba(26, 18, 46, 0.84);
+  --glass-card: rgba(42, 28, 72, 0.72);
+  --glass-fg: #f5f0ff;
+  --glass-muted: #bba8e6;
+}
+
+/* 自定义背景图叠加层 */
+body[data-cap-has-player-bg="1"] #capricorn-hub nav {
+  position: relative;
+  overflow: hidden;
+  background-image: var(--cap-player-bg-image) !important;
+  background-size: cover !important;
+  background-position: center !important;
+}
+body[data-cap-has-player-bg="1"] #capricorn-hub nav::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--glass-bg);
+  opacity: var(--cap-player-bg-opacity, 0.82);
+  backdrop-filter: blur(var(--cap-player-bg-blur, 24px));
+  -webkit-backdrop-filter: blur(var(--cap-player-bg-blur, 24px));
+  pointer-events: none;
+}
+body[data-cap-has-player-bg="1"] #capricorn-hub nav > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 3. 灵动岛：未播放玻璃球 / 磨砂玻璃球 -> 播放拉长显示歌词 */
 #capricorn-hub .cap-island {
+  --island-orb-size: 44px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  min-height: 42px;
-  max-width: 82vw;
-  padding: 8px 16px 8px 10px;
+  justify-content: center;
+  gap: 0;
+  height: var(--island-orb-size);
+  min-width: var(--island-orb-size);
+  padding: 0;
   border-radius: 999px;
-  border: 1px solid var(--glass-line);
-  background: var(--glass-bg);
-  color: var(--glass-fg);
-  backdrop-filter: var(--glass-filter);
-  -webkit-backdrop-filter: var(--glass-filter);
-  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 8px 28px rgba(0, 0, 0, 0.18);
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+  transition:
+    padding 0.42s cubic-bezier(0.34, 1.35, 0.64, 1),
+    gap 0.35s ease,
+    max-width 0.45s cubic-bezier(0.34, 1.25, 0.64, 1),
+    background 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.2s ease;
 }
-#capricorn-hub .cap-island:active { transform: scale(0.96); }
-#capricorn-hub .cap-island-eq {
+
+/* 未播放：日间通透玻璃球 */
+body[data-cap-look="light"] #capricorn-hub .cap-island[data-playing="false"] {
+  width: var(--island-orb-size);
+  background: radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.94), rgba(235, 240, 248, 0.62) 56%, rgba(208, 218, 234, 0.45));
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  color: #111111;
+  backdrop-filter: blur(18px) saturate(185%);
+  -webkit-backdrop-filter: blur(18px) saturate(185%);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.95),
+    inset 0 -3px 8px rgba(130, 145, 175, 0.22),
+    0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+/* 未播放：夜间深邃磨砂玻璃球 */
+body[data-cap-look="dark"] #capricorn-hub .cap-island[data-playing="false"] {
+  width: var(--island-orb-size);
+  background: radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.26), rgba(38, 40, 48, 0.76) 54%, rgba(16, 17, 22, 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  box-shadow:
+    inset 0 1.5px 3px rgba(255, 255, 255, 0.34),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.48),
+    0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+/* 播放中：拉长胶囊 + 日黑夜白歌词字体 */
+#capricorn-hub .cap-island[data-playing="true"] {
+  width: auto;
+  max-width: min(78vw, 340px);
+  padding: 0 16px 0 8px;
+  gap: 8px;
+}
+body[data-cap-look="light"] #capricorn-hub .cap-island[data-playing="true"] {
+  color: #111111;
+  background: rgba(252, 252, 255, 0.76);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+body[data-cap-look="dark"] #capricorn-hub .cap-island[data-playing="true"] {
+  color: #ffffff;
+  background: rgba(24, 24, 28, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+#capricorn-hub .cap-island-orb {
   display: inline-grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ff4e6a, var(--am-accent, #fa243c));
-  color: #fff;
-  font-size: 12px;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(250, 36, 60, 0.35);
+  position: relative;
 }
-#capricorn-hub .cap-island span:last-child {
+#capricorn-hub .cap-island[data-playing="true"] .cap-island-note-svg { display: none; }
+#capricorn-hub .cap-island[data-playing="false"] .cap-island-bars { display: none; }
+
+#capricorn-hub .cap-island-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2.5px;
+  height: 13px;
+}
+#capricorn-hub .cap-island-bars i {
+  display: block;
+  width: 2.5px;
+  border-radius: 99px;
+  background: var(--am-accent, currentColor);
+  animation: capEqBounce 0.9s ease-in-out infinite alternate;
+}
+#capricorn-hub .cap-island-bars i:nth-child(1) { height: 6px; animation-delay: 0s; }
+#capricorn-hub .cap-island-bars i:nth-child(2) { height: 12px; animation-delay: 0.22s; }
+#capricorn-hub .cap-island-bars i:nth-child(3) { height: 8px; animation-delay: 0.44s; }
+@keyframes capEqBounce {
+  0% { transform: scaleY(0.45); opacity: 0.75; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+
+#capricorn-hub .cap-island-lyric-wrap {
+  display: inline-flex;
+  align-items: center;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-width 0.42s cubic-bezier(0.34, 1.2, 0.64, 1), opacity 0.28s ease;
+}
+#capricorn-hub .cap-island[data-playing="true"] .cap-island-lyric-wrap {
+  max-width: min(64vw, 276px);
+  opacity: 1;
+}
+#capricorn-hub .cap-island-lyric {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-
-/* Apple Music 风格主弹窗 */
-#capricorn-hub nav {
-  margin-top: 10px;
-  width: min(400px, calc(100vw - 20px));
-  max-height: calc(100dvh - 88px - env(safe-area-inset-bottom, 0px));
-  overflow: auto;
-  overscroll-behavior: contain;
-  background: var(--glass-bg);
-  color: var(--glass-fg);
-  border: 1px solid var(--glass-line);
-  -webkit-backdrop-filter: var(--glass-filter);
-  backdrop-filter: var(--glass-filter);
-  border-radius: 26px;
-  padding: 16px;
-  box-sizing: border-box;
-  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 24px 60px rgba(0, 0, 0, 0.24);
+#capricorn-hub .cap-island-lyric.is-swap {
+  animation: capLyricFade 0.28s ease;
 }
-#capricorn-hub header {
+@keyframes capLyricFade {
+  from { opacity: 0.25; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 设置面板辅助控件 */
+.cap-color-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 4px 12px;
+  gap: 6px;
+  margin-top: 5px;
 }
-#capricorn-hub header strong {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-#capricorn-hub header button {
-  width: 30px;
-  height: 30px;
-  border: 0;
-  border-radius: 50%;
-  background: var(--glass-control);
-  display: grid;
-  place-items: center;
-  font-size: 18px;
-  line-height: 1;
-}
-#capricorn-hub header button:hover { background: var(--glass-control-hover); }
-
-/* iOS 分段控制器 (Segmented Control) */
-#capricorn-hub .cap-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  padding: 3px;
-  border-radius: 12px;
-  background: var(--glass-control);
-  margin-bottom: 10px;
-}
-#capricorn-hub .cap-tabs button {
-  border: 0;
-  background: transparent;
-  padding: 7px 6px;
-  border-radius: 9px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--glass-muted);
-  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-}
-#capricorn-hub .cap-tabs button[aria-selected="true"] {
-  background: var(--glass-card);
-  color: var(--am-accent);
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-#capricorn-hub nav > small {
-  display: block;
-  padding: 2px 6px 8px;
-  font-size: 11px;
-  color: var(--glass-muted);
-}
-
-/* ---------- 3. 声屿迷你播放器 (Apple Music 美化) ---------- */
-body[data-capricorn-tab] #sound-isle-root { display: none !important; }
-body[data-capricorn-tab="music"] #capricorn-hub #sound-isle-root {
-  display: block !important;
-  position: static !important;
-  width: 100% !important;
-  max-width: 100% !important;
+.cap-color-row input[type="color"] {
+  width: 36px !important;
+  height: 34px;
+  padding: 2px !important;
   margin: 0 !important;
-  transform: none !important;
+  flex-shrink: 0;
+  cursor: pointer;
 }
-#capricorn-hub #sound-isle-root .si-island,
-#capricorn-hub #sound-isle-root .si-head { display: none !important; }
-#capricorn-hub #sound-isle-root .si-panel {
-  position: static !important;
-  width: 100% !important;
-  max-height: none !important;
-  overflow: visible !important;
-  padding: 4px 0 !important;
-  background: transparent !important;
-  color: var(--glass-fg) !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-#capricorn-hub #sound-isle-root .si-pill {
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--am-accent-soft);
-  color: var(--am-accent);
-  border: 0;
-  margin-bottom: 8px;
-}
-/* 正在播放卡片 */
-#capricorn-hub #sound-isle-root .si-now {
+.cap-color-row input[type="text"] { margin-top: 0 !important; flex: 1; }
+.cap-color-row button { margin: 0 !important; flex-shrink: 0; }
+.cap-bg-image-row,
+.cap-font-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  margin: 6px 0 12px;
-  border-radius: 18px;
-  background: var(--glass-card);
-  border: 1px solid var(--glass-line);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  gap: 6px;
+  margin: 8px 0 6px;
 }
-#capricorn-hub #sound-isle-root .si-cover {
-  width: 72px;
-  height: 72px;
-  border-radius: 12px;
-  object-fit: cover;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-  background: linear-gradient(135deg, #ff5e7e, #fa243c);
+.cap-inline-tip { font-size: 11px; opacity: 0.78; }
+.cap-font-manager {
+  margin: 10px 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--glass-line, rgba(128,128,128,0.2));
 }
-#capricorn-hub #sound-isle-root .si-now > button.si-btn {
-  width: 100%;
-  margin-top: 2px;
-  background: var(--am-accent-soft);
-  color: var(--am-accent);
-  border: 0;
-  font-weight: 600;
-  border-radius: 10px;
-  padding: 8px;
-}
-#capricorn-hub #sound-isle-root .si-now > button.si-btn:hover {
-  background: var(--am-accent);
-  color: #fff;
-}
-#capricorn-hub #sound-isle-root input[type="range"] {
-  accent-color: var(--am-accent);
-  height: 4px;
-}
-#capricorn-hub #sound-isle-root .si-controls {
-  gap: 14px;
-  margin: 12px 0;
-}
-#capricorn-hub #sound-isle-root .si-mainplay {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--am-accent);
-  color: #fff;
-  font-size: 18px;
-  box-shadow: 0 6px 18px rgba(250, 36, 60, 0.35);
-  transition: transform 0.15s ease;
-}
-#capricorn-hub #sound-isle-root .si-mainplay:active { transform: scale(0.93); }
-#capricorn-hub #sound-isle-root :is(.si-btn, .si-input, .si-item) {
-  background: var(--glass-control);
-  color: var(--glass-fg);
-  border: 1px solid var(--glass-line);
-  border-radius: 10px;
-}
-#capricorn-hub #sound-isle-root .si-btn {
-  padding: 5px 9px;
-  font-size: 12px;
-  border-color: transparent;
-}
-#capricorn-hub #sound-isle-root .si-btn:hover { background: var(--glass-control-hover); }
-#capricorn-hub #sound-isle-root .si-item {
-  border-color: transparent;
-  padding: 9px 11px;
-  font-weight: 500;
-}
-#capricorn-hub #sound-isle-root .si-item.active {
-  background: var(--am-accent-soft);
-  color: var(--am-accent);
-  font-weight: 600;
-}
-#capricorn-hub #sound-isle-root .si-section {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--glass-muted);
-  letter-spacing: 0.02em;
-  margin: 16px 0 8px;
-}
-#capricorn-hub #sound-isle-root .si-muted { color: var(--glass-muted); }
-#capricorn-hub #sound-isle-root .si-track {
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 10px 6px;
-  border-bottom: 1px solid var(--glass-line);
-  border-radius: 10px;
-}
-#capricorn-hub #sound-isle-root .si-track:hover { background: var(--glass-control); }
-#capricorn-hub #sound-isle-root .si-track .si-grow {
-  flex-basis: 100%;
-  margin-bottom: 4px;
-}
-#capricorn-hub #sound-isle-root .si-song { font-weight: 600; }
-#capricorn-hub #sound-isle-root .si-danger { color: var(--am-accent); }
 
-/* ---------- 4. Apple Music 全屏播放器 (.cap-full-player) ---------- */
-.cap-full-player[hidden] { display: none !important; }
-.cap-full-player {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483646;
-  overflow: hidden;
-  background: linear-gradient(160deg, var(--cap-art-color, #3a3a4a), #121216 78%);
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+/* 4. 拾忆侧边栏重构：纯图标精致耳扣（无文字） + 清爽图标顶栏 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed {
+  width: 44px !important;
+  right: max(0px, env(safe-area-inset-right)) !important;
 }
-.cap-ambient {
+body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand {
+  position: relative;
+  display: grid !important;
+  place-items: center !important;
+  width: 44px !important;
+  height: 46px !important;
+  min-height: 46px !important;
+  padding: 0 0 0 2px !important;
+  writing-mode: horizontal-tb !important;
+  letter-spacing: 0 !important;
+  border-radius: 18px 0 0 18px !important;
+  background: color-mix(in srgb, var(--note-tab-bg) 78%, transparent) !important;
+  color: var(--note-tab-fg) !important;
+  border: 1px solid var(--note-line) !important;
+  border-right: 0 !important;
+  backdrop-filter: blur(18px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(160%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    -4px 8px 22px rgba(0, 0, 0, 0.14) !important;
+  transition: transform 0.25s cubic-bezier(0.34, 1.4, 0.64, 1), background 0.2s ease, box-shadow 0.2s ease !important;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand:hover {
+  transform: translateX(-4px) scale(1.03);
+  color: var(--note-accent) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    -6px 10px 26px rgba(0, 0, 0, 0.2) !important;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand .cap-shiyi-dot {
   position: absolute;
-  inset: -40px;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-.cap-ambient img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(75px) saturate(190%) brightness(0.55);
-  transform: scale(1.25);
-  transition: opacity 0.6s ease;
-}
-.cap-ambient::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 25%, transparent 10%, rgba(0, 0, 0, 0.45) 100%);
-}
-.cap-fp-shell {
-  position: relative;
-  z-index: 1;
-  height: 100%;
-  max-width: 480px;
-  margin: 0 auto;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: calc(env(safe-area-inset-top, 0px) + 10px) max(22px, env(safe-area-inset-right)) calc(env(safe-area-inset-bottom, 0px) + 14px) max(22px, env(safe-area-inset-left));
-}
-.cap-grabber {
-  width: 38px;
-  height: 5px;
+  top: 5px;
+  left: 6px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.38);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.cap-full-player header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-.cap-fp-heading {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  opacity: 0.78;
-}
-.cap-fp-pill {
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--note-accent, #fa243c);
   color: #fff;
-  padding: 6px 13px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  backdrop-filter: blur(12px);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
 }
-.cap-fp-pill:hover { background: rgba(255, 255, 255, 0.24); }
 
-/* 专辑封面呼吸缩放 */
-.cap-full-player .cap-art {
-  position: relative;
-  width: min(68vw, 31vh, 300px);
-  aspect-ratio: 1;
-  flex-shrink: 0;
-  border-radius: 18px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.12);
-  display: grid;
+/* 拾忆展开顶栏：纯图标操作区 */
+.cap-shiyi-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--note-line);
+}
+.cap-shiyi-mark {
+  display: inline-grid;
   place-items: center;
-  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
-  transform: scale(0.9);
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.45s ease;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--note-accent) 16%, transparent);
+  color: var(--note-accent);
 }
-.cap-full-player[data-playing="true"] .cap-art {
-  transform: scale(1);
-  box-shadow: 0 28px 65px rgba(0, 0, 0, 0.55);
-}
-.cap-full-player .cap-art span { font-size: 60px; opacity: 0.55; }
-.cap-full-player .cap-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cap-full-player .cap-art img[hidden] { display: none; }
-
-/* 左对齐曲目信息 + 音质徽章 */
-.cap-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-.cap-meta-text { min-width: 0; flex: 1; }
-.cap-meta h2 {
-  margin: 0;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cap-meta p {
-  margin: 3px 0 0;
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.72);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cap-badge {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.9);
-}
-.cap-fp-status { margin: 0; font-size: 12px; opacity: 0.75; width: 100%; min-height: 16px; }
-
-/* Apple Music 细进度条 */
-.cap-scrubber { width: 100%; }
-.cap-scrubber input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 5px;
-  border-radius: 999px;
-  background: linear-gradient(to right, rgba(255,255,255,0.92) var(--cap-progress, 0%), rgba(255,255,255,0.24) var(--cap-progress, 0%));
-  outline: none;
-  cursor: pointer;
-}
-.cap-scrubber input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 13px;
-  height: 13px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-}
-.cap-clock-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.7;
-  margin-top: 6px;
-}
-
-/* 播控按钮 */
-.cap-transport {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 32px;
-  margin: 4px 0;
-}
-.cap-transport button {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-  transition: transform 0.16s ease, background 0.16s ease;
-}
-.cap-transport button:hover { background: rgba(255, 255, 255, 0.12); }
-.cap-transport button:active { transform: scale(0.9); }
-.cap-transport .cap-play-btn {
-  width: 64px;
-  height: 64px;
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(12px);
-}
-
-/* 歌词与队列区域 */
-.cap-fp-detail {
-  position: relative;
-  width: 100%;
-  flex: 1;
-  min-height: 110px;
-  overflow: auto;
-  overscroll-behavior: contain;
-  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
-  padding: 14px 4px;
-}
-.cap-fp-empty { text-align: center; opacity: 0.6; padding: 28px 0; font-size: 14px; }
-.cap-lyric {
-  display: block;
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  text-align: left;
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.45;
-  padding: 8px 6px;
-  border-radius: 12px;
-  opacity: 0.42;
-  cursor: pointer;
-  transition: opacity 0.25s ease, transform 0.25s ease;
-}
-.cap-lyric.active {
-  opacity: 1;
-  font-weight: 700;
-  transform: scale(1.02);
-  transform-origin: left center;
-}
-.cap-lyric small {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  opacity: 0.8;
-  margin-top: 3px;
-}
-.cap-queue-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  margin: 5px 0;
-  padding: 4px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-}
-.cap-queue-row.is-current { background: rgba(255, 255, 255, 0.2); }
-.cap-queue-row button {
-  border: 0;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  padding: 7px 9px;
-  cursor: pointer;
-}
-.cap-queue-row button:first-child {
-  flex: 1;
-  text-align: left;
-  background: transparent;
-  overflow-wrap: anywhere;
-  font-weight: 500;
-}
-.cap-queue-row button:disabled { opacity: 0.3; }
-
-/* 底部歌词/队列切换栏 */
-.cap-fp-tabs {
-  display: flex;
-  gap: 10px;
-  width: 100%;
-  justify-content: center;
-  padding-top: 4px;
-}
-.cap-fp-tabs button {
+.cap-shiyi-icon-actions {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 0;
-  border-radius: 999px;
-  padding: 8px 18px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
 }
-.cap-fp-tabs button[aria-selected="true"] {
-  background: rgba(255, 255, 255, 0.26);
-  color: #fff;
-}
-
-/* ---------- 5. 设置页与外挂控件 ---------- */
-#capricorn-hub .cap-settings { padding: 4px 2px; }
-#capricorn-hub .cap-backup,
-#capricorn-hub .cap-appearance {
-  padding: 12px;
-  margin-bottom: 12px;
-  border-radius: 16px;
-  background: var(--glass-card);
-  border: 1px solid var(--glass-line);
-}
-#capricorn-hub h4 { margin: 0 0 10px; font-size: 14px; font-weight: 700; }
-#capricorn-hub :is(select, textarea, input:not([type="range"]):not([type="checkbox"])) {
-  background: var(--glass-control);
-  color: var(--glass-fg);
-  border: 1px solid var(--glass-line);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 14px;
-  box-sizing: border-box;
-  width: 100%;
-  margin-top: 5px;
-}
-#capricorn-hub .cap-backup button,
-.cap-appearance button {
-  border: 0;
-  border-radius: 10px;
-  padding: 7px 12px;
-  margin: 4px 4px 4px 0;
-  background: var(--glass-control);
-  color: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.cap-appearance .cap-btn-primary {
-  background: var(--am-accent, #fa243c) !important;
-  color: #fff !important;
-}
-.cap-appearance-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.cap-appearance label { display: block; margin: 6px 0; font-size: 12px; font-weight: 600; }
-.cap-appearance textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; resize: vertical; }
-.cap-css-editor summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0 4px; }
-.cap-css-hint { font-size: 11px; opacity: 0.78; line-height: 1.5; margin: 4px 0 8px; }
-.cap-css-hint code { padding: 1px 4px; border-radius: 4px; background: rgba(128, 128, 128, 0.16); }
-.cap-css-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; font-size: 11px; }
-.cap-css-presets button { padding: 4px 8px !important; font-size: 11px !important; margin: 0 !important; }
-.cap-css-actions { display: flex; gap: 6px; margin-top: 8px; }
-.cap-css-status { font-size: 12px; margin: 6px 0 0; min-height: 16px; opacity: 0.85; }
-
-/* ---------- 6. 拾忆侧边栏 · 便签视觉系统 ---------- */
-body[data-cap-paper] #shiyi-dock.cap-memory-side {
-  /* 可通过自定义 CSS 自由覆盖的变量 */
-  --note-bg: #f6f2e8;
-  --note-card: #fffdf8;
-  --note-accent: #d9a043;
-  --note-tape: rgba(236, 198, 118, 0.52);
-  --note-fg: #34302a;
-  --note-muted: #787166;
-  --note-line: rgba(120, 108, 90, 0.22);
-  --note-radius: 12px;
-  --note-width: 380px;
-  --note-blur: 0px;
-  --note-shadow: 0 3px 10px rgba(45, 38, 25, 0.08), 0 1px 2px rgba(45, 38, 25, 0.05);
-  --note-tab-bg: #fff8e7;
-  --note-tab-fg: #4a3f30;
-  --sy-text: var(--note-fg);
-  --sy-muted: var(--note-muted);
-
-  position: fixed !important;
-  right: max(0px, env(safe-area-inset-right)) !important;
-  left: auto !important;
-  top: 42% !important;
-  bottom: auto !important;
-  transform: none !important;
-  z-index: 2147480999 !important;
-  box-sizing: border-box;
-  background-color: var(--note-bg) !important;
-  color: var(--note-fg) !important;
-  border: 1px solid var(--note-line) !important;
-  border-right: 0 !important;
-  backdrop-filter: blur(var(--note-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--note-blur)) !important;
-  box-shadow: -6px 10px 34px rgba(0, 0, 0, 0.16) !important;
-  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
-}
-
-/* 8 套内置便签主题 */
-body[data-cap-paper="yellow"] #shiyi-dock.cap-memory-side {
-  --note-bg: #f7ecc2; --note-card: #fff8d6; --note-accent: #e5a50a;
-  --note-tape: rgba(242, 183, 5, 0.42); --note-line: rgba(176, 140, 40, 0.28);
-  --note-tab-bg: #ffe999; --note-tab-fg: #544008;
-}
-body[data-cap-paper="cream"] #shiyi-dock.cap-memory-side {
-  --note-bg: #f5ecdc; --note-card: #fffaf0; --note-accent: #c98a5b;
-  --note-tape: rgba(217, 159, 114, 0.44); --note-line: rgba(168, 134, 98, 0.24);
-  --note-tab-bg: #f9eedb; --note-tab-fg: #5c432c;
-}
-body[data-cap-paper="sage"] #shiyi-dock.cap-memory-side {
-  --note-bg: #e8efe7; --note-card: #f7fbf6; --note-accent: #6c9a76;
-  --note-tape: rgba(124, 168, 134, 0.42); --note-fg: #263529; --note-muted: #5d7262;
-  --note-line: rgba(93, 128, 100, 0.22); --note-tab-bg: #dbe9da; --note-tab-fg: #27402c;
-}
-body[data-cap-paper="sakura"] #shiyi-dock.cap-memory-side {
-  --note-bg: #f8ecef; --note-card: #fff9fb; --note-accent: #db7695;
-  --note-tape: rgba(232, 146, 174, 0.42); --note-fg: #3b272e; --note-muted: #82616d;
-  --note-line: rgba(190, 120, 144, 0.22); --note-tab-bg: #fce0e8; --note-tab-fg: #6b2d42;
-}
-body[data-cap-paper="sky"] #shiyi-dock.cap-memory-side {
-  --note-bg: #e7f0f8; --note-card: #f7fbff; --note-accent: #4c8fd6;
-  --note-tape: rgba(105, 165, 224, 0.4); --note-fg: #1f3042; --note-muted: #5b728a;
-  --note-line: rgba(84, 130, 178, 0.22); --note-tab-bg: #d9ebfc; --note-tab-fg: #1e466e;
-}
-body[data-cap-paper="white"] #shiyi-dock.cap-memory-side {
-  --note-bg: #f3f3f6; --note-card: #ffffff; --note-accent: #fa243c;
-  --note-tape: rgba(160, 160, 170, 0.34); --note-fg: #1d1d1f; --note-muted: #6e6e73;
-  --note-line: rgba(60, 60, 67, 0.14); --note-tab-bg: #ffffff; --note-tab-fg: #1d1d1f;
-}
-body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side,
-body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side {
-  --note-bg: #20201f; --note-card: #2b2b29; --note-accent: #e5a94c;
-  --note-tape: rgba(229, 169, 76, 0.35); --note-fg: #ede9e0; --note-muted: #a6a095;
-  --note-line: rgba(255, 255, 255, 0.12); --note-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
-  --note-tab-bg: #2e2d2a; --note-tab-fg: #f0ece3;
-}
-
-/* 4 种纸张底纹 */
-body[data-cap-paper-pattern="dots"] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) {
-  background-image: radial-gradient(var(--note-line) 1.1px, transparent 1.1px);
-  background-size: 16px 16px;
-}
-body[data-cap-paper-pattern="grid"] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) {
-  background-image:
-    linear-gradient(to right, var(--note-line) 1px, transparent 1px),
-    linear-gradient(to bottom, var(--note-line) 1px, transparent 1px);
-  background-size: 20px 20px;
-}
-body[data-cap-paper-pattern="lines"] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) {
-  background-image: linear-gradient(to bottom, transparent 27px, var(--note-line) 28px);
-  background-size: 100% 28px;
-}
-
-/* 收起状态：右侧书签便签条 */
-body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed {
-  width: 38px !important;
-  min-width: 0 !important;
+body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-shiyi-icon-btn {
+  position: static !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 32px !important;
+  height: 32px !important;
   padding: 0 !important;
-  border-radius: 12px 0 0 12px !important;
-  overflow: visible !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side::before,
-body[data-cap-paper] #shiyi-dock.cap-memory-side::after { display: none !important; }
-body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand {
-  width: 38px !important;
-  height: auto !important;
-  min-height: 82px !important;
-  writing-mode: vertical-rl;
-  letter-spacing: 3px;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  padding: 12px 6px !important;
-  border-radius: 12px 0 0 12px !important;
-  background: var(--note-tab-bg) !important;
-  color: var(--note-tab-fg) !important;
-  border: 1px solid var(--note-line) !important;
-  border-left: 4px solid var(--note-accent) !important;
-  border-right: 0 !important;
-  box-shadow: -3px 5px 16px rgba(0, 0, 0, 0.14) !important;
-  transition: transform 0.2s ease;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand:hover {
-  transform: translateX(-3px);
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) #shiyi-expand { display: none !important; }
-
-/* 展开状态：便签侧边栏 */
-body[data-cap-paper] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) {
-  top: max(12px, env(safe-area-inset-top)) !important;
-  bottom: max(12px, env(safe-area-inset-bottom)) !important;
-  max-height: none;
-  width: min(var(--note-width), 92vw) !important;
-  padding: 16px !important;
-  border-radius: 20px 0 0 20px !important;
-  overflow: auto;
-  overscroll-behavior: contain;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side .shiyi-brand {
-  display: inline-block;
-  font-size: 17px;
-  font-weight: 700;
-  margin: 0 8px 10px 2px;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-style-btn {
-  padding: 4px 10px !important;
-  font-size: 12px !important;
-  border-radius: 999px !important;
+  border-radius: 10px !important;
   background: var(--note-card) !important;
-  border: 1px solid var(--note-line) !important;
   color: var(--note-fg) !important;
-  vertical-align: middle;
+  border: 1px solid var(--note-line) !important;
+  transition: transform 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
-body[data-cap-paper] #shiyi-dock.cap-memory-side button {
-  background: var(--note-card);
-  color: var(--note-fg);
-  border: 1px solid var(--note-line);
-  border-radius: 10px;
-  box-shadow: none;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer {
-  margin: 8px 0 14px;
-  padding: 12px;
-  border-radius: 14px;
-  background: var(--note-card);
-  border: 1px dashed var(--note-line);
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer :is(select, textarea) {
-  width: 100%;
-  box-sizing: border-box;
-  margin-top: 4px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid var(--note-line);
-  background: var(--note-bg);
-  color: var(--note-fg);
-}
-
-/* 便签卡片 (.cap-story) */
-body[data-cap-paper] #shiyi-dock .cap-timeline {
-  border: 0;
-  padding: 0;
-  margin: 12px 0;
-}
-body[data-cap-paper] #shiyi-dock .cap-timeline-empty {
-  font-size: 12px;
-  color: var(--note-muted);
-  margin: 0 0 10px 2px;
-}
-body[data-cap-paper] #shiyi-dock .cap-story {
-  position: relative;
-  background: var(--note-card);
-  color: var(--note-fg);
-  border: 1px solid var(--note-line);
-  border-radius: var(--note-radius);
-  padding: 15px 15px 12px;
-  margin: 0 0 14px;
-  box-shadow: var(--note-shadow);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
-}
-body[data-cap-paper] #shiyi-dock .cap-story:hover {
+body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-shiyi-icon-btn:hover {
+  color: var(--note-accent) !important;
   transform: translateY(-1px);
 }
-body[data-cap-paper] #shiyi-dock .cap-story::before { display: none; }
-
-/* 装饰风格：和纸胶带 / 顶部色条 / 折角 */
-body[data-cap-note-decor="tape"] #shiyi-dock .cap-story::after {
-  content: "";
-  position: absolute;
-  top: -7px;
-  left: 50%;
-  transform: translateX(-50%) rotate(-1.5deg);
-  width: 68px;
-  height: 15px;
-  background: var(--note-tape);
-  border-radius: 2px;
-  pointer-events: none;
-}
-body[data-cap-note-decor="strip"] #shiyi-dock .cap-story {
-  border-top: 4px solid var(--note-accent);
-}
-body[data-cap-note-decor="fold"] #shiyi-dock .cap-story {
-  overflow: hidden;
-}
-body[data-cap-note-decor="fold"] #shiyi-dock .cap-story::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  border-style: solid;
-  border-width: 0 18px 18px 0;
-  border-color: transparent var(--note-bg) var(--note-accent) transparent;
-  pointer-events: none;
-}
-
-body[data-cap-paper] #shiyi-dock .cap-story summary {
-  cursor: pointer;
-  list-style: none;
-}
-body[data-cap-paper] #shiyi-dock .cap-story summary::-webkit-details-marker { display: none; }
-body[data-cap-paper] #shiyi-dock .cap-story-time {
-  display: inline-block;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--note-muted);
-  padding: 2px 7px;
-  border-radius: 6px;
-  background: var(--note-bg);
-}
-body[data-cap-paper] #shiyi-dock .cap-story-title {
-  display: block;
-  font-size: 15px;
-  font-weight: 700;
-  margin: 7px 0 4px;
-  line-height: 1.4;
-}
-body[data-cap-paper] #shiyi-dock .cap-story-song {
-  display: block;
-  font-size: 12px;
-  color: var(--note-muted);
-}
-body[data-cap-paper] #shiyi-dock .cap-story[open] p {
-  margin: 10px 0 8px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--note-line);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.75;
-}
-body[data-cap-paper] #shiyi-dock .cap-story-play {
-  font-size: 12px !important;
-  padding: 5px 10px !important;
-  margin-top: 4px;
-}
-body[data-cap-paper] #shiyi-dock .cap-memory-tools summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--note-muted);
-  padding: 8px 2px;
-}
-
-/* 减少动效无障碍适配 */
-@media (prefers-reduced-motion: reduce) {
-  #capricorn-hub *, .cap-full-player *, #shiyi-dock * {
-    animation: none !important;
-    transition: none !important;
-  }
-}
-
-/* v2.5: interaction layout only; Alpha1 materials and paper themes retained. */
-body[data-capricorn-tab="library"] #capricorn-hub #sound-isle-root {display:block!important;position:static!important;width:100%!important;max-width:100%!important;margin:0!important;transform:none!important;}
-body[data-capricorn-tab="music"] #capricorn-hub .cap-local-library {display:none!important;}
-body[data-capricorn-tab="library"] #capricorn-hub .si-panel > :not(.cap-local-library):not(.si-footer) {display:none!important;}
-#capricorn-hub [hidden], #shiyi-dock [hidden] {display:none!important;}
-#capricorn-hub .cap-action-menu summary, #capricorn-hub details > summary {cursor:pointer;padding:8px 4px;}
-#capricorn-hub .si-track {display:flex;align-items:flex-start;flex-wrap:wrap;}
-#capricorn-hub .cap-track-title {flex:1;min-width:0;text-align:left;background:transparent!important;border:0!important;box-shadow:none!important;color:inherit!important;white-space:normal;overflow-wrap:anywhere;}
-#capricorn-hub .si-track .cap-action-menu {max-width:100%;}
-#capricorn-hub .si-track .cap-action-menu[open] {flex-basis:100%;}
-#capricorn-hub .si-track .cap-action-menu button {margin:3px;}
-#capricorn-hub nav > small:empty {display:none;}
-#capricorn-hub nav > header [data-tab="settings"] {margin-left:auto;}
-/* v2.6 Floating light */
-#capricorn-hub .cap-island {width:44px;height:44px;min-height:44px;padding:0;justify-content:center;gap:0;transition:width .32s ease,border-radius .32s ease,background .25s ease;overflow:hidden;background:radial-gradient(circle at 30% 20%,var(--glass-highlight),transparent 58%),var(--glass-bg);}
-#capricorn-hub .cap-island .cap-island-eq{display:none}
-#capricorn-hub .cap-island[data-playing="true"]{width:min(300px,76vw);padding:0 14px;background:var(--glass-bg)}
-#capricorn-hub .cap-island span:last-child{display:none}
-#capricorn-hub .cap-island[data-playing="true"] span:last-child{display:block;min-width:0;font-size:14px;font-weight:500;color:#000}
-body[data-cap-look="dark"] #capricorn-hub .cap-island[data-playing="true"] span:last-child{color:#fff}
-#capricorn-hub,.cap-full-player,#shiyi-dock{font-family:var(--cap-user-font,system-ui),system-ui,sans-serif!important}
-#capricorn-hub :is(button,input,select,textarea),.cap-full-player :is(button,input,select,textarea),#shiyi-dock :is(button,input,select,textarea,.cap-story){font-family:inherit!important}
-body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed{width:42px!important}
-body[data-cap-paper] #shiyi-dock.cap-memory-side #shiyi-expand{position:relative;display:grid;place-items:center;width:42px!important;height:46px!important;min-height:0!important;padding:0!important;writing-mode:horizontal-tb;letter-spacing:0;border-radius:15px 0 0 15px!important;border-left:1px solid var(--note-line)!important;box-shadow:-2px 3px 14px #0001!important}
-#shiyi-expand[data-pending="true"]::after{content:'';position:absolute;right:6px;top:6px;width:6px;height:6px;border-radius:50%;background:var(--note-accent,#d88b69)}

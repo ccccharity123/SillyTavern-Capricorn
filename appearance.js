@@ -1,7 +1,26 @@
+import {
+  listFonts,
+  saveFontFile,
+  ensureFontLoaded,
+  deleteFont,
+  saveBgImage,
+  loadBgImageUrl,
+  clearBgImage
+} from './fonts.js';
+
 export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   const D = root.ownerDocument, W = D.defaultView, key = 'capricorn_appearance_v1';
   const defaults = {
     material: 'frost',
+    playerTheme: 'default',
+    playerBgColor: '',
+    playerBgOpacity: 82,
+    playerBgBlur: 24,
+    playerIslandCss: '',
+    playerThemeCss: '',
+    playerCustomCss: '',
+    sharedFontId: '',
+    noteFontId: 'shared',
     paper: 'warm',
     paperMode: 'auto',
     paperPattern: 'dots',
@@ -13,7 +32,10 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   let p = { ...defaults };
   try { p = { ...p, ...JSON.parse(W.localStorage.getItem(key) || '{}') }; } catch {}
 
-  const PRESETS = {
+  let installedFonts = [];
+  let bgImageUrl = '';
+
+  const NOTE_PRESETS = {
     glass: {
       side: '--note-bg: rgba(255, 252, 245, 0.78);\n--note-blur: 22px;\n--note-width: 380px;',
       note: '--note-card: rgba(255, 255, 255, 0.72);\n--note-radius: 14px;\n--note-shadow: 0 4px 16px rgba(0,0,0,0.06);',
@@ -36,12 +58,35 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     }
   };
 
-  function buildForm(compact = false) {
+  const PLAYER_PRESETS = {
+    crystal: {
+      playerIslandCss: 'border: 1px solid rgba(255,255,255,0.55);\nbox-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 10px 30px rgba(0,0,0,0.2);',
+      playerThemeCss: '--am-accent: #0a84ff;\nborder-radius: 28px;',
+      playerCustomCss: ''
+    },
+    aurora: {
+      playerIslandCss: 'background: linear-gradient(135deg, rgba(120,210,255,0.45), rgba(190,130,255,0.45));\nborder-color: rgba(255,255,255,0.45);',
+      playerThemeCss: '--am-accent: #7c5cff;\nbackground: linear-gradient(155deg, rgba(28,32,54,0.82), rgba(45,26,58,0.82));',
+      playerCustomCss: '.cap-island[data-playing="true"] { border-radius: 18px; }'
+    },
+    minimal: {
+      playerIslandCss: 'box-shadow: 0 4px 16px rgba(0,0,0,0.12);',
+      playerThemeCss: 'border-radius: 20px;\n--am-accent: #1d1d1f;',
+      playerCustomCss: '.cap-island-orb { background: transparent !important; box-shadow: none !important; }'
+    },
+    neon: {
+      playerIslandCss: 'border: 1px solid rgba(255, 78, 138, 0.7);\nbox-shadow: 0 0 18px rgba(255, 78, 138, 0.35);',
+      playerThemeCss: '--am-accent: #ff4e8a;\nborder: 1px solid rgba(255, 78, 138, 0.45);',
+      playerCustomCss: '.cap-island[data-playing="true"] { letter-spacing: 0.03em; }'
+    }
+  };
+
+  function buildPlayerForm() {
     const el = D.createElement('section');
-    el.className = compact ? 'cap-appearance cap-appearance-inline' : 'cap-appearance';
+    el.className = 'cap-appearance cap-player-appearance';
     el.innerHTML = `
-      ${compact ? '' : `
-        <h4>外观与材质</h4>
+      <h4>播放器外观与主题</h4>
+      <div class="cap-appearance-grid">
         <label>声屿材质
           <select data-pref="material">
             <option value="glass">液态玻璃 (Liquid Glass)</option>
@@ -49,7 +94,100 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
             <option value="solid">极简实色</option>
           </select>
         </label>
-      `}
+        <label>播放器主题
+          <select data-pref="playerTheme">
+            <option value="default">经典原生</option>
+            <option value="mist">晨雾白瓷</option>
+            <option value="ocean">深海靛蓝</option>
+            <option value="sunset">落日琥珀</option>
+            <option value="sakura">樱雾浅粉</option>
+            <option value="forest">森系青岚</option>
+            <option value="gold">暗夜黑金</option>
+            <option value="cyber">星云紫韵</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="cap-bg-customizer">
+        <label>自定义背景色 / 渐变（留空使用主题默认）
+          <div class="cap-color-row">
+            <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
+            <input type="text" data-pref-text="playerBgColor" placeholder="如 #1a1d2e 或 linear-gradient(135deg,#1d2b64,#f8cdda)">
+            <button type="button" data-clear-bg-color title="清除自定义背景色">清除</button>
+          </div>
+        </label>
+        <div class="cap-bg-image-row">
+          <button type="button" data-upload-bg>上传背景图</button>
+          <button type="button" data-clear-bg>移除背景图</button>
+          <input type="file" accept="image/*" data-bg-file hidden>
+          <span class="cap-inline-tip" data-bg-tip></span>
+        </div>
+        <div class="cap-appearance-grid">
+          <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
+            <input type="range" min="20" max="100" step="1" data-pref-range="playerBgOpacity">
+          </label>
+          <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
+            <input type="range" min="0" max="40" step="1" data-pref-range="playerBgBlur">
+          </label>
+        </div>
+      </div>
+
+      <div class="cap-font-manager">
+        <label>自定义字体（与拾忆互通 · 支持 .ttf）
+          <select data-font-select="player"></select>
+        </label>
+        <div class="cap-font-actions">
+          <button type="button" data-import-font class="cap-btn-primary">导入 TTF 字体</button>
+          <button type="button" data-delete-font>删除当前字体</button>
+          <input type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf" data-font-file hidden>
+        </div>
+        <p class="cap-css-status" data-font-status></p>
+      </div>
+
+      <details class="cap-css-editor">
+        <summary>自定义 CSS（灵动岛形态 & 播放器主题）</summary>
+        <p class="cap-css-hint">支持实时预览。可定制 <code>.cap-island</code>、<code>.cap-island[data-playing="false"]</code>（未播放球体）、<code>.cap-island[data-playing="true"]</code>（播放拉长态）、<code>nav</code> 及 <code>.cap-full-player</code>。</p>
+        <div class="cap-css-presets">
+          <span>快捷模板：</span>
+          <button type="button" data-player-preset="crystal">晶透光球</button>
+          <button type="button" data-player-preset="aurora">极光胶囊</button>
+          <button type="button" data-player-preset="minimal">极简素雅</button>
+          <button type="button" data-player-preset="neon">霓虹微光</button>
+        </div>
+        <label>灵动岛样式声明（无需大括号）
+          <textarea data-pcss="playerIslandCss" rows="3" placeholder="border-radius: 999px;\n--island-orb-size: 46px;"></textarea>
+        </label>
+        <label>播放器面板样式声明（无需大括号）
+          <textarea data-pcss="playerThemeCss" rows="3" placeholder="--am-accent: #fa243c;\nborder-radius: 26px;"></textarea>
+        </label>
+        <label>高级自定义 CSS（限定在播放器与灵动岛内）
+          <textarea data-pcss="playerCustomCss" rows="3" placeholder=".cap-island[data-playing=&quot;false&quot;] { width: 48px; height: 48px; }\n.cap-island[data-playing=&quot;true&quot;] { max-width: 360px; }"></textarea>
+        </label>
+        <div class="cap-css-actions">
+          <button type="button" data-psave class="cap-btn-primary">保存并应用</button>
+          <button type="button" data-preset-reset>恢复默认 CSS</button>
+        </div>
+        <p data-pstatus role="status" class="cap-css-status"></p>
+      </details>
+    `;
+    return el;
+  }
+
+  function buildNoteForm() {
+    const el = D.createElement('section');
+    el.className = 'cap-appearance cap-appearance-inline';
+    el.innerHTML = `
+      <div class="cap-font-manager">
+        <label>拾忆字体（与播放器互通）
+          <select data-font-select="note"></select>
+        </label>
+        <div class="cap-font-actions">
+          <button type="button" data-import-font class="cap-btn-primary">导入 TTF 字体</button>
+          <button type="button" data-delete-font>删除所选字体</button>
+          <input type="file" accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf" data-font-file hidden>
+        </div>
+        <p class="cap-css-status" data-font-status></p>
+      </div>
       <div class="cap-appearance-grid">
         <label>拾忆明暗
           <select data-pref="paperMode">
@@ -87,9 +225,9 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
           </select>
         </label>
       </div>
-      <details class="cap-css-editor" ${compact ? '' : 'open'}>
+      <details class="cap-css-editor">
         <summary>拾忆自定义 CSS（侧边栏 & 便签主题）</summary>
-        <p class="cap-css-hint">支持实时预览，不加载外部资源。可用变量：<code>--note-bg</code> <code>--note-width</code> <code>--note-blur</code> <code>--note-card</code> <code>--note-accent</code> <code>--note-fg</code> <code>--note-radius</code> <code>--note-tab-bg</code></p>
+        <p class="cap-css-hint">支持实时预览。可用变量：<code>--note-bg</code> <code>--note-width</code> <code>--note-blur</code> <code>--note-card</code> <code>--note-accent</code> <code>--note-fg</code> <code>--note-radius</code></p>
         <div class="cap-css-presets">
           <span>快捷模板：</span>
           <button type="button" data-preset="glass">磨砂浮窗</button>
@@ -98,13 +236,13 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
           <button type="button" data-preset="journal">手账大字</button>
         </div>
         <label>侧边栏样式声明（无需大括号）
-          <textarea data-css="side" rows="3" placeholder="--note-bg: #f6efe2;\n--note-width: 380px;\n--note-blur: 14px;"></textarea>
+          <textarea data-css="side" rows="3" placeholder="--note-bg: #f6efe2;\n--note-width: 380px;"></textarea>
         </label>
         <label>便签卡片样式声明（无需大括号）
-          <textarea data-css="note" rows="3" placeholder="--note-card: #fff8dc;\n--note-accent: #f2b705;\n--note-radius: 12px;\nfont-size: 14px;"></textarea>
+          <textarea data-css="note" rows="3" placeholder="--note-card: #fff8dc;\n--note-radius: 12px;"></textarea>
         </label>
-        <label>高级自定义 CSS（自动限定在拾忆侧边栏内）
-          <textarea data-css="custom" rows="3" placeholder=".cap-story-title { color: #8c4a27; }\n#shiyi-expand { border-left: 4px solid #f2b705; }"></textarea>
+        <label>高级自定义 CSS（限定在拾忆侧边栏内）
+          <textarea data-css="custom" rows="3" placeholder=".cap-story-title { color: #8c4a27; }"></textarea>
         </label>
         <div class="cap-css-actions">
           <button type="button" data-save class="cap-btn-primary">保存并应用</button>
@@ -116,26 +254,24 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     return el;
   }
 
-  const boxes = [];
-  const mainBox = buildForm(false);
-  mainBox.querySelectorAll('.cap-appearance-grid, .cap-css-editor').forEach(el => el.remove());
-  settings.prepend(mainBox);
-  boxes.push(mainBox);
+  const playerBox = buildPlayerForm();
+  settings.prepend(playerBox);
 
   let inlineDrawer = null;
+  let noteBox = null;
   if (memoryRoot) {
     inlineDrawer = D.createElement('div');
     inlineDrawer.className = 'cap-note-customizer';
     inlineDrawer.hidden = true;
-    const inlineBox = buildForm(true);
-    inlineDrawer.append(inlineBox);
-    boxes.push(inlineBox);
+    noteBox = buildNoteForm();
+    inlineDrawer.append(noteBox);
     const contentHost = memoryRoot.querySelector('.shiyi-dock-content');
     const timelineEl = memoryRoot.querySelector('.cap-timeline');
     if (timelineEl) timelineEl.before(inlineDrawer);
     else contentHost?.append(inlineDrawer);
   }
 
+  const allBoxes = [playerBox, noteBox].filter(Boolean);
   const media = W.matchMedia('(prefers-color-scheme: dark)');
   const sheet = D.createElement('style');
   sheet.id = 'capricorn-custom-note-css';
@@ -148,147 +284,189 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     return s;
   }
 
-  function scopedCss(s) {
-    if (typeof s !== 'string' || s.length > 12000) throw Error('高级 CSS 长度超出限制');
+  function scopedCss(s, scopePrefix, keepPrefix) {
+    if (typeof s !== 'string' || s.length > 16000) throw Error('高级 CSS 长度超出限制');
     if (/[<>\\]|@import|@charset|@font-face|url\s*\(|image-set\s*\(|expression\s*\(|javascript:/i.test(s)) {
       throw Error('高级 CSS 不支持外部资源、@import 或不安全字符');
     }
     const cleaned = s.replace(/\/\*[\s\S]*?\*\//g, '').trim();
     if (!cleaned) return '';
-    // 将每条规则的选择器安全限定在 #shiyi-dock.cap-memory-side 作用域内
     return cleaned.replace(/([^{}]+)\{([^{}]*)\}/g, (_, sel, body) => {
-      const scoped = sel.split(',').map(part => {
+      const trimmed = sel.trim();
+      if (/^@keyframes\b/i.test(trimmed)) return `${trimmed} { ${body} }\n`;
+      const scoped = trimmed.split(',').map(part => {
         const t = part.trim();
         if (!t) return '';
-        if (t.startsWith('#shiyi-dock')) return t;
-        return `#shiyi-dock.cap-memory-side ${t}`;
+        if (keepPrefix.some(k => t.startsWith(k))) return t;
+        return `${scopePrefix} ${t}`;
       }).filter(Boolean).join(', ');
       return scoped ? `${scoped} { ${body} }\n` : '';
     });
   }
 
-  function syncForms(sourceBox = null) {
-    for (const box of boxes) {
-      if (box === sourceBox) continue;
-      for (const el of box.querySelectorAll('[data-pref]')) {
-        const k = el.dataset.pref;
-        if (Array.from(el.options).some(o => o.value === p[k])) el.value = p[k];
+  function safeBgColor(val) {
+    const v = String(val || '').trim();
+    if (!v) return '';
+    if (/[{};<>\\]|url\s*\(|expression\s*\(|javascript:/i.test(v)) return '';
+    return v;
+  }
+
+  function setFontStatus(msg) {
+    for (const box of allBoxes) {
+      const el = box.querySelector('[data-font-status]');
+      if (el) el.textContent = msg;
+    }
+  }
+
+  function renderFontSelects() {
+    const pSel = playerBox.querySelector('[data-font-select="player"]');
+    if (pSel) {
+      pSel.replaceChildren();
+      const def = D.createElement('option');
+      def.value = ''; def.textContent = '系统默认字体';
+      pSel.append(def);
+      for (const f of installedFonts) {
+        const opt = D.createElement('option');
+        opt.value = f.id; opt.textContent = f.name;
+        pSel.append(opt);
       }
-      for (const k of ['side', 'note', 'custom']) {
-        const ta = box.querySelector(`[data-css="${k}"]`);
-        if (ta && ta.value !== (p[k] || '')) ta.value = p[k] || '';
+      pSel.value = installedFonts.some(f => f.id === p.sharedFontId) ? p.sharedFontId : '';
+    }
+    const nSel = noteBox?.querySelector('[data-font-select="note"]');
+    if (nSel) {
+      nSel.replaceChildren();
+      const syncOpt = D.createElement('option');
+      syncOpt.value = 'shared'; syncOpt.textContent = '跟随播放器互通字体';
+      const defOpt = D.createElement('option');
+      defOpt.value = ''; defOpt.textContent = '系统默认字体';
+      nSel.append(syncOpt, defOpt);
+      for (const f of installedFonts) {
+        const opt = D.createElement('option');
+        opt.value = f.id; opt.textContent = f.name;
+        nSel.append(opt);
       }
+      const validNote = p.noteFontId === 'shared' || p.noteFontId === '' || installedFonts.some(f => f.id === p.noteFontId);
+      nSel.value = validNote ? p.noteFontId : 'shared';
+    }
+  }
+
+  async function applyFonts(draft = p) {
+    const playerFontId = draft.sharedFontId || '';
+    const noteFontId = draft.noteFontId === 'shared' ? playerFontId : (draft.noteFontId || '');
+    try {
+      const pFam = playerFontId ? await ensureFontLoaded(playerFontId) : '';
+      const nFam = noteFontId ? await ensureFontLoaded(noteFontId) : '';
+      D.documentElement.style.setProperty(
+        '--cap-player-font',
+        pFam ? `"${pFam}", -apple-system, BlinkMacSystemFont, "PingFang SC", system-ui, sans-serif` : ''
+      );
+      D.documentElement.style.setProperty(
+        '--cap-note-font',
+        nFam ? `"${nFam}", -apple-system, BlinkMacSystemFont, "PingFang SC", system-ui, sans-serif` : ''
+      );
+      D.body.dataset.capHasPlayerFont = pFam ? '1' : '0';
+      D.body.dataset.capHasNoteFont = nFam ? '1' : '0';
+    } catch (e) {
+      console.warn('[Capricorn] applyFonts failed:', e);
     }
   }
 
   function apply(draft = p) {
     const b = D.body;
     b.dataset.capMaterial = draft.material;
+    b.dataset.capPlayerTheme = draft.playerTheme || 'default';
     b.dataset.capLook = themeSelect.value === 'auto' ? (media.matches ? 'dark' : 'light') : themeSelect.value;
     b.dataset.capPaper = draft.paper;
     b.dataset.capPaperMode = draft.paperMode === 'auto' ? (media.matches ? 'dark' : 'light') : draft.paperMode;
     b.dataset.capPaperPattern = draft.paperPattern;
     b.dataset.capNoteDecor = draft.noteDecor;
+    b.dataset.capHasPlayerBg = bgImageUrl ? '1' : '0';
+
+    const bgColor = safeBgColor(draft.playerBgColor);
+    const opacity = Math.min(1, Math.max(0.2, Number(draft.playerBgOpacity ?? 82) / 100));
+    const blur = Math.min(40, Math.max(0, Number(draft.playerBgBlur ?? 24)));
+
+    D.documentElement.style.setProperty('--cap-player-bg-image', bgImageUrl ? `url("${bgImageUrl}")` : 'none');
+    D.documentElement.style.setProperty('--cap-player-bg-opacity', String(opacity));
+    D.documentElement.style.setProperty('--cap-player-bg-blur', `${blur}px`);
+
     const sideCss = declarations(draft.side || '');
     const noteCss = declarations(draft.note || '');
-    const extraCss = scopedCss(draft.custom || '');
+    const extraNoteCss = scopedCss(draft.custom || '', '#shiyi-dock.cap-memory-side', ['#shiyi-dock']);
+    const islandCss = declarations(draft.playerIslandCss || '');
+    const pThemeCss = declarations(draft.playerThemeCss || '');
+    const extraPlayerCss = scopedCss(draft.playerCustomCss || '', '#capricorn-hub', ['#capricorn-hub', '.cap-full-player']);
+
+    const bgOverrideRule = bgColor
+      ? `#capricorn-hub nav { background: ${bgColor} !important; }\n`
+      : '';
+
     sheet.textContent =
+      bgOverrideRule +
+      `#capricorn-hub .cap-island { ${islandCss} }\n` +
+      `#capricorn-hub nav, .cap-full-player { ${pThemeCss} }\n` +
+      extraPlayerCss +
       `body[data-cap-paper] #shiyi-dock.cap-memory-side { ${sideCss} }\n` +
       `body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-story { ${noteCss} }\n` +
-      extraCss;
+      extraNoteCss;
   }
 
-  function save(sourceBox = null) {
+  function save() {
     W.localStorage.setItem(key, JSON.stringify(p));
     apply(p);
-    syncForms(sourceBox);
+    void applyFonts(p);
   }
 
-  function setStatus(msg) {
-    for (const box of boxes) {
-      const st = box.querySelector('[data-status]');
-      if (st) st.textContent = msg;
-    }
-  }
-
-  for (const box of boxes) {
+  // Bind common [data-pref] selects
+  for (const box of allBoxes) {
     for (const el of box.querySelectorAll('[data-pref]')) {
       const k = el.dataset.pref;
       if (!Array.from(el.options).some(o => o.value === p[k])) p[k] = defaults[k];
       el.value = p[k];
-      el.onchange = () => { p[k] = el.value; save(box); };
+      el.onchange = () => { p[k] = el.value; save(); };
     }
-    for (const k of ['side', 'note', 'custom']) {
-      const ta = box.querySelector(`[data-css="${k}"]`);
-      if (!ta) continue;
-      try {
-        if (k === 'custom') scopedCss(p[k] || '');
-        else declarations(p[k] || '');
-        ta.value = p[k] || '';
-      } catch { p[k] = ''; ta.value = ''; }
-      ta.oninput = () => {
-        try {
-          const draft = {
-            ...p,
-            side: box.querySelector('[data-css="side"]').value,
-            note: box.querySelector('[data-css="note"]').value,
-            custom: box.querySelector('[data-css="custom"]').value
-          };
-          apply(draft);
-          setStatus('预览中（点击“保存并应用”持久化）');
-        } catch (e) {
-          setStatus(e.message);
-        }
-      };
-    }
-    for (const btn of box.querySelectorAll('[data-preset]')) {
-      btn.onclick = () => {
-        const preset = PRESETS[btn.dataset.preset];
-        if (!preset) return;
-        p = { ...p, ...preset };
-        save(null);
-        setStatus(`已应用“${btn.textContent}”模板`);
-      };
-    }
-    if (box.querySelector('[data-save]')) box.querySelector('[data-save]').onclick = () => {
-      try {
-        const side = declarations(box.querySelector('[data-css="side"]').value);
-        const note = declarations(box.querySelector('[data-css="note"]').value);
-        const custom = box.querySelector('[data-css="custom"]').value;
-        scopedCss(custom);
-        p = { ...p, side, note, custom };
-        save(box);
-        setStatus('已保存并应用自定义 CSS');
-      } catch (e) {
-        setStatus(e.message);
-      }
-    };
-    if (box.querySelector('[data-reset]')) box.querySelector('[data-reset]').onclick = () => {
-      p = { ...p, side: '', note: '', custom: '' };
-      save(null);
-      setStatus('已恢复默认 CSS');
-    };
   }
 
-  themeSelect.addEventListener('change', () => apply(p));
-  media.addEventListener?.('change', () => apply(p));
-  apply(p);
+  // Player background controls
+  const bgText = playerBox.querySelector('[data-pref-text="playerBgColor"]');
+  const bgPicker = playerBox.querySelector('[data-bg-picker]');
+  const bgClearColor = playerBox.querySelector('[data-clear-bg-color]');
+  const bgUploadBtn = playerBox.querySelector('[data-upload-bg]');
+  const bgClearBtn = playerBox.querySelector('[data-clear-bg]');
+  const bgFileInput = playerBox.querySelector('[data-bg-file]');
+  const bgTip = playerBox.querySelector('[data-bg-tip]');
 
-  const api = {
-    closeInlineDrawer() { if (inlineDrawer) inlineDrawer.hidden = true; apply(p); },
-    toggleInlineDrawer() {
-      if (inlineDrawer) inlineDrawer.hidden = !inlineDrawer.hidden;
-    },
-    destroy() {
-      themeSelect.removeEventListener('change', apply);
-      media.removeEventListener?.('change', apply);
-      sheet.remove();
-      inlineDrawer?.remove();
-      mainBox.remove();
-      for (const k of ['capMaterial', 'capLook', 'capPaper', 'capPaperMode', 'capPaperPattern', 'capNoteDecor']) {
-        delete D.body.dataset[k];
+  if (bgText) {
+    bgText.value = p.playerBgColor || '';
+    bgText.oninput = () => { p.playerBgColor = bgText.value.trim(); save(); };
+  }
+  if (bgPicker) {
+    if (/^#[0-9a-f]{6}$/i.test(p.playerBgColor || '')) bgPicker.value = p.playerBgColor;
+    bgPicker.oninput = () => {
+      p.playerBgColor = bgPicker.value;
+      if (bgText) bgText.value = bgPicker.value;
+      save();
+    };
+  }
+  if (bgClearColor) {
+    bgClearColor.onclick = () => {
+      p.playerBgColor = '';
+      if (bgText) bgText.value = '';
+      save();
+    };
+  }
+  if (bgUploadBtn && bgFileInput) {
+    bgUploadBtn.onclick = () => bgFileInput.click();
+    bgFileInput.onchange = async () => {
+      try {
+        const f = bgFileInput.files?.[0];
+        if (!f) return;
+        bgImageUrl = await saveBgImage(f);
+        if (bgTip) bgTip.textContent = '已应用背景图';
+        apply(p);
+      } catch (e) {
+        if (bgTip) bgTip.textContent = e.message;
+      } finally {
+        bgFileInput.value = '';
       }
-    }
-  };
-  return api;
-}
+    

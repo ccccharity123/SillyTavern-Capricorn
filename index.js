@@ -1,4 +1,3 @@
-import { mountPersonalLook } from './personal-look.js';
 import { mountAppearance } from './appearance.js';
 import { mountCloud } from './cloud.js';
 import { mountNetease } from './netease.js';
@@ -14,15 +13,28 @@ try {
   for (const k of Object.keys(flags)) if (typeof x[k] === 'boolean') flags[k] = x[k];
 } catch {}
 
-const shared = { messages: null, flags };
-let cleanupLook, islandTimer, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
+const SHIYI_ICONS = {
+  bookmark: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2h9A2.5 2.5 0 0 1 19 4.5v16.3a.7.7 0 0 1-1.1.57L12 17.2l-5.9 4.17A.7.7 0 0 1 5 20.8V4.5z"/><path d="M12 6.5l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8.8-1.9z" fill="currentColor" stroke="none"/></svg>`,
+  palette: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".8" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".8" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".8" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".8" fill="currentColor"/><path d="M12 2a10 10 0 0 0 0 20c1.4 0 2-.9 2-1.8 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-1 .8-1.7 1.8-1.7H17a5 5 0 0 0 5-5c0-4.9-4.5-9-10-9z"/></svg>`,
+  refresh: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>`,
+  close: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>`,
+  note: `<svg class="cap-island-note-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>`
+};
+
+const shared = { messages: null, flags, onIslandUpdate: null };
+let appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
 root.innerHTML = `
-  <button class="cap-island" aria-expanded="false" aria-label="打开声屿">
-    <span class="cap-island-eq" aria-hidden="true">♫</span>
-    <span>声屿</span>
+  <button class="cap-island" aria-expanded="false" data-playing="false" aria-label="声屿音乐播放器" title="声屿">
+    <span class="cap-island-orb" aria-hidden="true">
+      ${SHIYI_ICONS.note}
+      <span class="cap-island-bars"><i></i><i></i><i></i></span>
+    </span>
+    <span class="cap-island-lyric-wrap">
+      <span class="cap-island-lyric">声屿</span>
+    </span>
   </button>
   <nav hidden>
     <header>
@@ -38,8 +50,8 @@ root.innerHTML = `
       <label>外观模式
         <select>
           <option value="auto">跟随系统</option>
-          <option value="light">浅色</option>
-          <option value="dark">深色</option>
+          <option value="light">日间浅色</option>
+          <option value="dark">夜间深色</option>
         </select>
       </label>
     </section>
@@ -49,7 +61,23 @@ root.innerHTML = `
 D.body.append(root);
 
 const nav = root.querySelector('nav'), island = root.querySelector('.cap-island');
+const islandLyric = root.querySelector('.cap-island-lyric');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
+
+shared.onIslandUpdate = ({ playing, text, title }) => {
+  island.dataset.playing = playing ? 'true' : 'false';
+  island.title = playing ? `${title || '正在播放'} · 点击展开声屿` : '声屿（点击打开播放器）';
+  if (playing && text) {
+    if (islandLyric.textContent !== text) {
+      islandLyric.classList.remove('is-swap');
+      void islandLyric.offsetWidth;
+      islandLyric.textContent = text;
+      islandLyric.classList.add('is-swap');
+    }
+  }
+  cleanupMobile?.fit?.();
+};
+
 const libraryNav = D.createElement('div');
 libraryNav.hidden = true;
 libraryNav.className = 'cap-tabs';
@@ -167,12 +195,20 @@ async function tick() {
     if (flags.music) await music?.tick();
     Promise.resolve(memory?.tick()).catch(e => console.warn('[Capricorn] memory scan', e));
     if (memoryOpen() && shownScope !== scope()) refreshTimeline();
-
     if (memory?.root) {
       const b = memory.root.querySelector('#shiyi-expand');
-      if (b) b.dataset.pending = String(!!memory.pending());
+      if (b) {
+        const cnt = Number(memory.pending?.() || 0);
+        b.dataset.pending = cnt > 0 ? String(cnt) : '';
+        b.title = cnt > 0 ? `拾忆（${cnt} 条待审核）` : '展开拾忆';
+        const dot = b.querySelector('.cap-shiyi-dot');
+        if (dot) {
+          dot.hidden = cnt <= 0;
+          dot.textContent = cnt > 9 ? '9+' : String(cnt);
+        }
+      }
     }
-    root.querySelector('small').textContent = !flags.music ? '自动收录已暂停' : !music ? '播放器未启动' : ''; 
+    root.querySelector('small').textContent = !flags.music ? '自动收录已暂停' : !music ? '播放器未启动' : '';
   } catch (e) {
     root.querySelector('small').textContent = e.message;
   } finally {
@@ -184,7 +220,6 @@ async function tick() {
 W.__capricornExtension = {
   destroy() {
     dead = true;
-    clearInterval(islandTimer); cleanupLook?.();
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
     cleanupNetease?.();
@@ -203,35 +238,78 @@ try { music = await startMusic(shared); } catch (e) { console.error('[Capricorn]
 
 if (memory?.root) {
   memory.root.classList.add('cap-memory-side');
-  memory.root.querySelector('#shiyi-expand').innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="3"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>';
-  const brand = memory.root.querySelector('.shiyi-brand');
-  if (brand) {
-    brand.textContent = '拾忆便签';
-    const styleBtn = D.createElement('button');
-    styleBtn.type = 'button';
-    styleBtn.className = 'cap-note-style-btn';
-    styleBtn.textContent = '外观 / CSS';
-    styleBtn.title = '切换便签主题与自定义 CSS';
-    styleBtn.onclick = () => appearanceApi?.toggleInlineDrawer();
-    brand.after(styleBtn);
-    styleBtn.hidden = true;
+
+  // 收起态：纯图标精致耳扣，彻底移除文字
+  const expandBtn = memory.root.querySelector('#shiyi-expand');
+  if (expandBtn) {
+    expandBtn.innerHTML = `${SHIYI_ICONS.bookmark}<span class="cap-shiyi-dot" hidden></span>`;
+    expandBtn.setAttribute('aria-label', '展开拾忆');
+    expandBtn.title = '展开拾忆';
   }
+
+  // 展开态顶栏：纯图标操作栏
+  const collapseBtn = memory.root.querySelector('#shiyi-collapse');
+  if (collapseBtn) {
+    collapseBtn.innerHTML = SHIYI_ICONS.close;
+    collapseBtn.title = '收起侧边栏';
+  }
+
+  const brand = memory.root.querySelector('.shiyi-brand');
+  const headerBar = D.createElement('div');
+  headerBar.className = 'cap-shiyi-topbar';
+
+  const brandIcon = D.createElement('span');
+  brandIcon.className = 'cap-shiyi-mark';
+  brandIcon.innerHTML = SHIYI_ICONS.bookmark;
+  brandIcon.title = '拾忆便签';
+
+  const iconGroup = D.createElement('div');
+  iconGroup.className = 'cap-shiyi-icon-actions';
+
+  const refreshIconBtn = D.createElement('button');
+  refreshIconBtn.type = 'button';
+  refreshIconBtn.className = 'cap-shiyi-icon-btn';
+  refreshIconBtn.innerHTML = SHIYI_ICONS.refresh;
+  refreshIconBtn.title = '刷新时间轴';
+  refreshIconBtn.setAttribute('aria-label', '刷新时间轴');
+  refreshIconBtn.onclick = refreshTimeline;
+
+  const styleBtn = D.createElement('button');
+  styleBtn.type = 'button';
+  styleBtn.className = 'cap-shiyi-icon-btn cap-note-style-btn';
+  styleBtn.innerHTML = SHIYI_ICONS.palette;
+  styleBtn.title = '外观、字体与自定义 CSS';
+  styleBtn.setAttribute('aria-label', '外观、字体与自定义 CSS');
+  styleBtn.onclick = () => appearanceApi?.toggleInlineDrawer();
+
+  iconGroup.append(refreshIconBtn, styleBtn);
+  if (collapseBtn) {
+    collapseBtn.classList.add('cap-shiyi-icon-btn');
+    iconGroup.append(collapseBtn);
+  }
+  headerBar.append(brandIcon, iconGroup);
+
+  if (brand) {
+    brand.hidden = true;
+    brand.before(headerBar);
+  }
+
   const tools = memory.root.querySelector('#shiyi-scan').parentElement;
   const more = D.createElement('details');
   more.className = 'cap-memory-tools';
   const label = D.createElement('summary');
   label.textContent = '⋯';
-  label.setAttribute('aria-label','拾忆管理与设置');
+  label.setAttribute('aria-label', '拾忆管理与设置');
   more.append(label);
   tools.before(timeline, more);
   more.append(tools);
-  const appearanceButton = memory.root.querySelector('.cap-note-style-btn');
-  if (appearanceButton) { appearanceButton.hidden = false; tools.append(appearanceButton); }
   more.addEventListener('toggle', () => { if (!more.open) appearanceApi?.closeInlineDrawer(); });
-  memory.root.querySelector('#shiyi-expand').addEventListener('click', refreshTimeline);
+  expandBtn?.addEventListener('click', refreshTimeline);
   const refresh = memory.root.querySelector('#shiyi-timeline');
-  refresh.textContent = '刷新时间轴';
-  refresh.onclick = refreshTimeline;
+  if (refresh) {
+    refresh.textContent = '刷新时间轴';
+    refresh.onclick = refreshTimeline;
+  }
 }
 
 if (music?.root) { content.append(music.root); }
@@ -265,7 +343,7 @@ controls.querySelector('[data-backup]').onclick = async () => {
     const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
     const a = D.createElement('a'); a.href = url; a.download = 'Capricorn-backup.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 3000);
-    result('已导出音乐库、便签外观设置及当前聊天记忆副本。');
+    result('已导出音乐库、外观设置及当前聊天记忆副本。');
   } catch (e) { result('导出失败：' + e.message); }
 };
 const file = controls.querySelector('input[type=file]');
@@ -287,8 +365,6 @@ cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
 appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
-cleanupLook = mountPersonalLook(settings, memory?.root, root);
-islandTimer = setInterval(()=>{const x=music?.islandState();const playing=!!x?.playing;const changed=island.dataset.playing!==String(playing);island.dataset.playing=String(playing);island.lastElementChild.textContent=playing?x.text:'';if(changed)cleanupMobile?.fit?.();},200);
 for (const [node,label] of [[controls,'数据与自动收录'],[settings.querySelector('.cap-backup:not(.cap-backup:first-child)'),'账号与连接']]) {
   if (!node || node.parentElement !== settings || node.closest('details')) continue;
   const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = label; d.append(h); node.before(d); d.append(node);

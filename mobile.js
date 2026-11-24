@@ -10,6 +10,8 @@ export function mountMobile({root,island,nav,onResume}){
  function end(e){if(!start||e.pointerId!==start.id)return;if(moved){suppress=true;const r=island.getBoundingClientRect();try{localStorage.setItem(key,JSON.stringify({x:r.left,y:r.top}))}catch{}}start=null}
  function resize(){cancelAnimationFrame(raf);raf=requestAnimationFrame(fit)}
  function visible(){if(!D.hidden){resize();onResume()}}
+ let ro=null;
+ if(typeof ResizeObserver!=='undefined'){ro=new ResizeObserver(()=>{if(!start&&nav.hidden&&root.style.left)resize()});ro.observe(island)}
  island.addEventListener('pointerdown',down);island.addEventListener('pointermove',move);island.addEventListener('pointerup',end);island.addEventListener('pointercancel',end);W.addEventListener('resize',resize);W.visualViewport?.addEventListener('resize',resize);D.addEventListener('visibilitychange',visible);
- return {fit(){resize();setTimeout(fit,350)},consumeDrag(){const v=suppress;suppress=false;return v},destroy(){cancelAnimationFrame(raf);island.removeEventListener('pointerdown',down);island.removeEventListener('pointermove',move);island.removeEventListener('pointerup',end);island.removeEventListener('pointercancel',end);W.removeEventListener('resize',resize);W.visualViewport?.removeEventListener('resize',resize);D.removeEventListener('visibilitychange',visible)}}
+ return {fit,consumeDrag(){const v=suppress;suppress=false;return v},destroy(){ro?.disconnect();cancelAnimationFrame(raf);island.removeEventListener('pointerdown',down);island.removeEventListener('pointermove',move);island.removeEventListener('pointerup',end);island.removeEventListener('pointercancel',end);W.removeEventListener('resize',resize);W.visualViewport?.removeEventListener('resize',resize);D.removeEventListener('visibilitychange',visible)}}
 }

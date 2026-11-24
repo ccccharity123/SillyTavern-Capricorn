@@ -67,9 +67,3 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.5 留白
 基于用户 Alpha1，保留材质与纸张主题。播放/曲库分离，歌曲操作折叠，拾忆外观与 CSS 仅在拾忆菜单内。网关与数据键不变。
-
-## v2.6 Alpha 浮光
-- 播放时灵动岛显示同步歌词，暂停恢复圆球；无歌词显示曲名。
-- 声屿与拾忆共享 IndexedDB 本地 TTF 字体库，分别选择字体；单文件上限 25MB。字体不随 JSON 备份迁移。
-- 声屿设置支持本地颜色/渐变背景及 CSS，选择器以 #capricorn-hub 或 .cap-full-player 开头。不支持外部资源。
-- 拾忆折叠入口改为便签图标。无需更新网关。实际设备待测试。
