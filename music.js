@@ -37,7 +37,11 @@ const matchPending=new Map();
 function chooseMatch(t,songs){
  const norm=x=>String(x||'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu,'');
  const artists=String(t.artist).split(/[/／、&＆]/).map(norm).filter(Boolean).sort().join('|');
- return songs.find(x=>/^\d+$/.test(String(x.id))&&norm(x.title)===norm(t.title)&&Array.isArray(x.artists)&&x.artists.map(norm).filter(Boolean).sort().join('|')===artists)||null;
+ const wanted=artists.split('|').filter(Boolean);
+ const candidates=songs.filter(x=>/^\d+$/.test(String(x.id))&&Array.isArray(x.artists));
+ const title=norm(t.title);
+ const score=x=>{const a=x.artists.map(norm).filter(Boolean), n=norm(x.title);const exact=n===title;const related=norm(String(x.title).replace(/\s*[（(][^）)]*[）)]\s*$/,''))===title;const overlap=wanted.filter(w=>a.includes(w)).length;return (exact?100:related?70:0)+(overlap===wanted.length&&overlap?40:overlap?20:0);};
+ return candidates.map(x=>({x,s:score(x)})).filter(x=>x.s>=90).sort((a,b)=>b.s-a.s)[0]?.x||null;
 }
 async function matchOnline(t,manual=false){
  if(!shared.online?.ready()||!t)return false;
@@ -61,7 +65,7 @@ async function matchOnline(t,manual=false){
  if(!manual)matchPending.set(t,job);
  try{return await job}finally{if(matchPending.get(t)===job)matchPending.delete(t)}
 }
-async function autoMatch(){if(matching||!shared.online?.ready()||shared.flags.music===false)return;const ch=character();const t=(db.playlists[ch?.id]?.songs||[]).slice().reverse().find(t=>!t.neteaseId&&!t.audioUrl&&Date.now()-(matchAttempts.get(t.id)||0)>600000);if(!t)return;matching=true;matchAttempts.set(t.id,Date.now());try{if(await matchOnline(t)){status('已匹配网易云：'+t.title);render()}else status('未找到准确版本：'+t.title+'，可手动在线匹配')}catch(e){status('在线匹配暂不可用：'+e.message)}finally{matching=false}}
+async function autoMatch(){if(matching||!shared.online?.ready()||shared.flags.music===false)return;const ch=character();const t=(db.playlists[ch?.id]?.songs||[]).slice().reverse().find(t=>!t.neteaseId&&!t.audioUrl&&Date.now()-(matchAttempts.get(t.id)||0)>30000);if(!t)return;matching=true;matchAttempts.set(t.id,Date.now());try{if(await matchOnline(t)){status('已匹配网易云：'+t.title);render();if(playing?.id===t.id&&!resolving&&!audio.getAttribute('src')&&W.localStorage.getItem('capricorn_follow_story')!=='off'&&character()?.id===ch.id){playing.neteaseId=t.neteaseId;playing.coverUrl=t.coverUrl;void playQueued(queueIndex);}}else status('未找到准确版本：'+t.title+'，可手动在线匹配')}catch(e){status('在线匹配暂不可用：'+e.message)}finally{matching=false}}
 async function playIndex(index){const tracks=audioTracks();if(!tracks[index])return;queue=tracks.slice();queuePlaylistName=db.playlists[selected]?.name||'声屿';return playQueued(index)}
 let lastMemory=0;
 function storePlayback(){if(disposed||!playing||resolving)return;db.settings.playback={queue:queue.slice(0,500).map(t=>({id:t.id,title:t.title,artist:t.artist,neteaseId:t.neteaseId,coverUrl:t.coverUrl,audioUrl:t.audioUrl})),index:queueIndex,name:queuePlaylistName,position:audio.currentTime||resumePosition||0};save()}
@@ -88,7 +92,7 @@ async function playQueued(index,resumeAt=0){
  }else throw Error('请启用网易云并填写访问密钥');if(!alive())return;if(!ok)throw Error('未能加载完整音源，请查看播放诊断');resolving=false;rememberPlay(t);storePlayback();updateMedia();render();trace('播放成功：'+actualQuality+(volumeCapability()?'':' · 当前音源请使用系统音量键'));
  }catch(e){if(!alive())return;resolving=false;audioError=e.name==='NotAllowedError'?'系统要求再次点击播放':e.message;render();trace(audioError)}
 }
-function diagnostic(){return ['声屿 2.7.2','聊天：'+chatId(),'跟随状态：'+String(followScope)+' / '+String(pendingScope),'音量引擎：'+(activeAudio===graphAudio?'Web Audio':nativeVolume?'原生':'系统限制'),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
+function diagnostic(){return ['声屿 2.7.3','聊天：'+chatId(),'跟随状态：'+String(followScope)+' / '+String(pendingScope),'音量引擎：'+(activeAudio===graphAudio?'Web Audio':nativeVolume?'原生':'系统限制'),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
 function nextTrack(direction=1){if(!queue.length){let tracks=audioTracks();if(!tracks.length)return;queue=tracks.slice();queueIndex=0;queuePlaylistName=db.playlists[selected]?.name||'声屿';return playQueued(0)}let i=queueIndex;if(playMode==='shuffle'&&queue.length>1){let n=Math.floor(Math.random()*(queue.length-1));i=n>=i?n+1:n}else i=(i+direction+queue.length)%queue.length;playQueued(i)}
 async function toggleAudio(){if(!playing)return playIndex(0);if(resolving){++playEpoch;resolving=false;clearAudio();trace('已取消加载，再点播放重试');render();return}if(!audio.paused){const e=++playEpoch;await fadeTo(0,250,e);if(e===playEpoch&&!disposed){audio.pause();render()}return}if(!audio.getAttribute('src')||audio.error)return playQueued(queueIndex,audio.currentTime||resumePosition||0);const epoch=++playEpoch;resolving=true;try{applyGain(0);await attemptPlay();if(epoch!==playEpoch||disposed)return;void fadeTo(1,450,epoch);started=true;audioError='';trace('播放成功：'+actualQuality)}catch(e){if(epoch!==playEpoch||disposed)return;audioError=e.name==='NotAllowedError'?'系统阻止播放，请再次点击':e.message;trace(audioError);if(e.name!=='NotAllowedError')clearAudio()}finally{if(epoch===playEpoch&&!disposed){resolving=false;render()}}}
 audio.addEventListener('error',()=>{const reasons={1:'播放已中止',2:'网络或音源请求失败',3:'音频格式无法解码',4:'音源不可用或格式不受支持'};audioError=reasons[audio.error?.code]||'音频播放失败';status(audioError+'；请检查音源授权、链接有效期及格式');updateMini()});
@@ -196,8 +200,8 @@ let scanFollowScope=null,scanFollowSignature=null;
 async function scan(){if(scanBusy||disposed||shared?.flags?.music===false)return;scanBusy=true;try{let ch=character();if(!ch)return;let pl=playlist(ch.id,ch.name+' · 故事原声');let msgs=getMessages(),now=Date.now(),added=0;for(let i=0;i<msgs.length;i++){let m=msgs[i],body=msgText(m),found=parseBgm(body);if(!found.length)continue;let id=msgId(m,i),key=ch.id+'|'+chatId()+'|'+id,signature=hash(body);if(db.processed[key]===signature)continue;let prev=stability.get(key);if(!prev||prev.signature!==signature){stability.set(key,{signature,at:now});continue}if(now-prev.at<9000)continue;for(let song of found)if(addSong(pl,song,{chat:chatId(),floor:id,character:ch.name}))added++;db.processed[key]=signature;save()}if(added){status('已自动收录 '+added+' 首歌曲');render()}
  const scope=storyKey();let latest=null;
  for(let i=msgs.length-1;i>=0;i--){const m=msgs[i],found=parseBgm(msgText(m));if(found.length){latest={song:found.at(-1),key:ch.id+'|'+chatId()+'|'+msgId(m,i),sig:hash(msgText(m))};break;}}
- if(scanFollowScope!==scope){scanFollowScope=scope;scanFollowSignature=latest?latest.key+'|'+latest.sig:null;}
- else if(latest&&db.processed[latest.key]===latest.sig){const sig=latest.key+'|'+latest.sig;if(sig!==scanFollowSignature){scanFollowSignature=sig;const t=pl.songs.find(x=>x.id===latest.song.id);if(t&&W.localStorage.getItem('capricorn_follow_story')!=='off'&&!pendingScope&&shared.flags.music!==false&&(!playing||playing.id!==t.id||(!resolving&&!audio.getAttribute('src')))){if(validUrl(t.audioUrl)||shared.online?.ready()){queue=pl.songs.slice();queuePlaylistName=pl.name;void playQueued(queue.indexOf(t));}}}}
+ if(scanFollowScope!==scope){scanFollowScope=scope;scanFollowSignature=null;}
+ else if(latest&&db.processed[latest.key]===latest.sig){const sig=latest.key+'|'+latest.sig;if(sig!==scanFollowSignature){const t=pl.songs.find(x=>x.id===latest.song.id);if(t&&W.localStorage.getItem('capricorn_follow_story')!=='off'&&!pendingScope&&shared.flags.music!==false&&(!playing||playing.id!==t.id||(!resolving&&!audio.getAttribute('src')))){if(validUrl(t.audioUrl)||shared.online?.ready()){scanFollowSignature=sig;queue=pl.songs.slice();queuePlaylistName=pl.name;void playQueued(queue.indexOf(t));}}}}
 }catch(e){console.warn('[声屿] 扫描失败',e)}finally{scanBusy=false}}
 function sync(){let ch=character();if(!ch)return;if(current!==ch.id){current=ch.id;playlist(ch.id,ch.name+' · 故事原声');if(!selected||db.playlists[selected]?.kind==='character')selected=ch.id;render()}}
 let storyEventSource=null,storyEventName=null;
@@ -209,7 +213,7 @@ function storyMessages(){const c=context();if(Array.isArray(c.chat)&&c.chat.leng
 async function followStory(){
  if(disposed||shared.flags.music===false)return;
  const ch=character(),chat=chatId(),key=storyKey();if(!ch||!key||chat==='unknown')return;
- if(followScope===null){followScope=key;return;}
+ if(followScope===null){followScope='initial';}
  if(W.localStorage.getItem('capricorn_follow_story')==='off'){followScope=key;pendingScope=null;return;}
  if(key===followScope&&!pendingScope)return;
  if(pendingScope!==key){pendingScope=key;pendingAt=Date.now();pendingSignature=null;++playEpoch;resolving=false;selected=ch.id;playlist(ch.id,ch.name+' · 故事原声');status('正在切换剧情音乐…');render();return;}
