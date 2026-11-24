@@ -1471,3 +1471,40 @@ body .cap-full-player[data-size][data-android-viewport="true"] {
 body .cap-full-player[data-android-viewport="true"][data-size="compact"]{--cap-panel-height:clamp(260px,calc(var(--cap-vh,100vh) * .32),310px)}
 body .cap-full-player[data-android-viewport="true"][data-size="half"]{--cap-panel-height:max(340px,calc(var(--cap-vh,100vh) * .5))}
 body .cap-full-player[data-android-viewport="true"][data-size="large"]{--cap-panel-height:calc(var(--cap-vh,100vh) * .85)}
+
+/* v2.7.7: independent memory tab and viewport-sized panel. */
+body #shiyi-dock.cap-memory-side.shiyi-collapsed {
+  top: var(--cap-memory-tab-top, 42%) !important;
+  bottom: auto !important;
+  height: 46px !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  touch-action: none !important;
+}
+body #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
+  touch-action: none !important;
+  user-select: none;
+  -webkit-user-select: none;
+  margin: 0 !important;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) {
+  top: max(env(safe-area-inset-top), var(--cap-memory-panel-top, 12px)) !important;
+  bottom: auto !important;
+  height: var(--cap-memory-panel-height, calc(100vh - 24px)) !important;
+  max-height: calc(100vh - 24px) !important;
+  min-height: 0 !important;
+  display: block !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) #shiyi-expand {
+  display: none !important;
+}
+body #shiyi-dock.cap-memory-side:not(.shiyi-collapsed) .shiyi-dock-content {
+  display: block !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}

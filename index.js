@@ -17,7 +17,7 @@ try {
 const SHIYI_ICONS = {bookmark:icon("note",20),palette:icon("palette",18),refresh:icon("refresh",18),close:icon("right",18),note:icon("music",18)};
 
 const shared = { messages: null, flags, onIslandUpdate: null };
-let appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
+let cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, busy = false, dead = false, tab = '';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
@@ -230,6 +230,7 @@ W.__capricornExtension = {
     dead = true;
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
+    cleanupMemorySide?.();
     cleanupNetease?.();
     cloud?.destroy();
     clearInterval(timer);
@@ -244,6 +245,56 @@ D.body.dataset.capricornTab = '';
 try { memory = await startMemory(shared); } catch (e) { console.error('[Capricorn] memory', e); }
 try { music = await startMusic(shared); } catch (e) { console.error('[Capricorn] music', e); }
 
+// Independent viewport geometry for the memory tab and panel.
+function mountMemorySide(dock, button) {
+  const win = dock.ownerDocument.defaultView;
+  const key = 'capricorn_memory_tab_y';
+  let ratio = 0.42, drag = null, suppress = false;
+  try { const saved = win.localStorage.getItem(key); if (saved !== null && Number.isFinite(Number(saved))) ratio = Math.max(0, Math.min(1, Number(saved))); } catch {}
+  const viewport = () => ({ top: win.visualViewport?.offsetTop || 0, height: win.visualViewport?.height || win.innerHeight });
+  function bounds() { const v = viewport(); return { min: v.top + 12, max: Math.max(v.top + 12, v.top + v.height - 58) }; }
+  function fit() {
+    const v = viewport(), b = bounds();
+    dock.style.setProperty('--cap-memory-tab-top', `${b.min + ratio * (b.max - b.min)}px`);
+    dock.style.setProperty('--cap-memory-panel-top', `${v.top + 12}px`);
+    dock.style.setProperty('--cap-memory-panel-height', `${Math.max(1, v.height - 24)}px`);
+  }
+  function down(e) {
+    if (!e.isPrimary || e.button !== 0 || !dock.classList.contains('shiyi-collapsed')) return;
+    suppress = false;
+    drag = { id: e.pointerId, y: e.clientY, top: dock.getBoundingClientRect().top, moved: false };
+    try { button.setPointerCapture(e.pointerId); } catch {}
+  }
+  function move(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.abs(dy) < 7) return;
+    drag.moved = true;
+    const b = bounds(); ratio = Math.max(0, Math.min(1, (drag.top + dy - b.min) / Math.max(1, b.max - b.min)));
+    fit();
+  }
+  function end(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    suppress = drag.moved; drag = null;
+    if (suppress) try { win.localStorage.setItem(key, String(ratio)); } catch {}
+  }
+  function click(e) { if (suppress && e.detail !== 0) { suppress = false; e.preventDefault(); e.stopImmediatePropagation(); } }
+  const listeners = [['pointerdown', down], ['pointermove', move], ['pointerup', end], ['pointercancel', end], ['lostpointercapture', end]];
+  for (const [name, fn] of listeners) button.addEventListener(name, fn);
+  button.addEventListener('click', click, true);
+  win.addEventListener('resize', fit);
+  win.visualViewport?.addEventListener('resize', fit);
+  win.visualViewport?.addEventListener('scroll', fit);
+  fit();
+  return () => {
+    for (const [name, fn] of listeners) button.removeEventListener(name, fn);
+    button.removeEventListener('click', click, true);
+    win.removeEventListener('resize', fit);
+    win.visualViewport?.removeEventListener('resize', fit);
+    win.visualViewport?.removeEventListener('scroll', fit);
+  };
+}
+
 if (memory?.root) {
   memory.root.classList.add('cap-memory-side');
 
@@ -252,7 +303,8 @@ if (memory?.root) {
   if (expandBtn) {
     expandBtn.innerHTML = `${SHIYI_ICONS.bookmark}<span class="cap-shiyi-dot" hidden></span>`;
     expandBtn.setAttribute('aria-label', '展开拾忆');
-    expandBtn.title = '展开拾忆';
+    expandBtn.title = '点击展开拾忆，拖动调整位置';
+    cleanupMemorySide = mountMemorySide(memory.root, expandBtn);
   }
 
   // 展开态顶栏：纯图标操作栏

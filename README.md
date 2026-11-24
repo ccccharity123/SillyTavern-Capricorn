@@ -111,3 +111,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.7.6 Alpha
 Android 播放器使用可见视口定位，禁用坐标变形展开动画；iOS 和媒体引擎保持不变。
+
+## v2.7.7 Alpha
+拾忆入口支持纵向拖动并记忆位置；展开面板独立使用可视视口高度，内部滚动。保留音乐、网关和记忆数据逻辑。尚未真机测试。
