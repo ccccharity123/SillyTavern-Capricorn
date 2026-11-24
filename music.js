@@ -108,10 +108,12 @@ function openExternal(url){try{W.open(url,'_blank','noopener,noreferrer')}catch(
 // 必须用户手动点击才发起请求；结果需用户确认，永不覆盖已关联的网易云ID。
 const normalize=s=>String(s||'').toLocaleLowerCase().normalize('NFKC').replace(/[\\s\\p{P}\\p{S}]+/gu,'');
 async function metadataCandidates(t){
+  if(localStorage.getItem('capricorn_privacy_mode')==='local'||!localStorage.getItem('capricorn_privacy_mode'))throw Error('本地模式禁止在线元数据查询');
+  if(!W.confirm('向 Apple 发送歌曲名称和歌手以查询封面？'))return []; 
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),8500);
   try{
     const url='https://itunes.apple.com/search?'+new URLSearchParams({term:t.title+' '+t.artist,entity:'song',limit:'12'});
-    const r=await fetch(url,{signal:controller.signal,credentials:'omit'});
+    const r=await fetch(url,{signal:controller.signal,credentials:'omit',referrerPolicy:'no-referrer'});
     if(!r.ok)throw Error('查询返回 HTTP '+r.status);
     const x=await r.json();
     return (Array.isArray(x.results)?x.results:[]).filter(v=>v.kind==='song'&&v.trackName&&v.artistName).map(v=>({
