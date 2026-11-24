@@ -14,7 +14,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     material: 'frost',
     playerTheme: 'default',
     playerBgColor: '',
-    bgSource: 'auto', coverShape: 'auto', coverRadius: 18, coverBorder: 0, coverBorderColor: '#ffffff', coverBorderStyle: 'solid', coverShadow: 0, bgSaturation: 100, bgShade: 15,
+    bgSource: 'auto', coverShape: 'rounded', coverSize: 250, coverPadding: 0, coverOpacity: 100, coverFit: 'cover', coverPlate: 'none', coverRadius: 18, coverBorder: 0, coverBorderColor: '#ffffff', coverBorderStyle: 'solid', coverShadow: 0, bgSaturation: 100, bgShade: 15,
     playerBgOpacity: 82,
     playerBgBlur: 24,
     playerIslandCss: '',
@@ -107,9 +107,9 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
       <details class="cap-bg-customizer"><summary>背景与封面</summary>
 <label>背景来源<select data-pref="bgSource"><option value="auto">主题默认 / 已导入图片</option><option value="album">专辑封面铺满</option><option value="color">专辑取色</option><option value="custom">自定义图片</option></select></label>
 <label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
-<label>边框样式<select data-pref="coverBorderStyle"><option value="solid">实线</option><option value="dashed">虚线</option><option value="double">双线</option></select></label>
+<label>图片填充<select data-pref="coverFit"><option value="cover">铺满</option><option value="contain">完整显示</option></select></label><label>底板<select data-pref="coverPlate"><option value="none">无</option><option value="solid">纯色</option><option value="glass">玻璃</option></select></label><label>大卡片封面大小 (<span data-val="coverSize"></span>)<input type="range" min="40" max="320" data-pref-range="coverSize"></label><label>内边距 (<span data-val="coverPadding"></span>)<input type="range" min="0" max="40" data-pref-range="coverPadding"></label><label>边框透明度 (<span data-val="coverOpacity"></span>)<input type="range" min="0" max="100" data-pref-range="coverOpacity"></label><label>边框样式<select data-pref="coverBorderStyle"><option value="solid">实线</option><option value="dashed">虚线</option><option value="double">双线</option></select></label>
 <label>边框颜色<input type="color" data-cover-color></label>
-<label>圆角 (<span data-val="coverRadius"></span>)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label><label>边框宽度 (<span data-val="coverBorder"></span>)<input type="range" min="0" max="8" data-pref-range="coverBorder"></label><label>阴影 (<span data-val="coverShadow"></span>)<input type="range" min="0" max="40" data-pref-range="coverShadow"></label><label>背景饱和度 (<span data-val="bgSaturation"></span>)<input type="range" min="0" max="200" data-pref-range="bgSaturation"></label><label>明暗遮罩 (<span data-val="bgShade"></span>)<input type="range" min="0" max="100" data-pref-range="bgShade"></label>
+<label>圆角 (<span data-val="coverRadius"></span>)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label><label>边框宽度 (<span data-val="coverBorder"></span>)<input type="range" min="0" max="12" data-pref-range="coverBorder"></label><label>阴影 (<span data-val="coverShadow"></span>)<input type="range" min="0" max="40" data-pref-range="coverShadow"></label><label>背景饱和度 (<span data-val="bgSaturation"></span>)<input type="range" min="0" max="200" data-pref-range="bgSaturation"></label><label>明暗遮罩 (<span data-val="bgShade"></span>)<input type="range" min="0" max="100" data-pref-range="bgShade"></label>
         <label>自定义背景色 / 渐变（留空使用主题默认）
           <div class="cap-color-row">
             <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
@@ -378,7 +378,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     b.dataset.capHasPlayerBg = bgImageUrl && ['auto','custom'].includes(draft.bgSource) ? '1' : '0';
     b.dataset.capBgSource = draft.bgSource;
     b.dataset.capCoverShape = draft.coverShape;
-    const vars = {'cover-radius':Number(draft.coverRadius)+'px','cover-border':Number(draft.coverBorder)+'px','cover-color':/^#[0-9a-f]{6}$/i.test(draft.coverBorderColor)?draft.coverBorderColor:'#ffffff','cover-style':['solid','dashed','double'].includes(draft.coverBorderStyle)?draft.coverBorderStyle:'solid','cover-shadow':Number(draft.coverShadow)+'px','bg-saturation':Number(draft.bgSaturation)+'%','bg-shade':Number(draft.bgShade)/100};
+    b.dataset.capCoverPlate=draft.coverPlate; const vars = {'cover-size':Number(draft.coverSize)+'px','cover-padding':Number(draft.coverPadding)+'px','cover-opacity':Number(draft.coverOpacity)/100,'cover-fit':draft.coverFit==='contain'?'contain':'cover','cover-radius':Number(draft.coverRadius)+'px','cover-border':Number(draft.coverBorder)+'px','cover-color':/^#[0-9a-f]{6}$/i.test(draft.coverBorderColor)?draft.coverBorderColor:'#ffffff','cover-style':['solid','dashed','double'].includes(draft.coverBorderStyle)?draft.coverBorderStyle:'solid','cover-shadow':Number(draft.coverShadow)+'px','bg-saturation':Number(draft.bgSaturation)+'%','bg-shade':Number(draft.bgShade)/100};
     for(const [k,v] of Object.entries(vars)) D.documentElement.style.setProperty('--cap-'+k,v);
     if(draft.playerTheme==='black')b.dataset.capLook='dark';
 

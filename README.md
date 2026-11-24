@@ -87,3 +87,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## 2.6.3
 专辑背景双层 1200ms 过渡；音量拖动保护。原生音量不可写时，尝试已授权跨域音源的 Web Audio 增益；不支持时使用系统音量键。实际客户端兼容性待测试。
+
+## 2.6.4
+封面容器自定义、跨域取色尝试与模糊封面回退、iOS Web Audio 优先并在加载失败时回退。跨域音源仍可能只支持系统音量。
