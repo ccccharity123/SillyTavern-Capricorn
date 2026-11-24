@@ -80,3 +80,6 @@ Explicit Chat Completion preset manager, save/reselect verification, individual 
 ## 4.3.1-dev.2
 - 读取排序分组和条目，手动选择前后或首尾，插入并启用保存；支持平面及分组排序。
 - 未知宿主结构拒绝写入；提供复制提示词回退。iOSTT 实机未验证。
+
+## 4.3.1-dev.3
+- 支持包装式预设读取、结构诊断及 JSON 副本导出。原生 iOSTT 写入接口仍待实机确认。
