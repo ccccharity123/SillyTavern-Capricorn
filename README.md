@@ -55,3 +55,9 @@
 
 ## v2.2 Alpha
 Requires gateway v1.10. Cloud library refreshes on opening; private creation, rename, add/remove tracks, delete owned ordinary playlists. No automatic role upload yet. Real upstream behavior requires testing. Keep existing environment and encrypted session file. Back up gateway before replacing. Do not test deletion on important playlists.
+
+## v2.3 Alpha
+角色私密原声带：云端曲库内创建或绑定，按账号及角色保存关联，每120秒增量添加已匹配歌曲，不自动删除。播放记忆：恢复队列及歌曲，点击播放后尝试恢复进度。沿用网关1.10。真实设备及网易云联机测试待完成。
+
+## 2.3.1
+云端曲库 → 管理导入：不导入、选择性导入、全部导入；按网关及网易云 UID 保存。新建歌单与已绑定原声带始终显示。取消导入仅隐藏，不删除云端数据。网关无需升级。
