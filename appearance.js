@@ -97,6 +97,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         <label>播放器主题
           <select data-pref="playerTheme">
             <option value="default">经典原生</option>
+            <option value="silverblue">余音 · 银蓝手账</option>
             <option value="mist">晨雾白瓷</option>
             <option value="ocean">深海靛蓝</option>
             <option value="sunset">落日琥珀</option>
@@ -398,7 +399,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     const extraPlayerCss = scopedCss(draft.playerCustomCss || '', '#capricorn-hub', ['#capricorn-hub', '.cap-full-player']);
 
     const bgOverrideRule = bgColor
-      ? `#capricorn-hub nav { background: ${bgColor} !important; }\n`
+      ? `#capricorn-hub nav, .cap-full-player { background: ${bgColor} !important; }\n`
       : '';
 
     sheet.textContent =
@@ -461,6 +462,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
       try {
         const f = bgFileInput.files?.[0];
         if (!f) return;
+        if (f.size > 25 * 1024 * 1024) throw Error("图片不能超过25MB");
         bgImageUrl = await saveBgImage(f);
         if (bgTip) bgTip.textContent = '已应用背景图';
         apply(p);
@@ -470,3 +472,60 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         bgFileInput.value = '';
       }
     
+
+    };
+  }
+  if (bgClearBtn) bgClearBtn.onclick = async () => {
+    await clearBgImage(); bgImageUrl = ''; if (bgTip) bgTip.textContent = '已移除背景图'; apply(p);
+  };
+  for (const el of playerBox.querySelectorAll('[data-pref-range]')) {
+    const k = el.dataset.prefRange; el.value = p[k];
+    const label = playerBox.querySelector(`[data-val="${k}"]`);
+    const update = () => { if (label) label.textContent = el.value; };
+    update(); el.oninput = () => { p[k] = Number(el.value); update(); save(); };
+  }
+  async function refreshFonts() { installedFonts = await listFonts(); renderFontSelects(); }
+  for (const box of allBoxes) {
+    const sel = box.querySelector('[data-font-select]');
+    const file = box.querySelector('[data-font-file]');
+    const k = sel.dataset.fontSelect === 'player' ? 'sharedFontId' : 'noteFontId';
+    sel.onchange = () => { p[k] = sel.value; save(); };
+    box.querySelector('[data-import-font]').onclick = () => file.click();
+    file.onchange = async () => {
+      try { const f = file.files?.[0]; if (!f) return; if (f.size > 25*1024*1024) throw Error('字体不能超过25MB');
+        const font = await saveFontFile(f); p[k] = font.id; await refreshFonts(); save(); setFontStatus('字体已导入');
+      } catch(e) { setFontStatus(e.message); } finally { file.value = ''; }
+    };
+    box.querySelector('[data-delete-font]').onclick = async () => {
+      const id = sel.value; if (!id || id === 'shared' || !W.confirm('删除共享字体？')) return;
+      try { await deleteFont(id); if (p.sharedFontId === id) p.sharedFontId = ''; if (p.noteFontId === id) p.noteFontId = 'shared'; await refreshFonts(); save(); } catch(e) { setFontStatus(e.message); }
+    };
+  }
+  function bindCss(box, attr, keys, presets, presetAttr, saveAttr, resetAttr, statusAttr) {
+    if (!box) return;
+    const fields = keys.map(k => box.querySelector(`[${attr}="${k}"]`));
+    const sync = () => fields.forEach((el,i) => { el.value = p[keys[i]] || ''; });
+    const status = msg => { box.querySelector(`[${statusAttr}]`).textContent = msg; };
+    function commit(values) {
+      const old = p; p = {...p, ...values};
+      try { apply(p); save(); sync(); status('已保存'); } catch(e) { p = old; apply(p); status(e.message); }
+    }
+    sync();
+    fields.forEach((el,i) => { el.oninput = () => { try { apply({...p,...Object.fromEntries(fields.map((f,j)=>[keys[j],f.value]))}); status('预览中'); } catch(e) { status(e.message); } }; });
+    box.querySelector(`[${saveAttr}]`).onclick = () => commit(Object.fromEntries(fields.map((f,i)=>[keys[i],f.value])));
+    box.querySelector(`[${resetAttr}]`).onclick = () => commit(Object.fromEntries(keys.map(k=>[k,''])));
+    for (const btn of box.querySelectorAll(`[${presetAttr}]`)) btn.onclick = () => commit(presets[btn.getAttribute(presetAttr)]);
+  }
+  bindCss(playerBox,'data-pcss',['playerIslandCss','playerThemeCss','playerCustomCss'],PLAYER_PRESETS,'data-player-preset','data-psave','data-preset-reset','data-pstatus');
+  bindCss(noteBox,'data-css',['side','note','custom'],NOTE_PRESETS,'data-preset','data-save','data-reset','data-status');
+  const onTheme = () => apply(p);
+  themeSelect.addEventListener('change',onTheme); media.addEventListener?.('change',onTheme);
+  try { apply(p); } catch(e) { console.warn('[Capricorn] invalid saved CSS',e); apply({...p,side:'',note:'',custom:'',playerIslandCss:'',playerThemeCss:'',playerCustomCss:''}); }
+  void refreshFonts().then(()=>applyFonts(p)).catch(e=>setFontStatus(e.message));
+  void loadBgImageUrl().then(url=>{bgImageUrl=url; if(bgTip && url) bgTip.textContent='已应用背景图'; apply(p);}).catch(e=>console.warn(e));
+  return {
+    closeInlineDrawer(){if(inlineDrawer) inlineDrawer.hidden=true;},
+    toggleInlineDrawer(){if(inlineDrawer) inlineDrawer.hidden=!inlineDrawer.hidden;},
+    destroy(){themeSelect.removeEventListener('change',onTheme);media.removeEventListener?.('change',onTheme);sheet.remove();inlineDrawer?.remove();playerBox.remove();for(const k of ['capMaterial','capPlayerTheme','capLook','capPaper','capPaperMode','capPaperPattern','capNoteDecor','capHasPlayerBg','capHasPlayerFont','capHasNoteFont']) delete D.body.dataset[k];}
+  };
+}

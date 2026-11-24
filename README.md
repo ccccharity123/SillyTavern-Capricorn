@@ -67,3 +67,6 @@ Requires gateway v1.10. Cloud library refreshes on opening; private creation, re
 
 ## v2.5 留白
 基于用户 Alpha1，保留材质与纸张主题。播放/曲库分离，歌曲操作折叠，拾忆外观与 CSS 仅在拾忆菜单内。网关与数据键不变。
+
+## 2.5.2 Alpha
+修复脚本转义与截断，恢复基础样式，新增余音 · 银蓝手账主题。
