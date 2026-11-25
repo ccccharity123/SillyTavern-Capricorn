@@ -1,45 +1,49 @@
-// Apple SF Symbols 风格统一图标库（24×24 光学网格）
+// Apple SF Symbols 6 Hierarchical & Phosphor Duotone 风格光学图标库（24×24 视网膜网格）
 const paths = {
-  // 播控类（实心圆角，呼应 Apple Music）
-  play: '<path d="M7.6 4.9c0-1.15 1.24-1.87 2.24-1.3l10.2 5.9a1.5 1.5 0 0 1 0 2.6l-10.2 5.9c-1 .57-2.24-.15-2.24-1.3Z"/>',
-  pause: '<rect x="5.5" y="4.2" width="4.4" height="15.6" rx="1.8"/><rect x="14.1" y="4.2" width="4.4" height="15.6" rx="1.8"/>',
-  prev: '<rect x="4.2" y="5" width="2.6" height="14" rx="1.3"/><path d="M19.2 6.1a1.25 1.25 0 0 0-1.9-1.06L8.6 10.94a1.25 1.25 0 0 0 0 2.12l8.7 5.9a1.25 1.25 0 0 0 1.9-1.06Z"/>',
-  next: '<path d="M4.8 6.1a1.25 1.25 0 0 1 1.9-1.06l8.7 5.9a1.25 1.25 0 0 1 0 2.12l-8.7 5.9a1.25 1.25 0 0 1-1.9-1.06Z"/><rect x="17.2" y="5" width="2.6" height="14" rx="1.3"/>',
-  stop: '<rect x="5.2" y="5.2" width="13.6" height="13.6" rx="3.2"/>',
-
-  // 播放模式与音量
-  repeat: '<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 11.5v-1a3.5 3.5 0 0 1 3.5-3.5h13.5"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 12.5v1a3.5 3.5 0 0 1-3.5 3.5H3.5"/>',
-  one: '<path d="M17 3.5 20.5 7 17 10.5"/><path d="M3.5 11.5v-1a3.5 3.5 0 0 1 3.5-3.5h13.5"/><path d="M7 20.5 3.5 17 7 13.5"/><path d="M20.5 12.5v1a3.5 3.5 0 0 1-3.5 3.5H3.5"/><path d="M11.2 10.4 12.6 9.5v5"/>',
-  shuffle: '<path d="M3.5 7h2.8c2.6 0 4 2.2 5.7 5s3.1 5 5.7 5h2.8"/><path d="m17.5 14 3 3-3 3"/><path d="M3.5 17h2.8c2.6 0 4-2.2 5.7-5s3.1-5 5.7-5h2.8"/><path d="m17.5 4 3 3-3 3"/>',
-  volumeLow: '<path d="M5.5 9.5h3.2l4.4-3.6a.9.9 0 0 1 1.4.7v10.8a.9.9 0 0 1-1.4.7l-4.4-3.6H5.5a1.5 1.5 0 0 1-1.5-1.5v-2a1.5 1.5 0 0 1 1.5-1.5Z"/>',
-  volumeHigh: '<path d="M4 9.5h3l4.2-3.5a.9.9 0 0 1 1.3.7v10.6a.9.9 0 0 1-1.3.7L7 14.5H4a1.5 1.5 0 0 1-1.5-1.5v-2A1.5 1.5 0 0 1 4 9.5Z"/><path d="M16 9.2a4 4 0 0 1 0 5.6"/><path d="M18.8 6.8a7.4 7.4 0 0 1 0 10.4"/>',
-
-  // 播放器功能区
-  lyrics: '<path d="M5.5 4.5h13a2.5 2.5 0 0 1 2.5 2.5v8a2.5 2.5 0 0 1-2.5 2.5h-6.8l-4.2 3v-3H5.5A2.5 2.5 0 0 1 3 15V7a2.5 2.5 0 0 1 2.5-2.5Z"/><path d="M7.5 9.2h9M7.5 12.8h6"/>',
-  queue: '<path d="M4 6.5h16M4 11.5h16M4 16.5h8.5"/><path d="M16.2 14.8l4.2 2.4-4.2 2.4Z" fill="currentColor" stroke="none"/>',
-  library: '<rect x="4" y="6.5" width="12.5" height="13.5" rx="2.5"/><path d="M8 3.5h9.5A2.5 2.5 0 0 1 20 6v10.5"/><path d="M9.5 15.2v-4.7l4.2-1v4.7"/><circle cx="8.2" cy="15.5" r="1.3"/><circle cx="12.4" cy="14.5" r="1.3"/>',
-  size: '<path d="M14.5 4.5h5v5M19.5 4.5l-6 6M9.5 19.5h-5v-5m0 5 6-6"/>',
-
-  // 导航与系统操作
-  close: '<path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/>',
-  down: '<path d="m6 9 6 6 6-6"/>',
-  right: '<path d="m9 6 6 6-6 6"/>',
-  up: '<path d="M12 19.5v-15m-5.5 5.5L12 4.5l5.5 5.5"/>',
-  arrowdown: '<path d="M12 4.5v15m-5.5-5.5L12 19.5l5.5-5.5"/>',
-  external: '<path d="M7 17 17 7M9.5 7H17v7.5"/>',
-  settings: '<path d="M4 6.5h16M4 12h16M4 17.5h16"/><circle cx="8.5" cy="6.5" r="2.1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="12" r="2.1" fill="currentColor" stroke="none"/><circle cx="10" cy="17.5" r="2.1" fill="currentColor" stroke="none"/>',
-  more: '<circle cx="5.5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.6" fill="currentColor" stroke="none"/>',
-  refresh: '<path d="M19.5 8.5A8 8 0 1 0 20 13.5"/><path d="M19.5 3.8v4.7h-4.7"/>',
-
-  // 拾忆与外观
-  note: '<rect x="4.5" y="3.5" width="15" height="17" rx="3"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4.2"/>',
-  palette: '<path d="M12 3.5a8.5 8.5 0 1 0 0 17h1.2a2.1 2.1 0 0 0 1.8-3.2 2 2 0 0 1 1.7-3h1.5a2.3 2.3 0 0 0 2.3-2.3A8.5 8.5 0 0 0 12 3.5Z"/><circle cx="8.2" cy="9.5" r="1" fill="currentColor" stroke="none"/><circle cx="12.5" cy="7.5" r="1" fill="currentColor" stroke="none"/><circle cx="16.2" cy="10.2" r="1" fill="currentColor" stroke="none"/>',
-  music: '<path d="M9.5 17.5V5.8l9.5-1.8v11.5"/><circle cx="7" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>'
+  play: '<path d="M7.50 6.40Q7.50 4.30 9.29 5.40L18.31 10.90Q20.10 12.00 18.31 13.10L9.29 18.60Q7.50 19.70 7.50 17.60Z"/>',
+  pause: '<rect x="5.8" y="4.5" width="4.2" height="15" rx="1.8"/><rect x="14" y="4.5" width="4.2" height="15" rx="1.8"/>',
+  prev: '<rect x="4.5" y="5.3" width="2.3" height="13.4" rx="1.15"/><path d="M19.40 6.85Q19.40 5.20 17.99 6.06L9.61 11.14Q8.20 12.00 9.61 12.86L17.99 17.94Q19.40 18.80 19.40 17.15Z"/>',
+  next: '<path d="M4.60 6.85Q4.60 5.20 6.01 6.06L14.39 11.14Q15.80 12.00 14.39 12.86L6.01 17.94Q4.60 18.80 4.60 17.15Z"/><rect x="17.2" y="5.3" width="2.3" height="13.4" rx="1.15"/>',
+  stop: '<rect x="5.6" y="5.6" width="12.8" height="12.8" rx="3.2"/>',
+  star: '<path d="M11.68 3.91Q12.00 3.20 12.32 3.91L14.12 7.93Q14.44 8.64 15.21 8.73L19.59 9.20Q20.37 9.28 19.79 9.80L16.53 12.76Q15.95 13.28 16.11 14.05L17.01 18.36Q17.17 19.12 16.50 18.73L12.68 16.54Q12.00 16.15 11.32 16.54L7.50 18.73Q6.83 19.12 6.99 18.36L7.89 14.05Q8.05 13.28 7.47 12.76L4.21 9.80Q3.63 9.28 4.41 9.20L8.79 8.73Q9.56 8.64 9.88 7.93Z"/>',
+  repeat: '<path d="M16.8 3.6 19.8 6.6 16.8 9.6"/><path d="M4.2 11.2V9.6a3 3 0 0 1 3-3h12.6"/><path class="cap-ico-dim" d="M7.2 20.4 4.2 17.4 7.2 14.4"/><path class="cap-ico-dim" d="M19.8 12.8v1.6a3 3 0 0 1-3 3H4.2"/>',
+  one: '<path d="M16.8 3.6 19.8 6.6 16.8 9.6"/><path d="M4.2 11.2V9.6a3 3 0 0 1 3-3h12.6"/><path class="cap-ico-dim" d="M7.2 20.4 4.2 17.4 7.2 14.4"/><path class="cap-ico-dim" d="M19.8 12.8v1.6a3 3 0 0 1-3 3H4.2"/><path d="M11.3 10.6 12.5 9.7v4.6"/>',
+  shuffle: '<path class="cap-ico-dim" d="M3.8 16.8h2.5c2.6 0 4.3-9.6 7.8-9.6h5.7"/><path class="cap-ico-dim" d="m17.1 4.5 2.7 2.7-2.7 2.7"/><path d="M3.8 7.2h2.5c2.6 0 4.3 9.6 7.8 9.6h5.7"/><path d="m17.1 14.1 2.7 2.7-2.7 2.7"/>',
+  volumeLow: '<path class="cap-ico-tint" d="M5.4 9.5h2.9l4.5-3.6a.85.85 0 0 1 1.38.67v10.86a.85.85 0 0 1-1.38.67l-4.5-3.6H5.4a1.4 1.4 0 0 1-1.4-1.4v-2.2a1.4 1.4 0 0 1 1.4-1.4Z"/><path d="M5.4 9.5h2.9l4.5-3.6a.85.85 0 0 1 1.38.67v10.86a.85.85 0 0 1-1.38.67l-4.5-3.6H5.4a1.4 1.4 0 0 1-1.4-1.4v-2.2a1.4 1.4 0 0 1 1.4-1.4Z"/><path class="cap-ico-dim" d="M16.9 9.5a3.6 3.6 0 0 1 0 5"/>',
+  volumeHigh: '<path class="cap-ico-tint" d="M4.2 9.5h2.8l4.3-3.5a.82.82 0 0 1 1.34.64v10.72a.82.82 0 0 1-1.34.64L7 14.5H4.2a1.4 1.4 0 0 1-1.4-1.4v-2.2a1.4 1.4 0 0 1 1.4-1.4Z"/><path d="M4.2 9.5h2.8l4.3-3.5a.82.82 0 0 1 1.34.64v10.72a.82.82 0 0 1-1.34.64L7 14.5H4.2a1.4 1.4 0 0 1-1.4-1.4v-2.2a1.4 1.4 0 0 1 1.4-1.4Z"/><path d="M15.6 9.2a4.1 4.1 0 0 1 0 5.6"/><path class="cap-ico-dim" d="M18.4 6.6a7.6 7.6 0 0 1 0 10.8"/>',
+  lyrics: '<path class="cap-ico-tint" d="M5.6 4.2h12.8a3.2 3.2 0 0 1 3.2 3.2v7.2a3.2 3.2 0 0 1-3.2 3.2h-6.3l-4.1 2.9a.55.55 0 0 1-.88-.44V17.8H5.6a3.2 3.2 0 0 1-3.2-3.2V7.4a3.2 3.2 0 0 1 3.2-3.2Z"/><path d="M5.6 4.2h12.8a3.2 3.2 0 0 1 3.2 3.2v7.2a3.2 3.2 0 0 1-3.2 3.2h-6.3l-4.1 2.9a.55.55 0 0 1-.88-.44V17.8H5.6a3.2 3.2 0 0 1-3.2-3.2V7.4a3.2 3.2 0 0 1 3.2-3.2Z"/><path d="M9.6 9.3c-.9 0-1.5.6-1.5 1.45 0 .8.6 1.35 1.35 1.35.15 0 .25-.02.35-.05-.15.85-.75 1.45-1.5 1.75M14.7 9.3c-.9 0-1.5.6-1.5 1.45 0 .8.6 1.35 1.35 1.35.15 0 .25-.02.35-.05-.15.85-.75 1.45-1.5 1.75"/>',
+  queue: '<path d="M4.2 6.5h15.6"/><path class="cap-ico-dim" d="M4.2 11.5h15.6"/><path d="M4.2 16.5h8.2"/><path d="M16.1 14.3l4.1 2.35a.45.45 0 0 1 0 .78l-4.1 2.35a.45.45 0 0 1-.68-.39v-4.7a.45.45 0 0 1 .68-.39Z" fill="currentColor" stroke="none"/>',
+  library: '<path class="cap-ico-dim" d="M7.6 4h8.8M5.8 6.8h12.4"/><rect class="cap-ico-tint" x="4" y="9.4" width="16" height="11" rx="2.8"/><rect x="4" y="9.4" width="16" height="11" rx="2.8"/><path d="M10.4 16.8v-4.1l4.4-.9v3.9"/><circle cx="9.2" cy="17.1" r="1.2" fill="currentColor" stroke="none"/><circle cx="13.6" cy="16.1" r="1.2" fill="currentColor" stroke="none"/>',
+  size: '<path d="M14.5 4.8h4.7v4.7M19.2 4.8l-5.7 5.7"/><path class="cap-ico-dim" d="M9.5 19.2H4.8v-4.7m0 4.7 5.7-5.7"/>',
+  settings: '<path class="cap-ico-tint" fill-rule="evenodd" d="M9.88 5.19Q10.36 4.99 10.43 4.47L10.58 3.26Q10.65 2.75 11.17 2.75L12.83 2.75Q13.35 2.75 13.42 3.26L13.57 4.47Q13.64 4.99 14.12 5.19L15.32 5.68Q15.80 5.88 16.21 5.56L17.17 4.82Q17.59 4.50 17.95 4.87L19.13 6.05Q19.50 6.41 19.18 6.83L18.44 7.79Q18.12 8.20 18.32 8.68L18.81 9.88Q19.01 10.36 19.53 10.43L20.74 10.58Q21.25 10.65 21.25 11.17L21.25 12.83Q21.25 13.35 20.74 13.42L19.53 13.57Q19.01 13.64 18.81 14.12L18.32 15.32Q18.12 15.80 18.44 16.21L19.18 17.17Q19.50 17.59 19.13 17.95L17.95 19.13Q17.59 19.50 17.17 19.18L16.21 18.44Q15.80 18.12 15.32 18.32L14.12 18.81Q13.64 19.01 13.57 19.53L13.42 20.74Q13.35 21.25 12.83 21.25L11.17 21.25Q10.65 21.25 10.58 20.74L10.43 19.53Q10.36 19.01 9.88 18.81L8.68 18.32Q8.20 18.12 7.79 18.44L6.83 19.18Q6.41 19.50 6.05 19.13L4.87 17.95Q4.50 17.59 4.82 17.17L5.56 16.21Q5.88 15.80 5.68 15.32L5.19 14.12Q4.99 13.64 4.47 13.57L3.26 13.42Q2.75 13.35 2.75 12.83L2.75 11.17Q2.75 10.65 3.26 10.58L4.47 10.43Q4.99 10.36 5.19 9.88L5.68 8.68Q5.88 8.20 5.56 7.79L4.82 6.83Q4.50 6.41 4.87 6.05L6.05 4.87Q6.41 4.50 6.83 4.82L7.79 5.56Q8.20 5.88 8.68 5.68ZM12 9.1a2.9 2.9 0 1 0 0 5.8a2.9 2.9 0 1 0 0-5.8Z"/><path d="M9.88 5.19Q10.36 4.99 10.43 4.47L10.58 3.26Q10.65 2.75 11.17 2.75L12.83 2.75Q13.35 2.75 13.42 3.26L13.57 4.47Q13.64 4.99 14.12 5.19L15.32 5.68Q15.80 5.88 16.21 5.56L17.17 4.82Q17.59 4.50 17.95 4.87L19.13 6.05Q19.50 6.41 19.18 6.83L18.44 7.79Q18.12 8.20 18.32 8.68L18.81 9.88Q19.01 10.36 19.53 10.43L20.74 10.58Q21.25 10.65 21.25 11.17L21.25 12.83Q21.25 13.35 20.74 13.42L19.53 13.57Q19.01 13.64 18.81 14.12L18.32 15.32Q18.12 15.80 18.44 16.21L19.18 17.17Q19.50 17.59 19.13 17.95L17.95 19.13Q17.59 19.50 17.17 19.18L16.21 18.44Q15.80 18.12 15.32 18.32L14.12 18.81Q13.64 19.01 13.57 19.53L13.42 20.74Q13.35 21.25 12.83 21.25L11.17 21.25Q10.65 21.25 10.58 20.74L10.43 19.53Q10.36 19.01 9.88 18.81L8.68 18.32Q8.20 18.12 7.79 18.44L6.83 19.18Q6.41 19.50 6.05 19.13L4.87 17.95Q4.50 17.59 4.82 17.17L5.56 16.21Q5.88 15.80 5.68 15.32L5.19 14.12Q4.99 13.64 4.47 13.57L3.26 13.42Q2.75 13.35 2.75 12.83L2.75 11.17Q2.75 10.65 3.26 10.58L4.47 10.43Q4.99 10.36 5.19 9.88L5.68 8.68Q5.88 8.20 5.56 7.79L4.82 6.83Q4.50 6.41 4.87 6.05L6.05 4.87Q6.41 4.50 6.83 4.82L7.79 5.56Q8.20 5.88 8.68 5.68Z"/><circle cx="12" cy="12" r="2.9"/>',
+  sliders: '<path class="cap-ico-dim" d="M4.2 6.5h2.2M10.6 6.5h9.2M4.2 12h9.2M17.6 12h2.2M4.2 17.5h4.2M12.6 17.5h7.2"/><circle class="cap-ico-tint" cx="8.5" cy="6.5" r="2"/><circle cx="8.5" cy="6.5" r="2"/><circle class="cap-ico-tint" cx="15.5" cy="12" r="2"/><circle cx="15.5" cy="12" r="2"/><circle class="cap-ico-tint" cx="10.5" cy="17.5" r="2"/><circle cx="10.5" cy="17.5" r="2"/>',
+  close: '<path d="m6.8 6.8 10.4 10.4M17.2 6.8 6.8 17.2"/>',
+  down: '<path d="m6.5 9.4 5.5 5.6 5.5-5.6"/>',
+  right: '<path d="m9.4 6.5 5.6 5.5-5.6 5.5"/>',
+  left: '<path d="m14.6 6.5-5.6 5.5 5.6 5.5"/>',
+  up: '<path d="M12 18.6V5.4m-5 5 5-5 5 5"/>',
+  arrowdown: '<path d="M12 5.4v13.2m-5-5 5 5 5-5"/>',
+  external: '<path d="M7.5 16.5 16.5 7.5M9.8 7.5h6.7v6.7"/>',
+  more: '<circle cx="6" cy="12" r="1.45" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.45" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.45" fill="currentColor" stroke="none"/>',
+  refresh: '<path d="M19.4 9.2A7.8 7.8 0 1 0 19.6 14"/><path d="M19.6 4.4v4.8h-4.8"/>',
+  search: '<circle class="cap-ico-tint" cx="10.75" cy="10.75" r="6.25"/><circle cx="10.75" cy="10.75" r="6.25"/><path d="m15.4 15.4 4.1 4.1"/>',
+  plus: '<path d="M12 5.4v13.2M5.4 12h13.2"/>',
+  check: '<path d="m5.5 12.6 4.3 4.3 8.8-9.2"/>',
+  lock: '<rect class="cap-ico-tint" x="5.2" y="10.6" width="13.6" height="9.4" rx="2.6"/><rect x="5.2" y="10.6" width="13.6" height="9.4" rx="2.6"/><path d="M8.5 10.6V7.8a3.5 3.5 0 0 1 7 0v2.8"/><circle cx="12" cy="15.3" r="1.15" fill="currentColor" stroke="none"/>',
+  unlock: '<rect class="cap-ico-tint" x="5.2" y="10.6" width="13.6" height="9.4" rx="2.6"/><rect x="5.2" y="10.6" width="13.6" height="9.4" rx="2.6"/><path class="cap-ico-dim" d="M8.5 10.6V7.8a3.5 3.5 0 0 1 6.7-1.4"/><circle cx="12" cy="15.3" r="1.15" fill="currentColor" stroke="none"/>',
+  sparkles: '<path class="cap-ico-tint" d="M10.20 6.30C11.30 12.10 11.30 12.10 17.10 13.20C11.30 14.30 11.30 14.30 10.20 20.10C9.10 14.30 9.10 14.30 3.30 13.20C9.10 12.10 9.10 12.10 10.20 6.30Z"/><path d="M10.20 6.30C11.30 12.10 11.30 12.10 17.10 13.20C11.30 14.30 11.30 14.30 10.20 20.10C9.10 14.30 9.10 14.30 3.30 13.20C9.10 12.10 9.10 12.10 10.20 6.30Z"/><path class="cap-ico-dim" d="M17.90 3.00C18.48 5.62 18.48 5.62 21.10 6.20C18.48 6.78 18.48 6.78 17.90 9.40C17.32 6.78 17.32 6.78 14.70 6.20C17.32 5.62 17.32 5.62 17.90 3.00Z" fill="currentColor" stroke="none"/><path class="cap-ico-dim" d="M18.60 15.65C18.99 17.21 18.99 17.21 20.55 17.60C18.99 17.99 18.99 17.99 18.60 19.55C18.21 17.99 18.21 17.99 16.65 17.60C18.21 17.21 18.21 17.21 18.60 15.65Z" fill="currentColor" stroke="none"/>',
+  note: '<rect class="cap-ico-tint" x="4.8" y="3.4" width="14.4" height="17.2" rx="3.2"/><rect x="4.8" y="3.4" width="14.4" height="17.2" rx="3.2"/><path class="cap-ico-tint" d="M11 3.4h4.4v6.4l-2.2-1.5-2.2 1.5Z"/><path d="M11 3.4v6.4l2.2-1.5 2.2 1.5V3.4"/><path class="cap-ico-dim" d="M8.3 13.6h7.4M8.3 16.6h4.8"/>',
+  palette: '<path class="cap-ico-tint" d="M12 3.4a8.6 8.6 0 1 0 0 17.2h.9c1.35 0 2.1-1.35 1.55-2.55-.35-.75.15-1.65.98-1.65h2.17a3 3 0 0 0 3-3A8.6 8.6 0 0 0 12 3.4Z"/><path d="M12 3.4a8.6 8.6 0 1 0 0 17.2h.9c1.35 0 2.1-1.35 1.55-2.55-.35-.75.15-1.65.98-1.65h2.17a3 3 0 0 0 3-3A8.6 8.6 0 0 0 12 3.4Z"/><circle cx="7.8" cy="11.2" r="1.15" fill="currentColor" stroke="none"/><circle cx="10.4" cy="7.5" r="1.15" fill="currentColor" stroke="none"/><circle cx="14.9" cy="7.9" r="1.15" fill="currentColor" stroke="none"/><circle class="cap-ico-dim" cx="17.3" cy="11.4" r="1.15" fill="currentColor" stroke="none"/>',
+  music: '<ellipse class="cap-ico-tint" cx="7.2" cy="17.3" rx="2.5" ry="1.95" transform="rotate(-18 7.2 17.3)"/><ellipse class="cap-ico-tint" cx="16.6" cy="15.4" rx="2.5" ry="1.95" transform="rotate(-18 16.6 15.4)"/><path d="M9.5 16.6V6.5c0-.62.43-1.15 1.04-1.28l7.35-1.52a1.1 1.1 0 0 1 1.32 1.08v9.92"/><ellipse cx="7.2" cy="17.3" rx="2.5" ry="1.95" transform="rotate(-18 7.2 17.3)"/><ellipse cx="16.6" cy="15.4" rx="2.5" ry="1.95" transform="rotate(-18 16.6 15.4)"/>',
+  playlist: '<path d="M4 6.5h11.2"/><path class="cap-ico-dim" d="M4 11.5h10.2M4 16.5h6.5"/><path d="M16.2 16.8V9.4l3.8-.9"/><ellipse class="cap-ico-tint" cx="14.4" cy="17.1" rx="2" ry="1.6" transform="rotate(-16 14.4 17.1)"/><ellipse cx="14.4" cy="17.1" rx="2" ry="1.6" transform="rotate(-16 14.4 17.1)"/>',
+  timeline: '<circle class="cap-ico-tint" cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="8.4"/><path d="M12 7.4v4.8l3.2 2"/>',
+  table: '<path class="cap-ico-tint" d="M3.8 7.4a2.8 2.8 0 0 1 2.8-2.8h10.8a2.8 2.8 0 0 1 2.8 2.8v2.2H3.8Z"/><rect x="3.8" y="4.6" width="16.4" height="14.8" rx="2.8"/><path d="M3.8 9.6h16.4"/><path class="cap-ico-dim" d="M9.5 9.6v9.8M15 9.6v9.8"/>',
+  dossier: '<rect class="cap-ico-tint" x="3.2" y="4.8" width="17.6" height="14.4" rx="3"/><rect x="3.2" y="4.8" width="17.6" height="14.4" rx="3"/><circle cx="8.6" cy="10.2" r="1.65"/><path d="M5.9 15.6a3 3 0 0 1 5.4 0"/><path class="cap-ico-dim" d="M13.6 10h4.2M13.6 13.6h2.9"/>',
 };
 
-const filled = new Set(['play', 'pause', 'prev', 'next', 'stop']);
+const filled = new Set(['play', 'pause', 'prev', 'next', 'stop', 'star']);
 
 export function icon(name, size = 22) {
   const isFilled = filled.has(name);
-  return `<svg class="cap-icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${isFilled ? 'currentColor' : 'none'}" stroke="${isFilled ? 'none' : 'currentColor'}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
+  return `<svg class="cap-icon${isFilled ? ' is-solid' : ''}" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="${size}" height="${size}" fill="${isFilled ? 'currentColor' : 'none'}" stroke="${isFilled ? 'none' : 'currentColor'}" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
 }

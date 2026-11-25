@@ -1541,7 +1541,7 @@ body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
 body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
 
 /* =========================================================
-   Apple HIG 审美与交互重构层 (Liquid Glass + Spring Physics)
+   Apple HIG Pro v2 全面审美与交互重构层
    ========================================================= */
 
 :root {
@@ -1550,41 +1550,46 @@ body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
   --apple-tap: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-/* 1. 全局滚动条隐形化与细腻化 */
+/* 1. 细腻隐形滚动条 */
 #capricorn-hub nav::-webkit-scrollbar,
 #shiyi-dock.cap-memory-side::-webkit-scrollbar,
 .cap-resonance::-webkit-scrollbar,
-.cap-song-picker-results::-webkit-scrollbar {
+.cap-song-picker-results::-webkit-scrollbar,
+.shiyi-dialog::-webkit-scrollbar {
   width: 5px;
   height: 5px;
 }
 #capricorn-hub nav::-webkit-scrollbar-thumb,
 #shiyi-dock.cap-memory-side::-webkit-scrollbar-thumb,
 .cap-resonance::-webkit-scrollbar-thumb,
-.cap-song-picker-results::-webkit-scrollbar-thumb {
+.cap-song-picker-results::-webkit-scrollbar-thumb,
+.shiyi-dialog::-webkit-scrollbar-thumb {
   background: rgba(128, 128, 128, 0.28);
   border-radius: 999px;
 }
 #capricorn-hub nav::-webkit-scrollbar-track,
-#shiyi-dock.cap-memory-side::-webkit-scrollbar-track {
+#shiyi-dock.cap-memory-side::-webkit-scrollbar-track,
+.shiyi-dialog::-webkit-scrollbar-track {
   background: transparent;
 }
 
-/* 2. 主弹窗弹簧入场与 Liquid Glass 质感升级 */
+/* 2. 弹簧入场动画 + 自适应分段控制器（修复 2-Tab 留白） */
 @keyframes capApplePopIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; transform: translateY(-10px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 @keyframes capFadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+@keyframes capSpinOnce {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes capResolveSpin {
+  to { transform: rotate(360deg); }
+}
+
 #capricorn-hub nav:not([hidden]) {
   animation: capApplePopIn 0.34s var(--apple-spring) both;
   border-radius: 28px;
@@ -1593,8 +1598,13 @@ body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
     0 24px 64px rgba(0, 0, 0, 0.22),
     0 4px 16px rgba(0, 0, 0, 0.08);
 }
+#capricorn-hub .cap-tabs {
+  grid-template-columns: none !important;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+}
 
-/* 3. 统一微交互：轻按回弹与键盘焦点环 */
+/* 3. 全局微交互与焦点环 */
 #capricorn-hub button,
 #shiyi-dock.cap-memory-side button,
 .cap-full-player button,
@@ -1619,7 +1629,59 @@ body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
   outline-offset: 2px;
 }
 
-/* 4. 灵动岛：更细腻的玻璃折射、拖拽反馈与歌词切换动效 */
+/* 4. 全局 iOS Toggle Switch（替代生硬原生复选框） */
+#capricorn-hub input[type="checkbox"],
+.cap-recall input[type="checkbox"],
+.shiyi-dialog label > input[type="checkbox"]:not(.shiyi-h-check) {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  width: 38px !important;
+  min-width: 38px;
+  height: 22px !important;
+  margin: 0 8px 0 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  border: 0 !important;
+  background: rgba(120, 120, 128, 0.32) !important;
+  vertical-align: middle;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.24s var(--apple-spring) !important;
+}
+#capricorn-hub input[type="checkbox"]::after,
+.cap-recall input[type="checkbox"]::after,
+.shiyi-dialog label > input[type="checkbox"]:not(.shiyi-h-check)::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.24);
+  transition: transform 0.26s var(--apple-spring);
+}
+#capricorn-hub input[type="checkbox"]:checked,
+.cap-recall input[type="checkbox"]:checked,
+.shiyi-dialog label > input[type="checkbox"]:not(.shiyi-h-check):checked {
+  background: var(--am-accent, #34c759) !important;
+}
+#capricorn-hub input[type="checkbox"]:checked::after,
+.cap-recall input[type="checkbox"]:checked::after,
+.shiyi-dialog label > input[type="checkbox"]:not(.shiyi-h-check):checked::after {
+  transform: translateX(16px);
+}
+#capricorn-hub .cap-settings label:has(> input[type="checkbox"]),
+.shiyi-dialog label:has(> input[type="checkbox"]:not(.shiyi-h-check)) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* 5. 灵动岛：液态玻璃质感、拖拽浮起与柔和歌词过渡 */
 #capricorn-hub .cap-island {
   transition:
     padding 0.44s var(--apple-spring),
@@ -1628,53 +1690,127 @@ body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
     transform 0.18s var(--apple-tap),
     box-shadow 0.3s ease;
 }
-#capricorn-hub .cap-island:hover {
-  box-shadow:
-    inset 0 1.5px 4px var(--glass-highlight),
-    0 12px 32px rgba(0, 0, 0, 0.22);
-}
-#capricorn-hub .cap-island[data-dragging="true"] {
-  transition: transform 0.14s var(--apple-spring), box-shadow 0.14s ease !important;
-  transform: scale(1.05);
-  box-shadow:
-    inset 0 1.5px 4px var(--glass-highlight),
-    0 18px 40px rgba(0, 0, 0, 0.28) !important;
-  cursor: grabbing;
-}
+
 @keyframes capLyricFade {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
-    filter: blur(2px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
-  }
+  from { opacity: 0; transform: translateY(5px); filter: blur(2px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
 }
 
-/* 5. Apple Music 进度条交互增强（悬停/拖拽变粗，更易操控） */
-.cap-scrubber input[type="range"] {
+/* 6. 主播放器结构重构：.cap-hero 现代 Flex 对齐（消除绝对定位错位） */
+.cap-full-player .cap-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+body .cap-full-player[data-size="compact"] .cap-hero,
+body .cap-full-player[data-size="half"] .cap-hero,
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-hero {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+body .cap-full-player[data-size="compact"] .cap-art,
+body .cap-full-player[data-size="half"] .cap-art,
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-art {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  width: 60px !important;
+  height: 60px !important;
+  border-radius: 14px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+body .cap-full-player[data-size="compact"] .cap-meta,
+body .cap-full-player[data-size="half"] .cap-meta,
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-meta {
+  padding-left: 0 !important;
+  min-height: 0 !important;
+  flex: 1;
+  min-width: 0;
+}
+.cap-full-player .cap-art img {
+  opacity: 0;
+  transition: opacity 0.42s var(--apple-spring), transform 0.42s var(--apple-spring);
+}
+.cap-full-player .cap-art img.is-loaded {
+  opacity: 1;
+}
+
+/* 主播放器顶部拖拽条 + 播控加载光环 */
+.cap-full-player[data-size] .cap-grabber {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 26%, transparent);
+  transition: background 0.2s ease, width 0.2s var(--apple-spring);
+}
+.cap-full-player[data-size] .cap-grabber:hover {
+  width: 48px;
+  background: color-mix(in srgb, currentColor 48%, transparent);
+}
+body .cap-full-player[data-size] .cap-transport .cap-play-btn {
+  position: relative;
+  border-radius: 50%;
+}
+body .cap-full-player[data-size][data-resolving="true"] .cap-transport .cap-play-btn::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-top-color: currentColor;
+  animation: capResolveSpin 0.85s linear infinite;
+  pointer-events: none;
+}
+
+/* Apple Music 统一滑块：进度条 + 音量条一致动效 */
+.cap-scrubber input[type="range"],
+.cap-volume input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   height: 5px;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
   transition: height 0.18s var(--apple-spring);
 }
+.cap-volume input[type="range"] {
+  background: linear-gradient(
+    to right,
+    currentColor var(--cap-vol-progress, 80%),
+    color-mix(in srgb, currentColor 22%, transparent) var(--cap-vol-progress, 80%)
+  );
+}
 .cap-scrubber input[type="range"]:hover,
-.cap-scrubber input[type="range"]:active {
+.cap-scrubber input[type="range"]:active,
+.cap-volume input[type="range"]:hover,
+.cap-volume input[type="range"]:active {
   height: 8px;
 }
-.cap-scrubber input[type="range"]::-webkit-slider-thumb {
+.cap-scrubber input[type="range"]::-webkit-slider-thumb,
+.cap-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
   width: 12px;
   height: 12px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.32);
   transition: transform 0.18s var(--apple-spring), box-shadow 0.18s ease;
 }
 .cap-scrubber input[type="range"]:hover::-webkit-slider-thumb,
-.cap-scrubber input[type="range"]:active::-webkit-slider-thumb {
+.cap-scrubber input[type="range"]:active::-webkit-slider-thumb,
+.cap-volume input[type="range"]:hover::-webkit-slider-thumb,
+.cap-volume input[type="range"]:active::-webkit-slider-thumb {
   transform: scale(1.25);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.42);
 }
 
-/* 6. 全屏歌词景深效果（Apple Music 标志性微模糊） */
+/* 全屏歌词景深效果 + 队列高亮 */
 body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric {
   filter: blur(0.6px);
   transition:
@@ -1692,8 +1828,17 @@ body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active
   transform: scale(1.02);
   transform-origin: left center;
 }
+.cap-full-player .cap-queue-row {
+  border-radius: 14px;
+  padding: 6px 8px;
+  transition: background 0.18s ease, transform 0.16s var(--apple-tap);
+}
+.cap-full-player .cap-queue-row.is-current {
+  background: color-mix(in srgb, var(--am-accent, #fa243c) 22%, rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--am-accent, #fa243c) 38%, transparent);
+}
 
-/* 7. 修复音质选择浮层：毛玻璃 + 正确响应日夜模式 */
+/* 音质选择浮层：毛玻璃日夜自适应 */
 .cap-quality-menu {
   background: var(--glass-bg, rgba(250, 250, 252, 0.88)) !important;
   color: var(--glass-fg, #1d1d1f) !important;
@@ -1709,62 +1854,205 @@ body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active
   background: var(--glass-control-hover, rgba(120, 120, 128, 0.16)) !important;
 }
 
-/* 8. 彻底重做「共鸣 · 剧情原声」界面 */
+/* 7. 「共鸣 · 剧情原声」全新信息架构样式 */
 .cap-resonance {
-  padding: 4px 2px 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 2px 2px 12px;
   gap: 10px;
 }
-.cap-resonance h3 {
-  margin: 2px 2px 4px;
+.cap-res-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+}
+.cap-res-header h3 {
+  margin: 0;
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
-.cap-resonance input,
-.cap-resonance select {
+.cap-res-recall {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  padding: 6px 12px !important;
+  min-height: 30px !important;
+  background: var(--am-accent-soft) !important;
+  color: var(--am-accent) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.cap-res-recall:hover {
+  background: var(--am-accent) !important;
+  color: #fff !important;
+}
+.cap-res-actions,
+.cap-res-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.cap-res-filters {
+  grid-template-columns: 1.45fr 1fr;
+}
+.cap-res-play-all,
+.cap-res-lock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0 !important;
+  border-radius: 12px !important;
+  padding: 9px 10px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.cap-res-play-all {
+  background: var(--am-accent) !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--am-accent) 32%, transparent);
+}
+.cap-res-play-all:disabled {
+  opacity: 0.42;
+  box-shadow: none;
+}
+.cap-res-lock {
+  background: var(--glass-card) !important;
+  border: 1px solid var(--glass-line) !important;
+  color: var(--glass-fg) !important;
+}
+.cap-res-lock[aria-pressed="true"] {
+  background: var(--am-accent-soft) !important;
+  border-color: color-mix(in srgb, var(--am-accent) 35%, transparent) !important;
+  color: var(--am-accent) !important;
+}
+.cap-res-search,
+.cap-res-chapter {
   background: var(--glass-control) !important;
   border: 1px solid var(--glass-line) !important;
   border-radius: 12px !important;
-  padding: 9px 12px !important;
+  padding: 8px 10px !important;
   font-size: 13px !important;
+  margin-top: 0 !important;
 }
-.cap-resonance > button {
-  background: var(--glass-card) !important;
-  border: 1px solid var(--glass-line) !important;
-  border-radius: 12px !important;
-  padding: 9px 14px !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
+.cap-res-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.cap-resonance > button:hover:not(:disabled) {
-  background: var(--glass-control-hover) !important;
+.cap-res-empty {
+  text-align: center;
+  font-size: 13px;
+  color: var(--glass-muted);
+  padding: 20px 8px;
+  margin: 0;
 }
-.cap-resonance details {
+.cap-res-card {
   background: var(--glass-card);
   border: 1px solid var(--glass-line) !important;
   border-radius: 16px;
-  padding: 12px 14px !important;
-  margin-bottom: 8px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+  padding: 0 !important;
+  overflow: hidden;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
 }
-.cap-resonance summary {
-  font-weight: 600;
-  font-size: 14px;
+.cap-res-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px !important;
   list-style: none;
+  cursor: pointer;
 }
-.cap-resonance summary::-webkit-details-marker { display: none; }
-.cap-resonance details button {
+.cap-res-summary::-webkit-details-marker { display: none; }
+.cap-res-track-info {
+  min-width: 0;
+  flex: 1;
+}
+.cap-res-track-info strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cap-res-track-info small {
+  display: block;
+  font-size: 12px;
+  color: var(--glass-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cap-res-play-btn {
+  display: inline-grid !important;
+  place-items: center;
+  width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  flex-shrink: 0;
   background: var(--am-accent-soft) !important;
   color: var(--am-accent) !important;
-  border: 0 !important;
-  border-radius: 10px !important;
-  padding: 6px 12px !important;
-  font-size: 12px !important;
+}
+.cap-res-play-btn:hover:not(:disabled) {
+  background: var(--am-accent) !important;
+  color: #fff !important;
+}
+.cap-res-play-btn:disabled { opacity: 0.35; }
+.cap-res-moments {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--glass-line);
+  background: color-mix(in srgb, var(--glass-control) 35%, transparent);
+}
+.cap-res-moment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cap-res-moment-text {
+  min-width: 0;
+  flex: 1;
+}
+.cap-res-moment-text strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cap-res-moment-text small {
+  display: block;
+  font-size: 11px;
+  color: var(--glass-muted);
+}
+.cap-res-jump {
+  flex-shrink: 0;
+  border: 1px solid var(--glass-line) !important;
+  background: var(--glass-card) !important;
+  color: var(--glass-fg) !important;
+  border-radius: 8px !important;
+  padding: 5px 10px !important;
+  min-height: 28px !important;
+  font-size: 11px !important;
   font-weight: 600 !important;
-  margin: 6px 6px 4px 0;
 }
 
-/* 9. 重做「选歌弹窗」为 iOS 毛玻璃模态框 */
+/* 8. 选歌弹窗 iOS 毛玻璃化 */
 .cap-song-picker-overlay {
   background: rgba(0, 0, 0, 0.42) !important;
   backdrop-filter: blur(8px);
@@ -1797,12 +2085,27 @@ body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active
   border-color: var(--am-accent) !important;
 }
 
-/* 10. 拾忆侧边栏：iOS 分段胶囊导航 + 刷新旋转反馈 */
+/* 9. 拾忆侧边栏：Sticky 顶栏、置顶分段导航、精致搜索框与便签操作条 */
+.cap-shiyi-topbar {
+  position: sticky;
+  top: -16px;
+  z-index: 6;
+  margin: -16px -16px 10px;
+  padding: 14px 16px 10px;
+  background: color-mix(in srgb, var(--note-bg) 86%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--note-line);
+}
+.cap-shiyi-icon-btn.is-spinning svg {
+  animation: capSpinOnce 0.55s var(--apple-spring);
+}
 body #shiyi-dock .cap-memory-primary-nav {
   background: color-mix(in srgb, var(--note-fg) 6%, transparent);
   padding: 4px;
   border-radius: 14px;
   gap: 4px;
+  margin: 0 0 8px;
 }
 body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
   background: transparent !important;
@@ -1810,20 +2113,155 @@ body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
   border-radius: 10px !important;
   padding: 8px 4px !important;
   font-size: 13px !important;
+  font-weight: 600 !important;
 }
 body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn:hover {
   background: var(--note-card) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
 }
-@keyframes capSpinOnce {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+
+/* 管理与设置折叠抽屉（置顶且紧凑 2 列网格） */
+body[data-cap-paper] #shiyi-dock .cap-memory-tools {
+  margin-bottom: 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--note-card) 68%, transparent);
+  border: 1px solid var(--note-line);
+  padding: 2px 10px;
 }
-.cap-shiyi-icon-btn.is-spinning svg {
-  animation: capSpinOnce 0.55s var(--apple-spring);
+body[data-cap-paper] #shiyi-dock .cap-memory-tools > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--note-muted);
+  padding: 7px 0;
+}
+body[data-cap-paper] #shiyi-dock .cap-memory-tools > summary::-webkit-details-marker { display: none; }
+body[data-cap-paper] #shiyi-dock .cap-memory-tools[open] > div {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px 0 8px;
+}
+body[data-cap-paper] #shiyi-dock .cap-memory-tools[open] > div button {
+  margin: 0 !important;
+  padding: 8px 6px !important;
+  font-size: 12px !important;
+  text-align: center;
 }
 
-/* 11. iOS Inset Grouped 风格设置分组 (appearance.js) */
+/* 便签搜索框 + 分页条 + 卡片展开指示与操作条 */
+.cap-timeline-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.cap-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.cap-search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--note-muted);
+  pointer-events: none;
+  display: inline-flex;
+}
+.cap-search-box input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 32px 9px 34px;
+  border-radius: 12px;
+  border: 1px solid var(--note-line);
+  background: var(--note-card);
+  color: var(--note-fg);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.cap-search-box input:focus {
+  border-color: var(--note-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--note-accent) 18%, transparent);
+}
+.cap-search-clear {
+  position: absolute;
+  right: 6px;
+  width: 22px !important;
+  height: 22px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: color-mix(in srgb, var(--note-fg) 12%, transparent) !important;
+  color: var(--note-muted) !important;
+  display: inline-grid !important;
+  place-items: center;
+}
+body[data-cap-paper] #shiyi-dock .cap-story summary {
+  position: relative;
+  padding-right: 22px;
+}
+body[data-cap-paper] #shiyi-dock .cap-story summary::after {
+  content: "›";
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--note-muted);
+  opacity: 0.65;
+  transition: transform 0.24s var(--apple-spring);
+}
+body[data-cap-paper] #shiyi-dock .cap-story[open] summary::after {
+  transform: rotate(90deg);
+}
+body[data-cap-paper] #shiyi-dock .cap-story-song[data-empty="true"] {
+  opacity: 0.52;
+  font-size: 11px;
+}
+.cap-story-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cap-story-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px !important;
+  margin: 0 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  border-radius: 999px !important;
+}
+.cap-story-actions .cap-story-play {
+  background: color-mix(in srgb, var(--note-accent) 14%, var(--note-card)) !important;
+  color: var(--note-accent) !important;
+  border-color: color-mix(in srgb, var(--note-accent) 28%, transparent) !important;
+}
+.cap-timeline-pager,
+.cap-lib-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 12px 0 4px;
+}
+.cap-timeline-pager .cap-page-info {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--note-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 10. iOS Inset Grouped 外观设置 + 云端/本地曲库精修 */
 .cap-setting-group {
   margin: 10px 0;
   padding: 12px;
@@ -1851,16 +2289,13 @@ body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn:hover {
   transition: background 0.18s ease;
 }
 #capricorn-hub .cap-appearance details > summary::-webkit-details-marker,
-#shiyi-dock .cap-appearance details > summary::-webkit-details-marker {
-  display: none;
-}
+#shiyi-dock .cap-appearance details > summary::-webkit-details-marker { display: none; }
 #capricorn-hub .cap-appearance details > summary::after,
 #shiyi-dock .cap-appearance details > summary::after {
   content: "›";
   font-size: 16px;
   font-weight: 600;
   opacity: 0.55;
-  transform: rotate(0deg);
   transition: transform 0.24s var(--apple-spring);
 }
 #capricorn-hub .cap-appearance details[open] > summary::after,
@@ -1885,7 +2320,17 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   box-shadow: var(--note-shadow);
 }
 
-/* 12. 云端曲库 (cloud.js) 与本地曲库菜单 (music.js) */
+/* 正在播放歌曲在曲库中的高亮 */
+#capricorn-hub #sound-isle-root .si-track.is-playing {
+  background: var(--am-accent-soft);
+  border-color: transparent;
+  box-shadow: inset 3px 0 0 var(--am-accent);
+  padding-left: 10px;
+}
+#capricorn-hub #sound-isle-root .si-track.is-playing .si-song:first-child {
+  color: var(--am-accent);
+}
+
 #capricorn-hub .cap-content > section.cap-backup {
   padding: 14px;
   border-radius: 20px;
@@ -1941,7 +2386,6 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
 #capricorn-hub .cap-action-menu > summary::-webkit-details-marker { display: none; }
 #capricorn-hub .cap-action-menu > summary:hover { color: var(--glass-fg); }
 
-/* 13. 网易云与隐私设置 (netease.js) */
 #capricorn-hub .cap-settings .cap-backup > p:not([role="status"]) {
   font-size: 11px;
   line-height: 1.55;
@@ -1957,7 +2401,7 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
 }
 
-/* 14. 拾忆弹窗、留痕档案 (dossier.js) 与来源追溯 (memory-provenance.js) */
+/* 11. 拾忆原生弹窗（.shiyi-dialog）Apple 卡片化 + 完整深色模式自适应 */
 .shiyi-overlay {
   animation: capFadeIn 0.2s ease both;
 }
@@ -1965,7 +2409,7 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   animation: capApplePopIn 0.3s var(--apple-spring) both;
 }
 .shiyi-dialog .shiyi-history-item {
-  background: rgba(255, 255, 255, 0.56);
+  background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(120, 130, 150, 0.16) !important;
   border-radius: 16px;
   padding: 14px 16px !important;
@@ -2009,10 +2453,52 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   font: inherit;
   outline: none;
 }
-.shiyi-dialog select:focus {
-  border-color: rgba(22, 119, 242, 0.5);
-  background: rgba(255, 255, 255, 0.85);
+
+/* 夜间模式下的拾忆弹窗（消除刺眼白屏） */
+body[data-cap-paper-mode="dark"] .shiyi-overlay,
+body[data-cap-paper="ink"] .shiyi-overlay {
+  --sy-text: #f5f5f7;
+  --sy-muted: #a1a1a6;
+  background: rgba(0, 0, 0, 0.56) !important;
 }
+body[data-cap-paper-mode="dark"] .shiyi-dialog,
+body[data-cap-paper="ink"] .shiyi-dialog {
+  background: rgba(28, 28, 32, 0.88) !important;
+  color: #f5f5f7 !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+body[data-cap-paper-mode="dark"] .shiyi-dialog::before,
+body[data-cap-paper="ink"] .shiyi-dialog::before {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.08), transparent 45%) !important;
+}
+body[data-cap-paper-mode="dark"] .shiyi-dialog :is(input:not([type="checkbox"]), textarea, select),
+body[data-cap-paper="ink"] .shiyi-dialog :is(input:not([type="checkbox"]), textarea, select) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f5f5f7 !important;
+}
+body[data-cap-paper-mode="dark"] .shiyi-dialog button:not(.primary),
+body[data-cap-paper="ink"] .shiyi-dialog button:not(.primary) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #f5f5f7 !important;
+  box-shadow: none !important;
+}
+body[data-cap-paper-mode="dark"] .shiyi-dialog button:not(.primary):hover,
+body[data-cap-paper="ink"] .shiyi-dialog button:not(.primary):hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+}
+body[data-cap-paper-mode="dark"] .shiyi-dialog .shiyi-history-item,
+body[data-cap-paper="ink"] .shiyi-dialog .shiyi-history-item {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+body[data-cap-paper-mode="dark"] .cap-memory-provenance li,
+body[data-cap-paper="ink"] .cap-memory-provenance li {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
 .cap-memory-provenance {
   margin: 8px 0;
   padding: 6px 10px;
@@ -2046,35 +2532,7 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   background: rgba(255, 255, 255, 0.45);
 }
 
-/* 15. 主播放器精修 (now-playing.js) + 回响漫游 (recall.js) + 预设 (preset.js) */
-.cap-full-player .cap-art img {
-  opacity: 0;
-  transition: opacity 0.42s var(--apple-spring), transform 0.42s var(--apple-spring);
-}
-.cap-full-player .cap-art img.is-loaded {
-  opacity: 1;
-}
-.cap-full-player[data-size] .cap-grabber {
-  width: 36px;
-  height: 4px;
-  margin: 0 auto 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, currentColor 28%, transparent);
-  transition: background 0.2s ease, width 0.2s var(--apple-spring);
-}
-.cap-full-player[data-size] .cap-grabber:hover {
-  width: 48px;
-  background: color-mix(in srgb, currentColor 48%, transparent);
-}
-.cap-full-player .cap-queue-row {
-  border-radius: 14px;
-  padding: 6px 8px;
-  transition: background 0.18s ease, transform 0.16s var(--apple-tap);
-}
-.cap-full-player .cap-queue-row.is-current {
-  background: color-mix(in srgb, var(--am-accent, #fa243c) 22%, rgba(255, 255, 255, 0.12));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--am-accent, #fa243c) 38%, transparent);
-}
+/* 12. 回响 · 剧情漫游 (recall.js) + 预设面板 (preset.js) */
 .cap-recall {
   background: radial-gradient(circle at 50% 18%, #242b38, #12161f 85%) !important;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", system-ui, sans-serif !important;
@@ -2098,6 +2556,12 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   -webkit-backdrop-filter: blur(20px);
   border-radius: 16px;
   padding: 10px 14px;
+}
+.cap-recall .cap-recall-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
 }
 .cap-recall article {
   background: rgba(255, 255, 255, 0.07) !important;
@@ -2141,4 +2605,745 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidde
   border-radius: 12px;
   background: rgba(128, 128, 128, 0.08);
   border: 1px solid rgba(128, 128, 128, 0.16);
+}
+
+/* =========================================================
+   3D 高透水晶玻璃球灵动岛 · 升级版 (Ultra-Clear 52px + 缓慢呼吸流光)
+   ========================================================= */
+
+@keyframes capOrbSheen {
+  0%, 100% {
+    opacity: 0.88;
+    transform: rotate(-28deg) translate(0, 0) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(-23deg) translate(1.2px, -0.6px) scale(1.06);
+  }
+}
+
+@keyframes capOrbCaustic {
+  0%, 100% {
+    opacity: 0.72;
+    filter: hue-rotate(0deg) brightness(1);
+  }
+  50% {
+    opacity: 1;
+    filter: hue-rotate(14deg) brightness(1.12);
+  }
+}
+
+@keyframes capCapsuleSheen {
+  0%, 100% { opacity: 0.78; }
+  50% { opacity: 1; }
+}
+
+#capricorn-hub .cap-island {
+  --island-orb-size: 52px;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 999px;
+  min-width: var(--island-orb-size);
+  height: var(--island-orb-size);
+  padding: 0;
+  transition:
+    width 0.48s var(--apple-spring),
+    max-width 0.48s var(--apple-spring),
+    height 0.36s var(--apple-spring),
+    padding 0.44s var(--apple-spring),
+    transform 0.24s var(--apple-spring),
+    box-shadow 0.32s ease,
+    border-color 0.32s ease;
+}
+
+/* 歌词层始终置于高光层之上，保证日黑夜白锐利可读 */
+#capricorn-hub .cap-island .cap-island-lyric-wrap {
+  position: relative;
+  z-index: 3;
+}
+
+/* 专辑取色作为水晶球内部的柔和折光液 */
+#capricorn-hub .cap-island .cap-island-colors {
+  position: absolute;
+  inset: -4px;
+  z-index: 0;
+  border-radius: inherit;
+  filter: blur(11px) saturate(165%);
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+#capricorn-hub .cap-island[data-playing="false"] .cap-island-colors {
+  opacity: 0.1;
+}
+body[data-cap-look="light"] #capricorn-hub .cap-island[data-playing="true"] .cap-island-colors {
+  opacity: 0.2;
+}
+body[data-cap-look="dark"] #capricorn-hub .cap-island[data-playing="true"] .cap-island-colors {
+  opacity: 0.3;
+}
+
+/* --- 日间模式：高透 3D 水晶弹珠（中心极透，边缘强菲涅尔厚壁折射） --- */
+body[data-cap-look="light"] #capricorn-hub button.cap-island[data-playing] {
+  color: #0b0c10;
+  background:
+    radial-gradient(
+      circle at 30% 24%,
+      rgba(255, 255, 255, 0.72) 0%,
+      rgba(255, 255, 255, 0.12) 26%,
+      rgba(240, 248, 255, 0.03) 56%,
+      rgba(130, 168, 218, 0.2) 86%,
+      rgba(95, 138, 198, 0.32) 100%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 62% 90%,
+      rgba(255, 255, 255, 0.82) 0%,
+      rgba(182, 224, 255, 0.28) 44%,
+      transparent 72%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06);
+  -webkit-backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 1),
+    inset 3px 5px 10px rgba(255, 255, 255, 0.48),
+    inset -4px -8px 14px rgba(14, 34, 72, 0.22),
+    inset 0 -3px 7px rgba(255, 255, 255, 0.86),
+    0 14px 32px -4px rgba(15, 28, 56, 0.26),
+    0 4px 12px rgba(15, 28, 56, 0.12);
+}
+body[data-cap-look="light"] #capricorn-hub button.cap-island[data-playing="true"] {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.56) 0%,
+      rgba(246, 250, 255, 0.26) 50%,
+      rgba(222, 236, 252, 0.42) 100%
+    );
+  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.65);
+}
+
+/* --- 夜间模式：高透黑曜水晶球（中心透亮微暗，边缘月光焦散） --- */
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
+  color: #ffffff;
+  background:
+    radial-gradient(
+      circle at 30% 24%,
+      rgba(255, 255, 255, 0.36) 0%,
+      rgba(200, 226, 255, 0.08) 26%,
+      rgba(16, 20, 32, 0.22) 58%,
+      rgba(6, 9, 18, 0.58) 100%
+    ),
+    radial-gradient(
+      ellipse 70% 42% at 62% 90%,
+      rgba(170, 224, 255, 0.48) 0%,
+      rgba(120, 178, 255, 0.16) 46%,
+      transparent 74%
+    );
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05);
+  -webkit-backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.82),
+    inset 3px 5px 10px rgba(255, 255, 255, 0.18),
+    inset -5px -9px 18px rgba(0, 0, 0, 0.72),
+    inset 0 -3px 8px rgba(175, 226, 255, 0.46),
+    0 16px 36px -4px rgba(0, 0, 0, 0.6),
+    0 5px 14px rgba(0, 0, 0, 0.34);
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"] {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.16) 0%,
+      rgba(18, 20, 28, 0.42) 48%,
+      rgba(10, 12, 20, 0.6) 100%
+    );
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.82), 0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+/* --- 材质档位联动 --- */
+/* 液态玻璃：极低模糊，像真正透明水珠/水晶球清晰折射背后画面 */
+body[data-cap-material="glass"][data-cap-look="light"] #capricorn-hub button.cap-island[data-playing] {
+  backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08);
+  -webkit-backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08);
+}
+body[data-cap-material="glass"][data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
+  backdrop-filter: blur(3px) saturate(225%) brightness(1.1) contrast(1.06);
+  -webkit-backdrop-filter: blur(3px) saturate(225%) brightness(1.1) contrast(1.06);
+}
+/* Apple 磨砂玻璃：温润立体磨砂玻璃珠 */
+body[data-cap-material="frost"][data-cap-look="light"] #capricorn-hub button.cap-island[data-playing],
+body[data-cap-material="frost"][data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
+  backdrop-filter: blur(14px) saturate(195%) brightness(1.04);
+  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.04);
+}
+/* 银蓝手账主题专属冷月光折射 */
+body[data-cap-player-theme="silverblue"] #capricorn-hub button.cap-island[data-playing] {
+  border-color: rgba(215, 236, 255, 0.84);
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.98),
+    inset 3px 5px 10px rgba(220, 238, 255, 0.48),
+    inset -4px -8px 14px rgba(42, 74, 112, 0.26),
+    inset 0 -3px 7px rgba(186, 224, 255, 0.72),
+    0 14px 32px -4px rgba(38, 68, 108, 0.3);
+}
+
+/* --- 光学层 1 (::before)：球面顶部弯曲镜面高光 + 缓慢呼吸流光 --- */
+#capricorn-hub button.cap-island::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition:
+    top 0.36s var(--apple-spring),
+    left 0.36s var(--apple-spring),
+    right 0.36s var(--apple-spring),
+    width 0.36s var(--apple-spring),
+    height 0.36s var(--apple-spring),
+    opacity 0.28s ease;
+}
+
+/* 未播放：52px 球体专属弯曲穹顶高光弧 */
+#capricorn-hub button.cap-island[data-playing="false"]::before {
+  top: 4px;
+  left: 8px;
+  width: 24px;
+  height: 12px;
+  border-radius: 50%;
+  transform: rotate(-28deg);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.58) 52%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: blur(0.3px);
+  animation: capOrbSheen 7.5s ease-in-out infinite;
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="false"]::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(215, 238, 255, 0.42) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* 播放中：沿胶囊顶部的立体柱面流光带 */
+#capricorn-hub button.cap-island[data-playing="true"]::before {
+  top: 2px;
+  left: 16px;
+  right: 16px;
+  width: auto;
+  height: 44%;
+  border-radius: 999px 999px 50% 50%;
+  transform: none;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.72) 0%,
+    rgba(255, 255, 255, 0.14) 56%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: capCapsuleSheen 6.5s ease-in-out infinite;
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"]::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(215, 238, 255, 0.06) 56%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* --- 光学层 2 (::after)：副高光点 + 底部焦散光弧 + 微虹彩呼吸流光 --- */
+#capricorn-hub button.cap-island::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: opacity, filter;
+  animation: capOrbCaustic 6.5s ease-in-out infinite;
+}
+
+#capricorn-hub button.cap-island[data-playing="false"]::after {
+  background:
+    radial-gradient(circle 2.6px at 74% 24%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0) 100%),
+    radial-gradient(ellipse 60% 30% at 56% 93%, rgba(255, 255, 255, 0.92) 0%, rgba(168, 224, 255, 0.44) 52%, transparent 100%);
+  box-shadow:
+    inset 1.6px -1.6px 4px rgba(130, 214, 255, 0.52),
+    inset -1.6px 1.6px 4px rgba(255, 182, 232, 0.36);
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="false"]::after {
+  background:
+    radial-gradient(circle 2.5px at 74% 24%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%),
+    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(192, 236, 255, 0.7) 0%, rgba(125, 186, 255, 0.28) 54%, transparent 100%);
+  box-shadow:
+    inset 1.6px -1.6px 4px rgba(120, 208, 255, 0.46),
+    inset -1.6px 1.6px 4px rgba(214, 160, 255, 0.32);
+}
+
+#capricorn-hub button.cap-island[data-playing="true"]::after {
+  background:
+    radial-gradient(ellipse 70% 34% at 50% 100%, rgba(255, 255, 255, 0.56) 0%, rgba(170, 224, 255, 0.22) 54%, transparent 100%);
+  box-shadow:
+    inset 0 -1.2px 2.5px rgba(255, 255, 255, 0.58),
+    inset 1.2px 0 3.5px rgba(135, 214, 255, 0.34),
+    inset -1.2px 0 3.5px rgba(255, 184, 232, 0.26);
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"]::after {
+  background:
+    radial-gradient(ellipse 70% 34% at 50% 100%, rgba(185, 230, 255, 0.32) 0%, rgba(120, 178, 255, 0.1) 56%, transparent 100%);
+  box-shadow:
+    inset 0 -1.2px 2.5px rgba(185, 228, 255, 0.38),
+    inset 1.2px 0 3.5px rgba(120, 208, 255, 0.28),
+    inset -1.2px 0 3.5px rgba(214, 160, 255, 0.22);
+}
+
+/* --- 交互触感：悬停微浮、按压回弹、拖拽跟手 --- */
+#capricorn-hub button.cap-island:hover {
+  transform: translateY(-2px) scale(1.05);
+}
+#capricorn-hub button.cap-island:active:not([data-dragging="true"]) {
+  transform: scale(0.92);
+}
+#capricorn-hub button.cap-island[data-dragging="true"] {
+  transition: transform 0.14s var(--apple-spring), box-shadow 0.14s ease !important;
+  transform: scale(1.1);
+  cursor: grabbing;
+}
+#capricorn-hub button.cap-island[data-dragging="true"]::before,
+#capricorn-hub button.cap-island[data-dragging="true"]::after {
+  animation-play-state: paused;
+}
+
+/* --- 尺寸态：52px 水晶球 -> 48px/56px 立体水晶胶囊 --- */
+#capricorn-hub button.cap-island[data-playing="false"] {
+  width: var(--island-orb-size);
+  max-width: var(--island-orb-size);
+  padding: 0;
+}
+#capricorn-hub button.cap-island[data-playing="true"] {
+  width: auto;
+  height: 48px;
+  max-width: min(80vw, 350px);
+  padding: 0 20px;
+}
+#capricorn-hub button.cap-island[data-playing="true"][data-bilingual="true"] {
+  height: 56px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #capricorn-hub button.cap-island::before,
+  #capricorn-hub button.cap-island::after {
+    animation: none !important;
+  }
+}
+
+/* =========================================================
+   拾忆收起态 · 同款 3D 立体水晶玻璃耳扣 (Crystal Glass Ear-Tab)
+   ========================================================= */
+
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed {
+  width: 48px !important;
+  height: 50px !important;
+  right: max(0px, env(safe-area-inset-right)) !important;
+  overflow: visible !important;
+}
+
+/* 日间高透 3D 水晶玻璃耳扣（与灵动岛玻璃球同源光学结构） */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
+  position: relative !important;
+  isolation: isolate;
+  overflow: visible !important;
+  display: grid !important;
+  place-items: center !important;
+  width: 48px !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  padding: 0 2px 0 6px !important;
+  border-radius: 25px 0 0 25px !important;
+  color: #111318 !important;
+  background:
+    radial-gradient(
+      circle at 32% 24%,
+      rgba(255, 255, 255, 0.76) 0%,
+      rgba(255, 255, 255, 0.14) 28%,
+      rgba(240, 248, 255, 0.04) 56%,
+      rgba(130, 168, 218, 0.22) 88%,
+      rgba(95, 138, 198, 0.34) 100%
+    ),
+    radial-gradient(
+      ellipse 72% 44% at 62% 90%,
+      rgba(255, 255, 255, 0.84) 0%,
+      rgba(182, 224, 255, 0.3) 45%,
+      transparent 74%
+    ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.84) !important;
+  border-right: 0 !important;
+  backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06) !important;
+  -webkit-backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06) !important;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 1),
+    inset 3px 5px 10px rgba(255, 255, 255, 0.48),
+    inset -3px -7px 14px rgba(14, 34, 72, 0.2),
+    inset 0 -3px 7px rgba(255, 255, 255, 0.86),
+    -8px 12px 28px -4px rgba(15, 28, 56, 0.24),
+    -3px 4px 10px rgba(15, 28, 56, 0.1) !important;
+  transition:
+    transform 0.26s var(--apple-spring),
+    color 0.2s ease,
+    box-shadow 0.28s ease !important;
+}
+
+/* 夜间深邃黑曜 3D 水晶玻璃耳扣 */
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
+  color: #ffffff !important;
+  background:
+    radial-gradient(
+      circle at 32% 24%,
+      rgba(255, 255, 255, 0.38) 0%,
+      rgba(200, 226, 255, 0.08) 28%,
+      rgba(16, 20, 32, 0.24) 58%,
+      rgba(6, 9, 18, 0.6) 100%
+    ),
+    radial-gradient(
+      ellipse 72% 44% at 62% 90%,
+      rgba(170, 224, 255, 0.48) 0%,
+      rgba(120, 178, 255, 0.16) 46%,
+      transparent 74%
+    ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.38) !important;
+  border-right: 0 !important;
+  backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05) !important;
+  -webkit-backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05) !important;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.82),
+    inset 3px 5px 10px rgba(255, 255, 255, 0.18),
+    inset -4px -8px 16px rgba(0, 0, 0, 0.72),
+    inset 0 -3px 8px rgba(175, 226, 255, 0.46),
+    -10px 14px 32px -4px rgba(0, 0, 0, 0.56),
+    -3px 4px 12px rgba(0, 0, 0, 0.32) !important;
+}
+
+/* 与声屿材质档位同步（液态玻璃极透 / 磨砂玻璃温润） */
+body[data-cap-material="glass"][data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
+  backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08) !important;
+  -webkit-backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08) !important;
+}
+body[data-cap-material="frost"][data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
+  backdrop-filter: blur(14px) saturate(195%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.04) !important;
+}
+
+/* 图标置于光学高光层之上，保证锐利立体 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon {
+  position: relative;
+  z-index: 3;
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.55));
+  transition: transform 0.24s var(--apple-spring);
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon {
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.65));
+}
+
+/* 光学层 1 (::before)：耳扣顶部弧面主高光 + 缓慢呼吸流光 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  width: 22px;
+  height: 11px;
+  z-index: 2;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: rotate(-24deg);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 255, 255, 0.56) 52%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: blur(0.3px);
+  will-change: transform, opacity;
+  animation: capOrbSheen 7.5s ease-in-out infinite;
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(215, 238, 255, 0.4) 55%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+/* 光学层 2 (::after)：底部焦散反光 + 边缘微虹彩色散 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
+  content: "";
+  position: absolute;
+  inset: 1px 0 1px 1px;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(circle 2.4px at 76% 24%, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0) 100%),
+    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(255, 255, 255, 0.9) 0%, rgba(168, 224, 255, 0.42) 54%, transparent 100%);
+  box-shadow:
+    inset 1.5px -1.5px 4px rgba(130, 214, 255, 0.5),
+    inset 0 1.5px 4px rgba(255, 182, 232, 0.32);
+  will-change: opacity, filter;
+  animation: capOrbCaustic 6.5s ease-in-out infinite;
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
+  background:
+    radial-gradient(circle 2.3px at 76% 24%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%),
+    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(192, 236, 255, 0.68) 0%, rgba(125, 186, 255, 0.26) 54%, transparent 100%);
+  box-shadow:
+    inset 1.5px -1.5px 4px rgba(120, 208, 255, 0.44),
+    inset 0 1.5px 4px rgba(214, 160, 255, 0.28);
+}
+
+/* 待审核角标：iOS 悬浮红/主题色光点，不被裁切 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-shiyi-dot {
+  top: -2px;
+  left: -2px;
+  z-index: 5;
+  min-width: 17px;
+  height: 17px;
+  line-height: 17px;
+  font-size: 10px;
+  border: 1.5px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+}
+
+/* 交互触感：悬停左滑透出、按压回弹、拖动浮起不掉阴影 */
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover {
+  transform: translateX(-4px) scale(1.04) !important;
+  color: var(--note-accent) !important;
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 1),
+    inset 3px 5px 11px rgba(255, 255, 255, 0.56),
+    inset -3px -7px 14px rgba(14, 34, 72, 0.22),
+    inset 0 -3px 8px rgba(255, 255, 255, 0.92),
+    -12px 16px 34px -4px rgba(15, 28, 56, 0.28),
+    -4px 5px 12px rgba(15, 28, 56, 0.14) !important;
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover {
+  box-shadow:
+    inset 0 2px 3px rgba(255, 255, 255, 0.9),
+    inset 3px 5px 11px rgba(255, 255, 255, 0.24),
+    inset -4px -8px 16px rgba(0, 0, 0, 0.76),
+    inset 0 -3px 9px rgba(185, 232, 255, 0.54),
+    -12px 18px 38px -4px rgba(0, 0, 0, 0.64),
+    -4px 6px 14px rgba(0, 0, 0, 0.38) !important;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover .cap-icon {
+  transform: scale(1.08);
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:active:not([data-dragging="true"]) {
+  transform: translateX(-1px) scale(0.94) !important;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"] {
+  transition: transform 0.14s var(--apple-spring) !important;
+  transform: translateX(-4px) scale(1.08) !important;
+  cursor: grabbing;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"]::before,
+body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"]::after {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before,
+  body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
+    animation: none !important;
+  }
+}
+
+/* =========================================================
+   Apple SF Symbols 6 Hierarchical / Duotone 图标与按钮精雕层
+   ========================================================= */
+
+/* 1. 分层双色调光学深度（主描边 + 半透明玻璃底色 + 次级淡化层） */
+.cap-icon {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  pointer-events: none;
+  color: inherit;
+  transition: transform 0.22s var(--apple-spring), opacity 0.2s ease;
+}
+.cap-icon .cap-ico-tint {
+  fill: currentColor;
+  fill-opacity: 0.16;
+  stroke: none;
+  transition: fill-opacity 0.22s ease;
+}
+.cap-icon .cap-ico-dim {
+  opacity: 0.48;
+  transition: opacity 0.22s ease;
+}
+
+/* 按钮悬停/激活时的细腻光感响应 */
+:is(button, summary):hover:not(:disabled) > .cap-icon .cap-ico-tint,
+:is(button, summary)[aria-selected="true"] > .cap-icon .cap-ico-tint,
+:is(button, summary)[aria-pressed="true"] > .cap-icon .cap-ico-tint {
+  fill-opacity: 0.26;
+}
+:is(button, summary):hover:not(:disabled) > .cap-icon .cap-ico-dim,
+:is(button, summary)[aria-selected="true"] > .cap-icon .cap-ico-dim,
+:is(button, summary)[aria-pressed="true"] > .cap-icon .cap-ico-dim {
+  opacity: 0.82;
+}
+
+/* 2. 主弹窗顶栏圆形玻璃按钮（留白呼吸感） */
+#capricorn-hub nav > header {
+  gap: 8px;
+}
+#capricorn-hub nav > header button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-line);
+  background: var(--glass-control);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  display: inline-grid;
+  place-items: center;
+}
+#capricorn-hub nav > header button:hover {
+  background: var(--glass-control-hover);
+  transform: scale(1.05);
+}
+
+/* 3. 主播放器图标按钮精修（圆润光晕热区 + 居中对齐） */
+body .cap-full-player[data-size] .cap-fp-tools button,
+body .cap-full-player[data-size] .cap-fp-pill {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 50% !important;
+  transition: background-color 0.2s ease, transform 0.18s var(--apple-spring) !important;
+}
+body .cap-full-player[data-size] .cap-fp-tools button:hover,
+body .cap-full-player[data-size] .cap-fp-pill:hover {
+  background: color-mix(in srgb, currentColor 11%, transparent) !important;
+}
+body .cap-full-player[data-size] .cap-transport button {
+  width: 46px;
+  height: 46px;
+  border-radius: 50% !important;
+}
+body .cap-full-player[data-size] .cap-transport button:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent) !important;
+}
+body .cap-full-player[data-size] .cap-transport .cap-play-btn {
+  width: 58px;
+  height: 58px;
+  background: color-mix(in srgb, currentColor 11%, transparent) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, currentColor 18%, transparent) !important;
+}
+body .cap-full-player[data-size] .cap-transport .cap-play-btn:hover {
+  background: color-mix(in srgb, currentColor 18%, transparent) !important;
+  transform: scale(1.04);
+}
+body .cap-full-player[data-size] .cap-fp-tabs button {
+  width: 44px;
+  height: 38px;
+  min-width: 44px;
+  min-height: 38px;
+  border-radius: 12px !important;
+  opacity: 0.72;
+}
+body .cap-full-player[data-size] .cap-fp-tabs button:hover {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 9%, transparent) !important;
+}
+body .cap-full-player[data-size] .cap-fp-tabs button[aria-selected="true"] {
+  opacity: 1;
+  background: color-mix(in srgb, currentColor 16%, transparent) !important;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, currentColor 20%, transparent) !important;
+}
+
+/* 音质胶囊与音质勾选菜单对齐 */
+.cap-full-player .cap-quality {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.cap-quality-menu button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px !important;
+  text-align: left;
+  font-weight: 500;
+}
+.cap-quality-menu button.is-selected {
+  color: var(--am-accent, #fa243c) !important;
+  background: var(--am-accent-soft, rgba(250, 36, 60, 0.12)) !important;
+  font-weight: 600;
+}
+
+/* 队列行图标微调 */
+.cap-full-player .cap-queue-row button:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cap-full-player .cap-queue-row button:not(:first-child) {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+}
+
+/* 4. 拾忆侧边栏主导航胶囊 + 卡片微图标对齐 */
+body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+body[data-cap-paper] #shiyi-dock .cap-story-star {
+  display: inline-flex;
+  vertical-align: -1px;
+  margin-right: 4px;
+  color: var(--note-accent, #d9a043);
+}
+body[data-cap-paper] #shiyi-dock .cap-story-song {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+}
+
+/* 5. 回响漫游按钮图标对齐 */
+.cap-recall header strong,
+.cap-recall button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* 6. 曲库折叠菜单图标间距 */
+#capricorn-hub .cap-action-menu > summary {
+  gap: 6px;
 }
