@@ -1,0 +1,8 @@
+摩羯座全局隐藏正则（仅显示，不删除原始消息）
+
+1. 表格：/<table\s*>[\s\S]*?<\/table\s*>/g
+2. 摘要：/<summary\s*>[\s\S]*?<\/summary\s*>/g
+3. BGM：/<bgm\s*>[\s\S]*?<\/bgm\s*>/g
+
+三条规则均为 AI 输出、仅格式显示（Markdown only）、非 Prompt only，替换为空字符串。
+如宿主无法自动安装，可手动添加。不要设置为发送给 AI 前删除。

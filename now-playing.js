@@ -18,7 +18,7 @@ export function parseLrc(text) {
   return out.sort((a, b) => a.time - b.time);
 }
 
-const ICONS = Object.fromEntries(["prev","next","play","pause","stop","lyrics","queue"].map(k=>[k,icon(k,k==="play"||k==="pause"||k==="stop"?28:k==="prev"||k==="next"?23:20)]));
+const ICONS = Object.fromEntries(["prev","next","play","pause","stop","lyrics","queue"].map(k=>[k,icon(k,k==="play"||k==="pause"?32:24)]));
 
 export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
   const panel = D.createElement('section');
@@ -40,24 +40,22 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   panel.innerHTML = `
     <div class="cap-ambient" aria-hidden="true"><img alt="" hidden></div>
     <div class="cap-fp-shell">
-      <div class="cap-grabber" data-close title="收起播放器" aria-hidden="true"></div>
+      
       <header>
-        <button data-close class="cap-fp-pill" aria-label="收起播放器">${icon("down",19)}</button>
+        <button data-close class="cap-fp-pill" aria-label="收起播放器">${icon("down")}</button>
         <span data-heading class="cap-fp-heading">声屿</span>
-        <div class="cap-fp-tools"><button data-size-switch aria-label="切换尺寸">${icon("size",18)}</button><button data-settings aria-label="设置">${icon("settings",18)}</button></div>
+        <div class="cap-fp-tools"><button data-size-switch aria-label="切换尺寸" >${icon("size")}</button><button data-settings aria-label="设置">${icon("settings")}</button></div>
       </header>
-      <div class="cap-hero">
-        <div class="cap-art" title="点击切换播放视图">
-          <img alt="专辑封面" hidden>
-          <span>${icon("music",32)}</span>
+      <div class="cap-art">
+        <img alt="专辑封面" hidden>
+        <span>${icon("music",32)}</span>
+      </div>
+      <div class="cap-meta">
+        <div class="cap-meta-text">
+          <h2></h2>
+          <p data-artist></p>
         </div>
-        <div class="cap-meta">
-          <div class="cap-meta-text">
-            <h2></h2>
-            <p data-artist></p>
-          </div>
-          <button type="button" class="cap-badge cap-quality" data-quality aria-label="切换音质" aria-expanded="false"></button>
-        </div>
+        <button type="button" class="cap-badge cap-quality" data-quality aria-label="切换音质" aria-expanded="false"></button>
       </div>
       <p data-status role="status" class="cap-fp-status"></p><p data-current-lyric class="cap-current-lyric"></p>
       <div class="cap-scrubber">
@@ -75,9 +73,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       <div class="cap-volume"><span aria-hidden="true">${icon("volumeLow",16)}</span><input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量"><span aria-hidden="true">${icon("volumeHigh",19)}</span></div><small data-volume-note class="cap-volume-note"></small><small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>
       <div data-detail class="cap-fp-detail" hidden></div>
       <nav class="cap-fp-tabs">
-        <button data-mode aria-label="播放模式">${icon("repeat",20)}</button><button data-lyrics aria-label="歌词" aria-selected="false">${ICONS.lyrics}</button>
+        <button data-mode aria-label="播放模式">${icon("repeat")}</button><button data-lyrics aria-label="歌词" aria-selected="false">${ICONS.lyrics}</button>
         <button data-queue aria-label="播放队列" aria-selected="false">${ICONS.queue}</button>
-      <button data-library aria-label="曲库">${icon("library",20)}</button></nav>
+      <button data-library aria-label="曲库">${icon("library")}</button></nav>
     </div>
   `;
   D.body.append(panel);
@@ -88,17 +86,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   const qualityButton=q('[data-quality]');
   const qualityMenu=D.createElement('div');qualityMenu.className='cap-quality-menu';qualityMenu.hidden=true;qualityButton.after(qualityMenu);
   function closeQuality(){qualityMenu.hidden=true;qualityButton.setAttribute('aria-expanded','false')}
-  qualityButton.onclick=()=>{if(!qualityMenu.hidden){closeQuality();return}qualityMenu.replaceChildren();for(const [level,label] of Object.entries(qualityLabels)){const b=D.createElement('button');b.type='button';const active=state().preferredQuality===level;b.className=active?'is-selected':'';const t=D.createElement('span');t.textContent=label;b.append(t);if(active)b.insertAdjacentHTML('beforeend',icon('check',14));b.onclick=()=>{closeQuality();quality?.(level)};qualityMenu.append(b)}qualityMenu.hidden=false;qualityButton.setAttribute('aria-expanded','true')};
+  qualityButton.onclick=()=>{if(!qualityMenu.hidden){closeQuality();return}qualityMenu.replaceChildren();for(const [level,label] of Object.entries(qualityLabels)){const b=D.createElement('button');b.type='button';b.textContent=label+(state().preferredQuality===level?'  ✓':'');b.onclick=()=>{closeQuality();quality?.(level)};qualityMenu.append(b)}qualityMenu.hidden=false;qualityButton.setAttribute('aria-expanded','true')};
   panel.addEventListener('click',e=>{if(!qualityMenu.contains(e.target)&&!qualityButton.contains(e.target))closeQuality()});
-  panel.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      if (!qualityMenu.hidden) closeQuality();
-      else closePanel();
-    } else if (e.key === ' ' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target?.tagName)) {
-      e.preventDefault();
-      toggle?.();
-    }
-  });
+  panel.addEventListener('keydown',e=>{if(e.key==='Escape')closeQuality()});
   const sizes = ['compact','half','large'];
   let size = 'half'; try { const saved = W.localStorage.getItem('capricorn_player_size'); if(sizes.includes(saved)) size=saved; } catch {}
   panel.dataset.size=size;
@@ -110,22 +100,13 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   function openAux(t){closePanel();shared.openPlayerAux?.(t);}
   function setTab(t){showTab(tab===t?'':t);} function showTab(t){tab=t;detail.hidden=!tab;panel.dataset.detail=tab;updateTabState();if(tab==='lyrics'){void loadLyrics(true);drawLyrics();}if(tab==='queue'){queueSignature='';queuePage=Math.max(0,Math.floor(state().queueIndex/queuePageSize));drawQueue();}}
   q('[data-size-switch]').onclick=setSize;
-  q('.cap-art').onclick=()=>{
-    if(size!=='large'){
-      const before=q('.cap-art').getBoundingClientRect();
-      size='large';panel.dataset.size=size;fitViewport();showTab('lyrics');
-      try{W.localStorage.setItem('capricorn_player_size',size)}catch{}
-      animateFrom(before,q('.cap-art'));
-    }
-  };
   q('[data-settings]').onclick=()=>openAux('settings');
   q('[data-library]').onclick=()=>openAux('library');
   q('[data-mode]').onclick=()=>{mode?.();refresh();};
   const volumeSlider=q('[data-volume]');let volumeDragging=false;
   volumeSlider.onpointerdown=()=>{volumeDragging=true};
-  const paintVol=v=>volumeSlider.style.setProperty('--cap-vol-progress',Math.round(Math.max(0,Math.min(1,Number(v)||0))*100)+'%');
-  volumeSlider.oninput=e=>{paintVol(e.target.value);volume?.(Number(e.target.value));};
-  volumeSlider.onchange=e=>{paintVol(e.target.value);volume?.(Number(e.target.value));volumeDragging=false};
+  volumeSlider.oninput=e=>volume?.(Number(e.target.value));
+  volumeSlider.onchange=e=>{volume?.(Number(e.target.value));volumeDragging=false};
   volumeSlider.onpointerup=volumeSlider.onpointercancel=volumeSlider.onblur=()=>{volumeDragging=false};
 
   const img = q('.cap-art img');
@@ -207,7 +188,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     panel.style.removeProperty('--cap-art-color');
   };
   img.onload=()=>{
-    img.classList.add('is-loaded');
     cancelColorProbe();
     const url=img.src;
     const probe=new W.Image();
@@ -246,7 +226,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const b = D.createElement('button');
     const controls = {'↑':['up','上移'],'↓':['arrowdown','下移'],'×':['close','移除']};
     if (Object.hasOwn(controls,label)) {
-      b.innerHTML=icon(controls[label][0],15);
+      b.innerHTML=icon(controls[label][0],18);
       b.setAttribute('aria-label',controls[label][1]);
     } else b.textContent = label;
     b.onclick = fn;
@@ -290,7 +270,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       const track=queue[i];
       const row=D.createElement('div');
       row.className='cap-queue-row'+(i===queueIndex?' is-current':'');
-      const name=button(track.title+' — '+track.artist,()=>play(i));if(i===queueIndex)name.insertAdjacentHTML('afterbegin',icon('music',13)+' ');
+      const name=button((i===queueIndex?'♫ ':'')+track.title+' — '+track.artist,()=>play(i));
       const up=button('↑',()=>move(i,i-1)),down=button('↓',()=>move(i,i+1)),del=button('×',()=>remove(i));
       up.disabled=resolving||i===0;
       down.disabled=resolving||i===queue.length-1;
@@ -392,7 +372,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const currentLine=q('[data-current-lyric]');
     if(currentLine.textContent!==text)currentLine.textContent=text;
     const {userVolume,volumeSupported}=state();
-    if(!volumeDragging){const v=userVolume??audio.volume;volumeSlider.value=v;paintVol(v);}
+    if(!volumeDragging)volumeSlider.value=userVolume??audio.volume;
     q('[data-volume-note]').textContent=volumeSupported===false?'当前音源仅支持系统音量键':'';
     volumeSlider.title=volumeSupported===false?'当前音源可能需要系统音量键':'音量';
     if(tab!=='lyrics'||!lines.length||index===active)return;
@@ -418,16 +398,15 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     q('[data-status]').textContent=statusText||'';
     q('h2').textContent=track?.title||'尚未播放';
     q('[data-artist]').textContent=track?.artist||'选择一首歌曲';
-    qualityButton.replaceChildren();const ql=D.createElement('span');ql.textContent=qualityLabels[actualQuality]||actualQuality||'音质';qualityButton.append(ql);qualityButton.insertAdjacentHTML('beforeend',icon('down',12));
+    qualityButton.textContent=(qualityLabels[actualQuality]||actualQuality||'音质')+' ⌄';
     qualityButton.disabled=resolving||!canChangeQuality;
     if(qualityButton.disabled)closeQuality();
     q('[data-toggle]').innerHTML=resolving?ICONS.stop:audio.paused?ICONS.play:ICONS.pause;
     panel.dataset.playing=String(!audio.paused);
-    panel.dataset.resolving=String(!!resolving);
     const modeButton=q('[data-mode]');
     const modeIcon=playMode==='shuffle'?'shuffle':playMode==='one'?'one':'repeat';
     if(modeButton.dataset.icon!==modeIcon){
-      modeButton.innerHTML=icon(modeIcon,20);
+      modeButton.innerHTML=icon(modeIcon);
       modeButton.dataset.icon=modeIcon;
       modeButton.title=playMode==='shuffle'?'随机播放':playMode==='one'?'单曲循环':'顺序播放';
       modeButton.setAttribute('aria-label',modeButton.title+'，点击切换');
@@ -436,7 +415,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     if(id!==identity){
       identity=id;
       cancelColorProbe();
-      img.classList.remove('is-loaded');
       img.hidden=true;
       img.removeAttribute('src');
       img.alt='专辑封面';

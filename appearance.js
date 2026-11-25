@@ -104,107 +104,32 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         </label>
       </div>
 
-      <details class="cap-bg-customizer">
-        <summary>背景与封面</summary>
-
-        <div class="cap-setting-group">
-          <div class="cap-setting-group-title">背景材质</div>
-          <div class="cap-appearance-grid">
-            <label>背景来源
-              <select data-pref="bgSource">
-                <option value="auto">主题默认 / 已导入图片</option>
-                <option value="album">专辑封面铺满</option>
-                <option value="color">专辑取色</option>
-                <option value="custom">自定义图片</option>
-              </select>
-            </label>
-            <label>背景饱和度 (<span data-val="bgSaturation"></span>%)
-              <input type="range" min="0" max="200" data-pref-range="bgSaturation">
-            </label>
-            <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
-              <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
-            </label>
-            <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
-              <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
-            </label>
-            <label>明暗遮罩 (<span data-val="bgShade"></span>%)
-              <input type="range" min="0" max="100" data-pref-range="bgShade">
-            </label>
+      <details class="cap-bg-customizer"><summary>背景与封面</summary>
+<label>背景来源<select data-pref="bgSource"><option value="auto">主题默认 / 已导入图片</option><option value="album">专辑封面铺满</option><option value="color">专辑取色</option><option value="custom">自定义图片</option></select></label>
+<label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
+<label>图片填充<select data-pref="coverFit"><option value="cover">铺满</option><option value="contain">完整显示</option></select></label><label>底板<select data-pref="coverPlate"><option value="none">无</option><option value="solid">纯色</option><option value="glass">玻璃</option></select></label><label>大卡片封面大小 (<span data-val="coverSize"></span>)<input type="range" min="40" max="320" data-pref-range="coverSize"></label><label>内边距 (<span data-val="coverPadding"></span>)<input type="range" min="0" max="40" data-pref-range="coverPadding"></label><label>边框透明度 (<span data-val="coverOpacity"></span>)<input type="range" min="0" max="100" data-pref-range="coverOpacity"></label><label>边框样式<select data-pref="coverBorderStyle"><option value="solid">实线</option><option value="dashed">虚线</option><option value="double">双线</option></select></label>
+<label>边框颜色<input type="color" data-cover-color></label>
+<label>圆角 (<span data-val="coverRadius"></span>)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label><label>边框宽度 (<span data-val="coverBorder"></span>)<input type="range" min="0" max="12" data-pref-range="coverBorder"></label><label>阴影 (<span data-val="coverShadow"></span>)<input type="range" min="0" max="40" data-pref-range="coverShadow"></label><label>背景饱和度 (<span data-val="bgSaturation"></span>)<input type="range" min="0" max="200" data-pref-range="bgSaturation"></label><label>明暗遮罩 (<span data-val="bgShade"></span>)<input type="range" min="0" max="100" data-pref-range="bgShade"></label>
+        <label>自定义背景色 / 渐变（留空使用主题默认）
+          <div class="cap-color-row">
+            <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
+            <input type="text" data-pref-text="playerBgColor" placeholder="如 #1a1d2e 或 linear-gradient(135deg,#1d2b64,#f8cdda)">
+            <button type="button" data-clear-bg-color title="清除自定义背景色">清除</button>
           </div>
-          <label>自定义背景色 / 渐变
-            <div class="cap-color-row">
-              <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
-              <input type="text" data-pref-text="playerBgColor" placeholder="如 #1a1d2e 或 linear-gradient(...)">
-              <button type="button" data-clear-bg-color title="清除自定义背景色">清除</button>
-            </div>
+        </label>
+        <div class="cap-bg-image-row">
+          <button type="button" data-upload-bg>上传背景图</button>
+          <button type="button" data-clear-bg>移除背景图</button>
+          <input type="file" accept="image/*" data-bg-file hidden>
+          <span class="cap-inline-tip" data-bg-tip></span>
+        </div>
+        <div class="cap-appearance-grid">
+          <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
+            <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
           </label>
-          <div class="cap-bg-image-row">
-            <button type="button" data-upload-bg class="cap-btn-primary">上传背景图</button>
-            <button type="button" data-clear-bg>移除背景图</button>
-            <input type="file" accept="image/*" data-bg-file hidden>
-            <span class="cap-inline-tip" data-bg-tip></span>
-          </div>
-        </div>
-
-        <div class="cap-setting-group">
-          <div class="cap-setting-group-title">封面造型</div>
-          <div class="cap-appearance-grid">
-            <label>封面形状
-              <select data-pref="coverShape">
-                <option value="auto">主题默认</option>
-                <option value="square">方形</option>
-                <option value="rounded">圆角</option>
-                <option value="circle">圆形</option>
-              </select>
-            </label>
-            <label>图片填充
-              <select data-pref="coverFit">
-                <option value="cover">铺满</option>
-                <option value="contain">完整显示</option>
-              </select>
-            </label>
-            <label>封面底板
-              <select data-pref="coverPlate">
-                <option value="none">无</option>
-                <option value="solid">纯色</option>
-                <option value="glass">玻璃</option>
-              </select>
-            </label>
-            <label>大卡片尺寸 (<span data-val="coverSize"></span>px)
-              <input type="range" min="40" max="320" data-pref-range="coverSize">
-            </label>
-            <label>圆角 (<span data-val="coverRadius"></span>px)
-              <input type="range" min="0" max="50" data-pref-range="coverRadius">
-            </label>
-            <label>内边距 (<span data-val="coverPadding"></span>px)
-              <input type="range" min="0" max="40" data-pref-range="coverPadding">
-            </label>
-          </div>
-        </div>
-
-        <div class="cap-setting-group">
-          <div class="cap-setting-group-title">边框与光影</div>
-          <div class="cap-appearance-grid">
-            <label>边框样式
-              <select data-pref="coverBorderStyle">
-                <option value="solid">实线</option>
-                <option value="dashed">虚线</option>
-                <option value="double">双线</option>
-              </select>
-            </label>
-            <label>边框颜色
-              <input type="color" data-cover-color>
-            </label>
-            <label>边框宽度 (<span data-val="coverBorder"></span>px)
-              <input type="range" min="0" max="12" data-pref-range="coverBorder">
-            </label>
-            <label>边框透明度 (<span data-val="coverOpacity"></span>%)
-              <input type="range" min="0" max="100" data-pref-range="coverOpacity">
-            </label>
-            <label>投影强度 (<span data-val="coverShadow"></span>px)
-              <input type="range" min="0" max="40" data-pref-range="coverShadow">
-            </label>
-          </div>
+          <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
+            <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
+          </label>
         </div>
       </details>
 
