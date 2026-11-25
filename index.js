@@ -31,7 +31,7 @@ import { createSpotlight } from './ui-spotlight.js';
 
 const W = window, D = document;
 W.__capricornExtension?.destroy?.();
-if (W.navigator.deviceMemory > 0 && W.navigator.deviceMemory <= 4) D.body.dataset.capVisualLite = '';
+delete D.body.dataset.capVisualLite;
 const flags = { memory: true, music: true };
 try {
   const x = JSON.parse(W.localStorage.getItem('capricorn_modules') || '{}');

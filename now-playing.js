@@ -29,7 +29,7 @@ const ICONS = {
 };
 const sizeLabels = { compact: '悬浮卡片', half: '半屏', large: '大半屏' };
 
-export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
+export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, retryVolume, mode, quality }) {
   const panel = D.createElement('section');
   panel.className = 'cap-full-player cap-player-layout';
   const android = /Android/i.test(W.navigator.userAgent);
@@ -38,8 +38,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   const mobile = android || Boolean(coarse && coarse.matches);
   const motion = media('(prefers-reduced-motion: reduce)');
   const transparency = media('(prefers-reduced-transparency: reduce)');
-  const reduce = () => Boolean((motion && motion.matches) || (transparency && transparency.matches) ||
-    (W.navigator.deviceMemory > 0 && W.navigator.deviceMemory <= 4));
+  const reduce = () => false; // Material remains full fidelity; motion preferences handled separately.
   let viewportFrame = 0;
   let observedComposer = null;
   const composerObserver = W.ResizeObserver ? new W.ResizeObserver(scheduleViewport) : null;
@@ -68,7 +67,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       }
     }
     const rect = playerRect(box, panel.dataset.size, insets, panel.dataset.bilingual === 'true');
-    panel.dataset.short = String(rect.h < 310);
+    panel.dataset.short = String(rect.h < 375);
     panel.style.setProperty('--cap-rect-x', rect.x + 'px');
     panel.style.setProperty('--cap-rect-y', rect.y + 'px');
     panel.style.setProperty('--cap-rect-w', rect.w + 'px');
@@ -149,6 +148,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
             '<output class="cap-vol-pct" data-volume-value></output>' +
           '</div>' +
           '<small data-volume-note class="cap-volume-note"></small>' +
+          '<button type="button" data-volume-retry hidden>重试应用内音量</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -372,25 +372,27 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   function updateVolume() {
     const audioState = state();
     const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
-    if (value > 0.01) lastNonZeroVol = value;
-    const percent = Math.round(value * 100) + '%';
+    if (value > 0) lastNonZeroVol = value;
+    const supports = audioState.volumeSupported !== false;
+    const percent = supports ? Math.round(value * 100) + '%' : value === 0 ? '静音' : '系统';
     if (!volumeDragging && Number(volumeSlider.value) !== Number(value)) volumeSlider.value = value;
-    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== percent) volumeSlider.style.setProperty('--cap-vol-progress', percent);
+    const progress = Math.round(value * 100) + '%';
+    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== progress) volumeSlider.style.setProperty('--cap-vol-progress', progress);
     if (volumeValue.textContent !== percent) {
       volumeValue.textContent = percent;
       volumeSlider.setAttribute('aria-valuetext', percent);
       volumeButton.title = '音量 ' + percent;
     }
-    const supports = audioState.volumeSupported !== false;
-    const hint = supports ? '' : '当前通道仅支持静音／恢复；滑块保留目标音量，实际音量请用设备音量键。iOS 可关闭后台播放优先后切歌。';
+    const hint = supports ? '' : '当前通道仅支持静音／恢复；实际音量请用设备音量键。可重试应用内音量（会关闭后台播放优先并重新加载当前音源）。';
     if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
     const sliderTitle = supports ? '音量' : '目标音量（当前通道实际音量由系统控制）';
     if (volumeSlider.title !== sliderTitle) volumeSlider.title = sliderTitle;
     // Keep a functional 0/100 mute toggle in the fallback instead of displaying
     // a disabled control or a misleading continuous-volume slider.
-    if (volumeSlider.disabled) volumeSlider.disabled = false;
+    volumeSlider.disabled = !supports;
+    q('[data-volume-retry]').hidden = !audioState.canRetryVolume;
     if (volumeSlider.step !== '0.01') volumeSlider.step = '0.01';
-    if (volumeSlider.getAttribute('aria-disabled') !== 'false') volumeSlider.setAttribute('aria-disabled', 'false');
+    volumeSlider.setAttribute('aria-disabled', String(!supports));
     const muted = String(value === 0);
     if (volumeButton.dataset.muted !== muted) {
       volumeButton.dataset.muted = muted;
@@ -413,20 +415,21 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     openSurface({
       anchor: volumeButton, role: 'dialog', label: '音量', content: volumeContent,
       className: 'cap-volume-popover',
-      initialFocus: volumeSlider, minWidth: 248, onClose: () => { volumeDragging = false; }
+      initialFocus: volumeSlider, minWidth: 248, onClose: endVolDrag
     }, () => showInline(volumeButton, '音量', volumeContent, () => {
-      volumeDragging = false;
+      endVolDrag();
       volumeStore.append(volumeContent);
     }));
   };
   if (volMuteBtn) {
     volMuteBtn.onclick = () => {
-      const cur = Number(volumeSlider.value);
-      const nextVol = cur <= 0.01 ? Math.max(0.2, lastNonZeroVol || 0.8) : 0;
+      const cur = state().userVolume ?? Number(volumeSlider.value);
+      const nextVol = cur === 0 ? (lastNonZeroVol || 0.8) : 0;
       volumeSlider.value = String(nextVol);
       applyVolume();
     };
   }
+  q('[data-volume-retry]').onclick = () => retryVolume?.();
   volumeSlider.onpointerdown = () => { volumeDragging = true; volumeContent.dataset.dragging = 'true'; };
   volumeSlider.oninput = applyVolume;
   const endVolDrag = () => { volumeDragging = false; delete volumeContent.dataset.dragging; };
