@@ -1,6 +1,7 @@
 import { hasOwn } from './compat.js';
 import {fuzzy} from './traces.js';
 import { appendMemoryProvenance } from './memory-provenance.js';
+import { icon } from './icons.js';
 
 export function createDossier({D,modal,identity,check,archive,archivePatch,serial,jumpSource,notice,read}) {
  const kinds=['人物','关系','伏笔','事件','成长','物品','地点'];
@@ -53,16 +54,60 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      if (!fuzzy(`${row.title} ${row.people} ${row.body} ${row.status}`, query)) continue;
      const stale = (row.sources || []).some(key => !hasOwn(ledger.rows, key) && !hasOwn(summaries, key));
      if (filter.value !== '全部' && filter.value !== row.kind && !(filter.value === '来源失效' && stale)) continue;
+     const pinned = pins.includes(row.id);
      const card = el('div', list);
-     card.className = 'shiyi-history-item';
-     el('strong', card, `${row.kind} · ${row.title}${row.auto ? ' · 随层提取' : ''}`);
-     el('p', card, `${row.people || ''} ${row.kind === '伏笔' ? row.status : ''}${stale ? ' · 来源失效' : ''}`);
-     el('p', card, row.body).style.whiteSpace = 'pre-wrap';
+     card.className = 'shiyi-history-item cap-dossier-card';
+     if (pinned) card.dataset.pinned = 'true';
+     if (stale) card.dataset.stale = 'true';
+
+     const meta = el('div', card);
+     meta.className = 'cap-dossier-meta';
+     const kindTag = el('span', meta, row.kind);
+     kindTag.className = 'cap-dossier-kind';
+     if (row.auto) {
+      const autoTag = el('span', meta, '随层提取');
+      autoTag.className = 'cap-dossier-tag';
+     }
+     if (row.kind === '伏笔' && row.status) {
+      const statusTag = el('span', meta, row.status);
+      statusTag.className = 'cap-dossier-status';
+      statusTag.dataset.status = row.status;
+     }
+     if (stale) {
+      const staleTag = el('span', meta, '来源失效');
+      staleTag.className = 'cap-dossier-stale';
+     }
+
+     const titleEl = el('strong', card, row.title);
+     titleEl.className = 'cap-dossier-title';
+
+     if (row.people) {
+      const peopleEl = el('div', card);
+      peopleEl.className = 'cap-dossier-people';
+      peopleEl.innerHTML = icon('users', 13);
+      peopleEl.append(D.createTextNode(row.people));
+     }
+
+     if (row.body) {
+      const bodyEl = el('p', card, row.body);
+      bodyEl.className = 'cap-dossier-body';
+     }
+
      const origin = manualIds.has(row.id) ? 'manual' : 'derived';
      appendMemoryProvenance(D, card, () => identity() === id && view.provenance(
       row.kind === '伏笔' ? 'foreshadow' : 'dossier', row.id, { origin }), jumpSource);
 
-     const pin = el('button', card, pins.includes(row.id) ? '取消核心' : '核心记忆');
+     const actions = el('div', card);
+     actions.className = 'cap-dossier-actions';
+     const pin = el('button', actions);
+     pin.type = 'button';
+     pin.className = 'cap-dossier-pin';
+     const syncPin = isPinned => {
+      card.dataset.pinned = isPinned ? 'true' : 'false';
+      pin.setAttribute('aria-pressed', String(isPinned));
+      pin.innerHTML = `${icon('star', 13, { weight: isPinned ? 'fill' : 'regular' })}<span>${isPinned ? '核心记忆' : '设为核心'}</span>`;
+     };
+     syncPin(pinned);
      pin.onclick = async () => {
       await serial(async () => {
        check(id);
@@ -71,10 +116,12 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
        else next.add(row.id);
        archivePatch({ weavePins: [...next] });
       });
-      pin.textContent = (archive().weavePins || []).includes(row.id) ? '取消核心' : '核心记忆';
+      syncPin((archive().weavePins || []).includes(row.id));
      };
-     for (const [label, type] of [['编辑', 'edit'], ['删除', 'delete']]) {
-      const button = el('button', card, label);
+     for (const [label, type, glyph] of [['编辑', 'edit', 'edit'], ['删除', 'delete', 'remove']]) {
+      const button = el('button', actions);
+      button.type = 'button';
+      button.innerHTML = `${icon(glyph, 13)}<span>${label}</span>`;
       if (type === 'delete') button.className = 'shiyi-item-delete';
       button.onclick = () => {
        action = { type, row };

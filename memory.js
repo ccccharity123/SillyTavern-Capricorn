@@ -343,18 +343,33 @@ export async function startMemory(shared) {
       actions.className = 'shiyi-actions';
       dialog.append(heading, content, actions);
       overlay.append(dialog);
+      const dismissButton = buttons.find(b => b.value === 'cancel' || b.value === 'close' || b.value === false);
+      const onKey = event => {
+        if (event.key !== 'Escape' || event.defaultPrevented) return;
+        if (hostDocument.querySelector('.cap-ui-portal')) return;
+        if (dismissButton) {
+          event.preventDefault();
+          finish(dismissButton.value);
+        }
+      };
       let adapter, finished = false;
       const finish = value => {
         if (finished) return;
         finished = true;
+        hostDocument.removeEventListener('keydown', onKey);
         if (adapter) adapter.destroy();
         overlay.remove();
         state.open = false;
         state.closeModal = null;
         resolve(value);
       };
-      state.closeModal = () => finish('cancel');
+      state.closeModal = () => finish(dismissButton ? dismissButton.value : 'cancel');
       if (registerFinish) registerFinish(finish);
+      if (dismissButton) {
+        overlay.addEventListener('pointerdown', event => {
+          if (event.target === overlay) finish(dismissButton.value);
+        });
+      }
       buttons.forEach(({label, value, kind}) => {
         const button = hostDocument.createElement('button');
         button.type = 'button';
@@ -363,6 +378,7 @@ export async function startMemory(shared) {
         button.onclick = () => finish(value);
         actions.append(button);
       });
+      hostDocument.addEventListener('keydown', onKey);
       hostDocument.body.append(overlay);
       state.open = true;
       try { adapter = mountSelects(overlay); }
@@ -871,7 +887,7 @@ export async function startMemory(shared) {
     const chat=identity();if(!chat)return notice('请先打开聊天');
     let plan;try{plan=archivePlan();}catch(e){return error(e);}
     const box=hostDocument.createElement('div');
-    box.innerHTML=`<p>已核对摘要：${plan.confirmed} 条</p><p>最近正文保护起点：第 ${plan.protectedFrom} 楼</p><p>可手动隐藏：${plan.eligible.length} 条消息</p><p class="shiyi-muted">${plan.unreviewed?'检测到未审核摘要，本次禁止归档。':'仅在点击确认后隐藏；原始聊天不删除。请先备份聊天。'}隐藏消息是否从最终模型上下文排除，需要在你的酒馆版本中实际验证。</p>`;
+    box.innerHTML=`<div class="shiyi-stat-grid"><div class="shiyi-stat-card"><strong>${plan.confirmed}</strong><span>已核对摘要</span></div><div class="shiyi-stat-card"><strong>#${plan.protectedFrom}</strong><span>正文保护起点</span></div><div class="shiyi-stat-card"><strong>${plan.eligible.length}</strong><span>可隐藏消息</span></div></div><p class="shiyi-muted">${plan.unreviewed?'检测到未审核摘要，本次禁止归档。':'仅在点击确认后隐藏；原始聊天不删除。请先备份聊天。'}隐藏消息是否从最终模型上下文排除，需要在你的酒馆版本中实际验证。</p>`;
     const options=[{label:'关闭',value:'close'},{label:'恢复本聊天归档',value:'restore'}];
     if(plan.eligible.length)options.push({label:'确认隐藏',value:'archive',kind:'primary'});
     const choice=await modal('拾忆 · 正文归档',box,options);
@@ -963,7 +979,7 @@ export async function startMemory(shared) {
     const resultForChat=state.weaveResultScope===settingsChat?state.weaveResult:null;
     el.innerHTML='<label>摘要开始标签<input id="shiyi-start"></label><label>摘要结束标签<input id="shiyi-end"></label><label>剧情年份（可选，例：2026；用于补全摘要缺失的年份及星期）<input id="shiyi-year" inputmode="numeric" maxlength="4" placeholder="不确定请留空"></label><p class="shiyi-muted">第一版只支持起止标签。默认不自动隐藏旧正文；手动归档需再次确认。</p>';
     $('#shiyi-start',el).value=cfg.start;$('#shiyi-end',el).value=cfg.end;$('#shiyi-year',el).value=cfg.storyYear||'';
-    const w=hostDocument.createElement('div');w.innerHTML='<label>档案记忆模式<select id="weave-mode"><option value="archive">仅归档</option><option value="compact">精简记忆</option><option value="smart">智能记忆</option><option value="deep">深度记忆</option></select></label><label>记忆运行模式<select id="summary-mode"><option value="auto">智能自动（推荐）</option><option value="local">本地超长记忆</option><option value="enhanced">增强超长记忆</option><option value="legacy">简约模式 · 古法总结</option></select></label><label>检索引擎<select id="weave-engine"><option value="hybrid">凝忆 · BM25 + 实体 + 余温</option><option value="classic">原版检索</option></select></label><label>记忆注入预算（估算 Token）<input id="weave-budget" type="number" min="200" max="12000"></label><label><input id="weave-adaptive" type="checkbox"> 自适应预算（凝忆模式，上限为上述预算）</label><p>当前召回：'+(resultForChat?.selected?.length||0)+' 条；估算 '+(resultForChat?.estimate||0)+' Tokens。动态模式包含摘要与档案；旧版模式仅限制档案。摘要召回：'+(resultForChat?.summaries?.length||0)+' 条。</p>';el.append(w);const auto=hostDocument.createElement('label');auto.innerHTML='<input type="checkbox" id="auto-hide"> 自动隐藏已确认的旧 AI 正文（实验；默认关闭）';w.append(auto);const ve=hostDocument.createElement('div');ve.innerHTML='<label><input id="vector-enabled" type="checkbox"> 可选向量检索（剧情将发送到指定服务）</label><label><input id="vector-migration" type="checkbox"> 后台补全历史摘要向量（可能产生 API 费用，默认关闭）</label><label>完整 Embedding URL<input id="vector-url" type="url"></label><label>模型<input id="vector-model"></label><label>API Key（仅本次浏览器会话）<input id="vector-key" type="password"></label>';w.append(ve);const guide=hostDocument.createElement('details');guide.innerHTML='<summary>免费向量 API 获取指南</summary><p>硅基流动提供免费模型的情况以官方价格页为准。启用后剧情文本将发送至服务商。</p><p><a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noopener noreferrer">获取 API Key</a> · <a href="https://siliconflow.cn/pricing" target="_blank" rel="noopener noreferrer">模型价格</a> · <a href="https://siliconflow.readme.io/reference/createembedding" target="_blank" rel="noopener noreferrer">接口文档</a></p><p>注册、创建密钥、复制到上方，保存设置。</p>';const fill=hostDocument.createElement('button');fill.type='button';fill.textContent='填入硅基流动 BGE-M3 配置';fill.onclick=()=>{$('#vector-url',el).value='https://api.siliconflow.cn/v1/embeddings';$('#vector-model',el).value='BAAI/bge-m3';};guide.append(fill);w.append(guide);const layer=hostDocument.createElement('label');layer.innerHTML='<input type="checkbox" id="memory-layers"> 章节索引（实验，保留原始摘要）';w.append(layer);$('#memory-layers',el).checked=cfg.layers;$('#vector-enabled',el).checked=cfg.vectorEnabled;$('#vector-migration',el).checked=cfg.vectorMigration;$('#vector-url',el).value=cfg.vectorUrl;$('#vector-model',el).value=cfg.vectorModel;$('#vector-key',el).value=sessionStorage.getItem('capricorn-vector-key')||'';const vs=hostDocument.createElement('p');vs.textContent=vectorHealth.info({...config(),vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})+"；"+migration.info()+"；向量通道："+(vectorLane.busy()?"忙碌":"空闲")+"；"+vector.info()+"；"+retrieval.info();w.append(vs);$('#auto-hide',el).checked=cfg.autoHide;$('#weave-engine',el).value=cfg.engine;$('#weave-adaptive',el).checked=cfg.adaptive;const inspect=hostDocument.createElement('details');const caption=hostDocument.createElement('summary');caption.textContent='查看最近一次准备注入的记忆与召回原因';const pre=hostDocument.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent='召回阶段：'+(resultForChat?.recallStage||'—')+'；证据等级：'+({strong:'较强',limited:'有限',weak:'较弱',none:'无'}[resultForChat?.recallConfidence]||'—')+'\n'+(resultForChat?.details||[]).map(x=>x.id+'：'+x.reason+(x.group?' ['+x.group+']':'')).join('\n')+'\n\n'+(resultForChat?.content||'暂无');inspect.append(caption,pre);w.append(inspect);$('#summary-mode',el).value=cfg.summaryMode==='unified'?(cfg.vectorEnabled?'enhanced':'local'):cfg.summaryMode;$('#weave-mode',el).value=cfg.weaveMode;$('#weave-budget',el).value=cfg.weaveBudget;for(const k of kinds){const label=hostDocument.createElement('label'),c=hostDocument.createElement('input');c.type='checkbox';c.value=k;c.checked=cfg.weaveKinds.includes(k);c.dataset.weaveKind='1';label.append(c,k);w.append(label);}
+    const w=hostDocument.createElement('div');w.innerHTML='<label>档案记忆模式<select id="weave-mode"><option value="archive">仅归档</option><option value="compact">精简记忆</option><option value="smart">智能记忆</option><option value="deep">深度记忆</option></select></label><label>记忆运行模式<select id="summary-mode"><option value="auto">智能自动（推荐）</option><option value="local">本地超长记忆</option><option value="enhanced">增强超长记忆</option><option value="legacy">简约模式 · 古法总结</option></select></label><label>检索引擎<select id="weave-engine"><option value="hybrid">凝忆 · BM25 + 实体 + 余温</option><option value="classic">原版检索</option></select></label><label>记忆注入预算（估算 Token）<input id="weave-budget" type="number" min="200" max="12000"></label><label><input id="weave-adaptive" type="checkbox"> 自适应预算（凝忆模式，上限为上述预算）</label><p>当前召回：'+(resultForChat?.selected?.length||0)+' 条；估算 '+(resultForChat?.estimate||0)+' Tokens。动态模式包含摘要与档案；旧版模式仅限制档案。摘要召回：'+(resultForChat?.summaries?.length||0)+' 条。</p>';el.append(w);const auto=hostDocument.createElement('label');auto.innerHTML='<input type="checkbox" id="auto-hide"> 自动隐藏已确认的旧 AI 正文（实验；默认关闭）';w.append(auto);const ve=hostDocument.createElement('div');ve.innerHTML='<label><input id="vector-enabled" type="checkbox"> 可选向量检索（剧情将发送到指定服务）</label><label><input id="vector-migration" type="checkbox"> 后台补全历史摘要向量（可能产生 API 费用，默认关闭）</label><label>完整 Embedding URL<input id="vector-url" type="url"></label><label>模型<input id="vector-model"></label><label>API Key（仅本次浏览器会话）<input id="vector-key" type="password"></label>';w.append(ve);const guide=hostDocument.createElement('details');guide.innerHTML='<summary>免费向量 API 获取指南</summary><p>硅基流动提供免费模型的情况以官方价格页为准。启用后剧情文本将发送至服务商。</p><p><a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noopener noreferrer">获取 API Key</a> · <a href="https://siliconflow.cn/pricing" target="_blank" rel="noopener noreferrer">模型价格</a> · <a href="https://siliconflow.readme.io/reference/createembedding" target="_blank" rel="noopener noreferrer">接口文档</a></p><p>注册、创建密钥、复制到上方，保存设置。</p>';const fill=hostDocument.createElement('button');fill.type='button';fill.textContent='填入硅基流动 BGE-M3 配置';fill.onclick=()=>{$('#vector-url',el).value='https://api.siliconflow.cn/v1/embeddings';$('#vector-model',el).value='BAAI/bge-m3';};guide.append(fill);w.append(guide);const layer=hostDocument.createElement('label');layer.innerHTML='<input type="checkbox" id="memory-layers"> 章节索引（实验，保留原始摘要）';w.append(layer);$('#memory-layers',el).checked=cfg.layers;$('#vector-enabled',el).checked=cfg.vectorEnabled;$('#vector-migration',el).checked=cfg.vectorMigration;$('#vector-url',el).value=cfg.vectorUrl;$('#vector-model',el).value=cfg.vectorModel;$('#vector-key',el).value=sessionStorage.getItem('capricorn-vector-key')||'';const vs=hostDocument.createElement('p');vs.textContent=vectorHealth.info({...config(),vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})+"；"+migration.info()+"；向量通道："+(vectorLane.busy()?"忙碌":"空闲")+"；"+vector.info()+"；"+retrieval.info();w.append(vs);$('#auto-hide',el).checked=cfg.autoHide;$('#weave-engine',el).value=cfg.engine;$('#weave-adaptive',el).checked=cfg.adaptive;const inspect=hostDocument.createElement('details');const caption=hostDocument.createElement('summary');caption.textContent='查看最近一次准备注入的记忆与召回原因';const pre=hostDocument.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent='召回阶段：'+(resultForChat?.recallStage||'—')+'；证据等级：'+({strong:'较强',limited:'有限',weak:'较弱',none:'无'}[resultForChat?.recallConfidence]||'—')+'\n'+(resultForChat?.details||[]).map(x=>x.id+'：'+x.reason+(x.group?' ['+x.group+']':'')).join('\n')+'\n\n'+(resultForChat?.content||'暂无');inspect.append(caption,pre);w.append(inspect);$('#summary-mode',el).value=cfg.summaryMode==='unified'?(cfg.vectorEnabled?'enhanced':'local'):cfg.summaryMode;$('#weave-mode',el).value=cfg.weaveMode;$('#weave-budget',el).value=cfg.weaveBudget;const kindsWrap=hostDocument.createElement('div');kindsWrap.className='shiyi-kind-section';const kindsTitle=hostDocument.createElement('div');kindsTitle.className='shiyi-kind-title';kindsTitle.textContent='档案召回类别';const kindsGrid=hostDocument.createElement('div');kindsGrid.className='shiyi-kind-grid';for(const k of kinds){const label=hostDocument.createElement('label');label.className='shiyi-kind-chip';const c=hostDocument.createElement('input');c.type='checkbox';c.value=k;c.checked=cfg.weaveKinds.includes(k);c.dataset.weaveKind='1';const span=hostDocument.createElement('span');span.textContent=k;label.append(c,span);kindsGrid.append(label);}kindsWrap.append(kindsTitle,kindsGrid);w.append(kindsWrap);
     const modeSelect=$('#summary-mode',el);const modeLabel=modeSelect.closest('label');w.prepend(modeLabel);const modeHint=hostDocument.createElement('p');modeLabel.after(modeHint);const adviceLabel=hostDocument.createElement("label"),advice=hostDocument.createElement("input");advice.type="checkbox";advice.checked=cfg.modeAdvice;adviceLabel.append(advice," 智能模式切换建议");modeHint.after(adviceLabel);const advancedIds=['weave-engine','weave-adaptive','auto-hide','memory-layers'];const updateMode=()=>{const simple=modeSelect.value==='legacy',local=modeSelect.value==='local';for(const id of advancedIds)$('#'+id,el).closest('label').hidden=simple;ve.hidden=simple||local;guide.hidden=simple||local;vs.hidden=simple||local;modeHint.textContent=modeSelect.value==='auto'?'自动：小规模古法，超预算后本地超长；向量可选。':simple?'古法总结：完整世界书 + 档案检索，不调用向量服务。':local?'本地超长：使用已有摘要和本地索引。':'增强超长：配置并启用向量服务后增强召回。';};modeSelect.addEventListener('change',updateMode);updateMode();
     if (resultForChat?.knowledgeSources?.length) {
       appendMemoryProvenance(hostDocument, inspect, () => {
@@ -1100,11 +1116,36 @@ export async function startMemory(shared) {
     for(const k of ['',...categories]){const o=D.createElement('option');o.value=k;o.textContent=k||'全部分类';cat.append(o);}
     if (filters && categories.includes(filters.table)) cat.value = filters.table;
     const prev=D.createElement('button'),next=D.createElement('button'),status=D.createElement('span');prev.textContent='上一页';next.textContent='下一页';nav.append(prev,status,next);box.append(toolbar,list,nav);let page=0;
-    const field=(parent,k,v)=>{const line=D.createElement('div');line.style.overflowWrap='anywhere';const label=D.createElement('strong');label.textContent=k+'：';line.append(label);if(v&&typeof v==='object'){const nested=D.createElement('div');nested.style.paddingInlineStart='12px';for(const [key,val] of Object.entries(v))field(nested,Array.isArray(v)?String(Number(key)+1):key,val);line.append(nested);}else line.append(D.createTextNode(String(v??'—')));parent.append(line);};
-    function render(){if(state.disposed||identity()!==id)return;list.replaceChildren();const term=q.value.trim().toLowerCase(),filtered=rows.filter(([,r])=>(!cat.value||hasOwn(r.value,cat.value))&&(!term||JSON.stringify(cat.value?r.value[cat.value]:r.value).toLowerCase().includes(term)));const pages=Math.max(1,Math.ceil(filtered.length/20));page=Math.min(page,pages-1);status.textContent=` ${page+1}/${pages} · ${filtered.length} 楼 `;prev.disabled=page===0;next.disabled=page+1>=pages;
+    const field=(parent,k,v)=>{
+      const isObj=Boolean(v&&typeof v==='object');
+      const line=D.createElement('div');
+      line.className=isObj?'cap-table-group':'cap-table-row';
+      const label=D.createElement('strong');
+      label.className='cap-table-key';
+      label.textContent=k;
+      line.append(label);
+      if(isObj){
+        const nested=D.createElement('div');
+        nested.className='cap-table-nested';
+        for(const [key,val] of Object.entries(v))field(nested,Array.isArray(v)?'#'+String(Number(key)+1):key,val);
+        line.append(nested);
+      }else{
+        const val=D.createElement('span');
+        val.className='cap-table-val';
+        val.textContent=String(v??'—');
+        line.append(val);
+      }
+      parent.append(line);
+    };
+    function render(){if(state.disposed||identity()!==id)return;list.replaceChildren();const term=q.value.trim().toLowerCase(),filtered=rows.filter(([,r])=>(!cat.value||hasOwn(r.value,cat.value))&&(!term||JSON.stringify(cat.value?r.value[cat.value]:r.value).toLowerCase().includes(term)));const pages=Math.max(1,Math.ceil(filtered.length/20));page=Math.min(page,pages-1);nav.hidden=pages<=1;status.textContent=`${page+1} / ${pages} · ${filtered.length} 楼`;prev.disabled=page===0;next.disabled=page+1>=pages;
       for(const [key,row] of filtered.slice(page*20,page*20+20)){
         const item=D.createElement('details'),title=D.createElement('summary'),body=D.createElement('div');
-        title.textContent=`第 ${row.floor} 楼 · ${Object.keys(row.value).join(' / ')}`;
+        item.className='cap-table-card';
+        body.className='cap-table-body';
+        const floorBadge=D.createElement('span');floorBadge.className='cap-table-floor';floorBadge.textContent='#'+row.floor;
+        const chips=D.createElement('span');chips.className='cap-table-chips';
+        for(const col of Object.keys(row.value)){const chip=D.createElement('span');chip.className='cap-table-chip';chip.textContent=col;chips.append(chip);}
+        title.append(floorBadge,chips);
         item.append(title,body);
         item.addEventListener('toggle',()=>{
           if(!item.open||body.childNodes.length||identity()!==id)return;
@@ -1163,7 +1204,6 @@ export async function startMemory(shared) {
     }
     state.root=hostDocument.createElement('div');state.root.id='shiyi-dock';state.root.classList.add('shiyi-collapsed');state.root.innerHTML='<button type="button" class="shiyi-orb" id="shiyi-expand" aria-label="展开拾忆面板" title="展开拾忆" aria-expanded="false"></button><div class="shiyi-dock-content"><button type="button" class="shiyi-collapse" id="shiyi-collapse" aria-label="收起拾忆面板" title="收起">−</button><div class="shiyi-brand">拾忆 · v0.7.1</div><div><button id="shiyi-scan">全量检测</button><button id="shiyi-import">补录 / 恢复</button><button id="shiyi-archive">正文归档</button><button id="shiyi-timeline">时间轴</button><button id="shiyi-review">待审核</button><button id="shiyi-manage">管理</button><button id="shiyi-settings">设置</button></div><div id="shiyi-status">等待聊天加载</div></div>';
     hostDocument.body.append(state.root);
-    $('#shiyi-expand', state.root).innerHTML = icon('bookmark', 20);
     $('#shiyi-collapse', state.root).innerHTML = icon('right', 18);
     const setCollapsed=(collapsed)=>{state.root.classList.toggle('shiyi-collapsed',collapsed);$('#shiyi-expand',state.root).setAttribute('aria-expanded',String(!collapsed));};
     $('#shiyi-expand',state.root).onclick=()=>setCollapsed(false);

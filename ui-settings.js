@@ -1,8 +1,9 @@
 import { popover } from './ui-popover.js';
 
 const pages = [
-  ['appearance', '外观'], ['background', '背景'], ['fonts', '字体/CSS'],
-  ['services', '服务'], ['backup', '备份'],
+  ['memory', '拾忆'], ['music', '声屿'], ['appearance', '外观'],
+  ['background', '背景'], ['fonts', '字体/CSS'],
+  ['services', '运行'], ['backup', '数据'],
 ];
 
 export function mountSettings(root) {
@@ -12,7 +13,7 @@ export function mountSettings(root) {
   const groups = new Map();
   tabs.className = 'cap-settings-tabs';
   tabs.setAttribute('role', 'tablist');
-  tabs.setAttribute('aria-label', '声屿设置分类');
+  tabs.setAttribute('aria-label', '摩羯座统一设置分类');
   views.className = 'cap-settings-views';
 
   function activate(id, focus) {
@@ -74,6 +75,7 @@ export function mountSettings(root) {
   const observer = typeof Observer === 'function' ? new Observer(classify) : null;
   if (observer) observer.observe(root, { childList: true });
   return {
+    activate(id) { if (groups.has(id)) activate(id, false); },
     destroy() {
       if (observer) observer.disconnect();
       for (const entry of groups.values()) root.append(...entry.view.children);

@@ -239,7 +239,16 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     });
   }
   function animateFrom(rect, target = panel) {
-    if (!rect || !rect.width || !rect.height || reduce() || !target.animate || mobile) return;
+    if (reduce() || !target.animate) return;
+    if (mobile) {
+      if (target !== panel) return;
+      target.animate([
+        { transform: 'translateY(18px) scale(0.97)', opacity: 0.25 },
+        { transform: 'none', opacity: 1 }
+      ], { duration: 290, easing: 'cubic-bezier(0.32, 0.72, 0, 1)' });
+      return;
+    }
+    if (!rect || !rect.width || !rect.height) return;
     const bounds = target.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return;
     target.animate([
@@ -247,7 +256,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
         transform:'translate(' + (rect.left - bounds.left) + 'px,' + (rect.top - bounds.top) +
           'px) scale(' + (rect.width / bounds.width) + ',' + (rect.height / bounds.height) + ')', opacity:.65 },
       { transformOrigin:'top left', transform:'none', opacity:1 }
-    ], { duration:250, easing:'cubic-bezier(.22,1,.36,1)' });
+    ], { duration:320, easing:'cubic-bezier(0.32, 0.72, 0, 1)' });
   }
   function setSize(value) {
     if (size === value) return;
@@ -326,15 +335,21 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
     const percent = Math.round(value * 100) + '%';
     if (!volumeDragging) volumeSlider.value = value;
+    volumeSlider.style.setProperty('--cap-vol-progress', percent);
     if (volumeValue.textContent !== percent) {
       volumeValue.textContent = percent;
       volumeSlider.setAttribute('aria-valuetext', percent);
       volumeButton.title = '音量 ' + percent;
     }
     const supports = audioState.volumeSupported !== false;
-    const hint = supports ? '' : '当前音源仅支持系统音量键';
+    const hint = supports ? '' : '当前音源仅能静音／恢复；连续音量请用设备音量键。';
     if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
-    volumeSlider.title = supports ? '音量' : '当前音源可能需要系统音量键';
+    volumeSlider.title = supports ? '音量' : '静音／恢复（连续音量由系统控制）';
+    // Keep a functional 0/100 mute toggle in the fallback instead of displaying
+    // a disabled control or a misleading continuous-volume slider.
+    volumeSlider.disabled = false;
+    volumeSlider.step = supports ? '0.01' : '1';
+    volumeSlider.setAttribute('aria-disabled', 'false');
     const muted = String(value === 0);
     if (volumeButton.dataset.muted !== muted) {
       volumeButton.dataset.muted = muted;
@@ -343,6 +358,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   }
   function applyVolume() {
     const value = Number(volumeSlider.value);
+    volumeSlider.style.setProperty('--cap-vol-progress', Math.round(Math.max(0, Math.min(1, value)) * 100) + '%');
     const before = state().userVolume;
     if (volume && value !== (before == null ? audio.volume : before)) volume(value);
     updateVolume();
@@ -435,7 +451,11 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     colorProbe.removeAttribute('src');
     colorProbe=null;
   }
+  img.onload=()=>{
+    img.classList.add('is-loaded');
+  };
   img.onerror=()=>{
+    img.classList.remove('is-loaded');
     img.hidden=true;
     img.alt='封面加载失败';
   };
@@ -712,6 +732,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       transport.setAttribute('aria-label', actionLabel);
     }
     panel.dataset.playing=String(!audio.paused);
+    panel.dataset.resolving=String(!!resolving);
     const modeButton=q('[data-mode]');
     const modeIcon=playMode==='shuffle'?'shuffle':playMode==='one'?'one':'repeat';
     if(modeButton.dataset.icon!==modeIcon){
@@ -723,6 +744,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const id=JSON.stringify([track?.id,track?.neteaseId,track?.coverUrl]);
     if(id!==identity){
       identity=id;
+      img.classList.remove('is-loaded');
       img.hidden=true;
       img.removeAttribute('src');
       img.alt='专辑封面';
@@ -748,6 +770,17 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     el.onclick = closePanel;
   }
   q('[data-toggle]').onclick = toggle;
+  q('.cap-art').onclick = () => { if (size !== 'large') setSize('large'); };
+  panel.addEventListener('keydown', event => {
+    if (event.defaultPrevented) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closePanel();
+    } else if (event.key === ' ' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(event.target?.tagName)) {
+      event.preventDefault();
+      toggle?.();
+    }
+  });
   q('[data-prev]').onclick = () => next(-1);
   q('[data-next]').onclick = () => next(1);
   q('[data-lyrics]').onclick = () => { showTab(tab === 'lyrics' ? '' : 'lyrics'); };
@@ -776,7 +809,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       manualScrollUntil = 0;
       showTab(tab || (size === 'large' ? 'lyrics' : ''));
       refresh();
-      animateFrom(island && island.getBoundingClientRect());
+      const openingRect=W.__soundIsleOpenOrigin || (island && island.getBoundingClientRect());
+      delete W.__soundIsleOpenOrigin;
+      animateFrom(openingRect);
     },
     close: closePanel,
     isOpen: () => !panel.hidden,

@@ -1,3 +1,4 @@
+import { icon } from './icons.js';
 import { closeLibraryMenus, libraryButton, libraryMenu } from './ui-library.js';
 import { refreshSelect } from './ui-select.js';
 
@@ -132,7 +133,11 @@ export function mountCloud(content,shared,music){
     choices.scrollTop=top;
   }
   const controlButtons=element('div','cap-cloud-control-actions');
-  controls.append(mode,search,controlButtons);
+  const searchWrap=element('div','cap-lib-search-wrap');
+  const searchIco=element('span','cap-lib-search-icon');
+  searchIco.innerHTML=icon('search',15);
+  searchWrap.append(searchIco,search);
+  controls.append(mode,searchWrap,controlButtons);
   mode.onchange=()=>{if(draft){draft.mode=mode.value;render()}};
   search.oninput=render;
   button(controlButtons,'全选搜索结果',()=>{
@@ -205,12 +210,29 @@ export function mountCloud(content,shared,music){
       ]});
       tracks.append(tools);
     }
+    const safeCover=url=>{try{if(!url)return '';const u=new URL(url);return ['https:','http:'].includes(u.protocol)?u.href.replace(/^http:/,'https:'):'';}catch{return '';}};
     for(const [index,t] of rows.entries()){
       const row=element('div','si-track');
       const play=button(row,t.title,()=>music.playCloud(rows,index,p.name));
       play.className='cap-track-title';
       play.textContent='';
-      play.append(element('span','si-song',t.title),element('small','si-muted si-song',t.artists.join('/')));
+      const art=element('span','cap-track-art');
+      art.setAttribute('aria-hidden','true');
+      const coverUrl=safeCover(t.cover||t.coverUrl);
+      if(coverUrl){
+        const img=element('img');
+        img.loading='lazy';
+        img.decoding='async';
+        img.alt='';
+        img.src=coverUrl;
+        img.onerror=()=>{art.innerHTML=icon('music-note',16);};
+        art.append(img);
+      }else{
+        art.innerHTML=icon('music-note',16);
+      }
+      const textWrap=element('span','cap-track-meta');
+      textWrap.append(element('span','si-song',t.title),element('small','si-muted si-song',t.artists.join('/')));
+      play.append(art,textWrap);
       const menu=libraryMenu(row,'歌曲操作','more',{items:[
         action('播放',()=>music.playCloud(rows,index,p.name),{icon:'play'}),
         ...(editable?[action('移除',async()=>{
@@ -224,7 +246,7 @@ export function mountCloud(content,shared,music){
       tracks.append(row);
     }
     if(!rows.length)tracks.append(element('p','cap-library-empty','当前歌单没有歌曲'));
-    if(d.more&&d.songs.length)button(tracks,'加载更多歌曲',()=>open(p,true));
+    if(d.more&&d.songs.length){const moreBtn=button(tracks,'加载更多歌曲',()=>open(p,true));moreBtn.className='cap-cloud-more';}
     tracks.scrollTop=top;
   }
 

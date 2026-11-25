@@ -13,7 +13,6 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   const D = root.ownerDocument, W = D.defaultView, key = 'capricorn_appearance_v1';
   const defaults = {
     material: 'glass',
-    playerTheme: 'default',
     playerBgColor: '',
     bgSource: 'auto', coverShape: 'rounded', coverSize: 250, coverPadding: 0, coverOpacity: 100, coverFit: 'cover', coverPlate: 'none', coverRadius: 18, coverBorder: 0, coverBorderColor: '#ffffff', coverBorderStyle: 'solid', coverShadow: 0, bgSaturation: 100, bgShade: 15,
     playerBgOpacity: 82,
@@ -33,6 +32,8 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   };
   let p = { ...defaults };
   try { p = { ...p, ...JSON.parse(W.localStorage.getItem(key) || '{}') }; } catch {}
+  // Legacy color themes are no longer supported. Keep personal CSS, fonts and backgrounds.
+  delete p.playerTheme;
 
   let installedFonts = [];
   let bgImageUrl = '';
@@ -62,34 +63,11 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     }
   };
 
-  const PLAYER_PRESETS = {
-    crystal: {
-      playerIslandCss: 'border: 1px solid rgba(255,255,255,0.55);\nbox-shadow: inset 0 1px 2px rgba(255,255,255,0.8), 0 10px 30px rgba(0,0,0,0.2);',
-      playerThemeCss: '--am-accent: #0a84ff;\nborder-radius: 28px;',
-      playerCustomCss: ''
-    },
-    aurora: {
-      playerIslandCss: 'background: linear-gradient(135deg, rgba(120,210,255,0.45), rgba(190,130,255,0.45));\nborder-color: rgba(255,255,255,0.45);',
-      playerThemeCss: '--am-accent: #7c5cff;\nbackground: linear-gradient(155deg, rgba(28,32,54,0.82), rgba(45,26,58,0.82));',
-      playerCustomCss: '.cap-island[data-playing="true"] { border-radius: 18px; }'
-    },
-    minimal: {
-      playerIslandCss: 'box-shadow: 0 4px 16px rgba(0,0,0,0.12);',
-      playerThemeCss: 'border-radius: 20px;\n--am-accent: #1d1d1f;',
-      playerCustomCss: '.cap-island-orb { background: transparent !important; box-shadow: none !important; }'
-    },
-    neon: {
-      playerIslandCss: 'border: 1px solid rgba(255, 78, 138, 0.7);\nbox-shadow: 0 0 18px rgba(255, 78, 138, 0.35);',
-      playerThemeCss: '--am-accent: #ff4e8a;\nborder: 1px solid rgba(255, 78, 138, 0.45);',
-      playerCustomCss: '.cap-island[data-playing="true"] { letter-spacing: 0.03em; }'
-    }
-  };
-
   function buildPlayerForm() {
     const el = D.createElement('section');
     el.className = 'cap-appearance cap-player-appearance';
     el.innerHTML = `
-      <h4>播放器外观与主题</h4>
+      <h4>播放器外观 · 纯净液态玻璃</h4>
       <div class="cap-appearance-grid">
         <label>声屿材质
           <select data-pref="material" data-cap-select="segment">
@@ -98,50 +76,91 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
             <option value="solid">实色</option>
           </select>
         </label>
-        <label>播放器主题
-          <select data-pref="playerTheme" data-cap-select="search">
-            <option value="default" data-cap-swatch="#ededed">白 · 原生</option>
-            <option value="black" data-cap-swatch="#272727">黑 · 原生</option>
-            <option value="silverblue" data-cap-swatch="#9ab0c9">余音 · 银蓝手账</option>
-            <optgroup label="旧版主题">
-              <option value="mist" data-cap-swatch="#a6b7ef">晨雾</option>
-              <option value="ocean" data-cap-swatch="#439bc3">海洋</option>
-              <option value="sunset" data-cap-swatch="#e39a63">落日</option>
-              <option value="sakura" data-cap-swatch="#da91b4">樱花</option>
-              <option value="forest" data-cap-swatch="#7db39a">森林</option>
-              <option value="gold" data-cap-swatch="#b3935a">鎏金</option>
-              <option value="cyber" data-cap-swatch="#a278cc">赛博</option>
-            </optgroup>
-          </select>
-        </label>
       </div>
 
-      <details class="cap-bg-customizer" open><summary>背景与封面</summary>
-<label>背景来源<select data-pref="bgSource"><option value="auto">主题默认 / 已导入图片</option><option value="album">专辑封面铺满</option><option value="color">专辑取色</option><option value="custom">自定义图片</option></select></label>
-<label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
-<label>图片填充<select data-pref="coverFit"><option value="cover">铺满</option><option value="contain">完整显示</option></select></label><label>底板<select data-pref="coverPlate"><option value="none">无</option><option value="solid">纯色</option><option value="glass">玻璃</option></select></label><label>大卡片封面大小 (<span data-val="coverSize"></span>)<input type="range" min="40" max="320" data-pref-range="coverSize"></label><label>内边距 (<span data-val="coverPadding"></span>)<input type="range" min="0" max="40" data-pref-range="coverPadding"></label><label>边框透明度 (<span data-val="coverOpacity"></span>)<input type="range" min="0" max="100" data-pref-range="coverOpacity"></label><label>边框样式<select data-pref="coverBorderStyle"><option value="solid">实线</option><option value="dashed">虚线</option><option value="double">双线</option></select></label>
-<label>边框颜色<input type="color" data-cover-color></label>
-<label>圆角 (<span data-val="coverRadius"></span>)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label><label>边框宽度 (<span data-val="coverBorder"></span>)<input type="range" min="0" max="12" data-pref-range="coverBorder"></label><label>阴影 (<span data-val="coverShadow"></span>)<input type="range" min="0" max="40" data-pref-range="coverShadow"></label><label>背景饱和度 (<span data-val="bgSaturation"></span>)<input type="range" min="0" max="200" data-pref-range="bgSaturation"></label><label>明暗遮罩 (<span data-val="bgShade"></span>)<input type="range" min="0" max="100" data-pref-range="bgShade"></label>
-        <label>自定义背景色 / 渐变（留空使用主题默认）
-          <div class="cap-color-row">
-            <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
-            <input type="text" data-pref-text="playerBgColor" placeholder="如 #1a1d2e 或 linear-gradient(135deg,#1d2b64,#f8cdda)">
-            <button type="button" data-clear-bg-color title="清除自定义背景色">清除</button>
+      <details class="cap-bg-customizer" open>
+        <summary>背景与封面</summary>
+        <!-- 以下 4 项会被脚本自动移入「外观 → 封面布局」卡片 -->
+        <label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
+        <label>大卡片封面大小 (<span data-val="coverSize"></span>px)<input type="range" min="40" max="320" data-pref-range="coverSize"></label>
+        <label>内边距 (<span data-val="coverPadding"></span>px)<input type="range" min="0" max="40" data-pref-range="coverPadding"></label>
+        <label>圆角 (<span data-val="coverRadius"></span>px)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label>
+
+        <div class="cap-setting-card">
+          <div class="cap-setting-card-title">背景材质与氛围</div>
+          <label>背景来源
+            <select data-pref="bgSource">
+              <option value="auto">主题默认 / 已导入图片</option>
+              <option value="album">专辑封面铺满</option>
+              <option value="color">专辑取色</option>
+              <option value="custom">自定义图片</option>
+            </select>
+          </label>
+          <div class="cap-appearance-grid">
+            <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
+              <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
+            </label>
+            <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
+              <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
+            </label>
+            <label>背景饱和度 (<span data-val="bgSaturation"></span>%)
+              <input type="range" min="0" max="200" data-pref-range="bgSaturation">
+            </label>
+            <label>明暗遮罩 (<span data-val="bgShade"></span>%)
+              <input type="range" min="0" max="100" data-pref-range="bgShade">
+            </label>
           </div>
-        </label>
-        <div class="cap-bg-image-row">
-          <button type="button" data-upload-bg>上传背景图</button>
-          <button type="button" data-clear-bg>移除背景图</button>
-          <input type="file" accept="image/*" data-bg-file hidden>
-          <span class="cap-inline-tip" data-bg-tip></span>
+          <label>自定义背景色 / 渐变（留空使用默认）
+            <div class="cap-color-row">
+              <input type="color" data-bg-picker value="#1c1c1e" aria-label="选取背景颜色">
+              <input type="text" data-pref-text="playerBgColor" placeholder="如 #1a1d2e 或 linear-gradient(...)">
+              <button type="button" data-clear-bg-color title="清除自定义背景色">清除</button>
+            </div>
+          </label>
+          <div class="cap-bg-image-row">
+            <button type="button" data-upload-bg class="cap-btn-primary">上传背景图</button>
+            <button type="button" data-clear-bg>移除背景图</button>
+            <input type="file" accept="image/*" data-bg-file hidden>
+            <span class="cap-inline-tip" data-bg-tip></span>
+          </div>
         </div>
-        <div class="cap-appearance-grid">
-          <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
-            <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
-          </label>
-          <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
-            <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
-          </label>
+
+        <div class="cap-setting-card">
+          <div class="cap-setting-card-title">封面边框与光影</div>
+          <div class="cap-appearance-grid">
+            <label>图片填充
+              <select data-pref="coverFit" data-cap-select="segment">
+                <option value="cover">铺满</option>
+                <option value="contain">完整显示</option>
+              </select>
+            </label>
+            <label>封面底板
+              <select data-pref="coverPlate" data-cap-select="segment">
+                <option value="none">无</option>
+                <option value="solid">纯色</option>
+                <option value="glass">玻璃</option>
+              </select>
+            </label>
+            <label>边框样式
+              <select data-pref="coverBorderStyle" data-cap-select="segment">
+                <option value="solid">实线</option>
+                <option value="dashed">虚线</option>
+                <option value="double">双线</option>
+              </select>
+            </label>
+            <label>边框颜色
+              <input type="color" data-cover-color>
+            </label>
+            <label>边框宽度 (<span data-val="coverBorder"></span>px)
+              <input type="range" min="0" max="12" data-pref-range="coverBorder">
+            </label>
+            <label>边框透明度 (<span data-val="coverOpacity"></span>%)
+              <input type="range" min="0" max="100" data-pref-range="coverOpacity">
+            </label>
+            <label>投影强度 (<span data-val="coverShadow"></span>px)
+              <input type="range" min="0" max="40" data-pref-range="coverShadow">
+            </label>
+          </div>
         </div>
       </details>
 
@@ -158,15 +177,8 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
       </div>
 
       <details class="cap-css-editor">
-        <summary>自定义 CSS（灵动岛形态 & 播放器主题）</summary>
+        <summary>自定义 CSS（灵动岛形态 & 播放器面板）</summary>
         <p class="cap-css-hint">支持实时预览。可定制 <code>.cap-island</code>、<code>.cap-island[data-playing="false"]</code>（未播放球体）、<code>.cap-island[data-playing="true"]</code>（播放拉长态）、<code>nav</code> 及 <code>.cap-full-player</code>。</p>
-        <div class="cap-css-presets">
-          <span>快捷模板：</span>
-          <button type="button" data-player-preset="crystal">晶透光球</button>
-          <button type="button" data-player-preset="aurora">极光胶囊</button>
-          <button type="button" data-player-preset="minimal">极简素雅</button>
-          <button type="button" data-player-preset="neon">霓虹微光</button>
-        </div>
         <label>灵动岛样式声明（无需大括号）
           <textarea data-pcss="playerIslandCss" rows="3" placeholder="border-radius: 999px;\n--island-orb-size: 46px;"></textarea>
         </label>
@@ -211,8 +223,13 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         </label>
         <label>便签主题
           <select data-pref="paper">
-            <option value="white">极简纯白</option>
-            <option value="ink">暗夜墨笺</option>
+            <option value="white" data-cap-swatch="#f7f6f2">极简纯白</option>
+            <option value="cream" data-cap-swatch="#f5ecdc">暖霜米纸</option>
+            <option value="yellow" data-cap-swatch="#f7ecc2">奶油黄签</option>
+            <option value="sage" data-cap-swatch="#e8efe7">鼠尾草绿</option>
+            <option value="sakura" data-cap-swatch="#f8ecef">樱吹雪粉</option>
+            <option value="sky" data-cap-swatch="#e7f0f8">晴空蓝笺</option>
+            <option value="ink" data-cap-swatch="#252422">暗夜墨笺</option>
           </select>
         </label>
         <label>纸张底纹
@@ -388,7 +405,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     if (disposed) return;
     const b = D.body;
     b.dataset.capMaterial = draft.material;
-    b.dataset.capPlayerTheme = draft.playerTheme || 'default';
+    b.dataset.capPlayerTheme = 'default';
     b.dataset.capLook = themeSelect.value === 'auto' ? (media.matches ? 'dark' : 'light') : themeSelect.value;
     b.dataset.capPaper = draft.paper;
     b.dataset.capPaperMode = draft.paperMode === 'auto' ? (media.matches ? 'dark' : 'light') : draft.paperMode;
@@ -404,7 +421,6 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     b.dataset.capCoverShape = draft.coverShape;
     b.dataset.capCoverPlate=draft.coverPlate; const vars = {'cover-size':Number(draft.coverSize)+'px','cover-padding':Number(draft.coverPadding)+'px','cover-opacity':Number(draft.coverOpacity)/100,'cover-fit':draft.coverFit==='contain'?'contain':'cover','cover-radius':Number(draft.coverRadius)+'px','cover-border':Number(draft.coverBorder)+'px','cover-color':/^#[0-9a-f]{6}$/i.test(draft.coverBorderColor)?draft.coverBorderColor:'#ffffff','cover-style':['solid','dashed','double'].includes(draft.coverBorderStyle)?draft.coverBorderStyle:'solid','cover-shadow':Number(draft.coverShadow)+'px','bg-saturation':Number(draft.bgSaturation)+'%','bg-shade':Number(draft.bgShade)/100};
     for(const [k,v] of Object.entries(vars)) D.documentElement.style.setProperty('--cap-'+k,v);
-    if(draft.playerTheme==='black')b.dataset.capLook='dark';
 
     const bgColor = safeBgColor(draft.playerBgColor);
     const opacity = Math.min(1, Math.max(0, Number(draft.playerBgOpacity ?? 82) / 100));
@@ -547,7 +563,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     box.querySelector(`[${resetAttr}]`).onclick = () => commit(Object.fromEntries(keys.map(k=>[k,''])));
     for (const btn of box.querySelectorAll(`[${presetAttr}]`)) btn.onclick = () => commit(presets[btn.getAttribute(presetAttr)]);
   }
-  bindCss(playerBox,'data-pcss',['playerIslandCss','playerThemeCss','playerCustomCss'],PLAYER_PRESETS,'data-player-preset','data-psave','data-preset-reset','data-pstatus');
+  bindCss(playerBox,'data-pcss',['playerIslandCss','playerThemeCss','playerCustomCss'],{},'data-player-preset','data-psave','data-preset-reset','data-pstatus');
   bindCss(noteBox,'data-css',['side','note','custom'],NOTE_PRESETS,'data-preset','data-save','data-reset','data-status');
   const backgroundBox = D.createElement('section');
   backgroundBox.className = 'cap-appearance';

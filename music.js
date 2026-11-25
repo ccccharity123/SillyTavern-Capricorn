@@ -43,9 +43,16 @@ let previousTrackScrollReset = false;
 const playbackTasks = createLatestTask();
 const storyTasks = createLatestTask();
 let storyTask = storyTasks.start();
-function makeAudio(){const a=D.createElement('audio');a.preload='metadata';a.playsInline=true;a.setAttribute('playsinline','');a.style.display='none';D.body.append(a);return a}
+function makeAudio(){const a=D.createElement('audio');a.preload='metadata';a.playsInline=true;a.setAttribute('playsinline','');a.setAttribute('aria-hidden','true');a.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10000px;top:0';D.body.append(a);return a}
 const mobileMedia=/Android|iPhone|iPad|iPod/i.test(W.navigator.userAgent)||(W.navigator.platform==='MacIntel'&&W.navigator.maxTouchPoints>1);
-const mediaSession=W.navigator.mediaSession;
+const mediaSession=W.navigator?.mediaSession||window.navigator?.mediaSession||null;
+const mediaMetadataCtor=W.MediaMetadata||window.MediaMetadata;
+const fallbackArtwork=new URL('./sound-isle-cover.png',import.meta.url).href;
+const isAppleMobile=/iPhone|iPad|iPod/.test(W.navigator.userAgent)||(W.navigator.platform==='MacIntel'&&W.navigator.maxTouchPoints>1);
+// A native HTMLAudioElement is much more likely to keep iOS background media alive
+// than a Web Audio graph, which the operating system may suspend when backgrounded.
+// Users can opt out when they prefer in-page Web Audio volume adjustment.
+const backgroundPriority=()=>db.settings.backgroundPlaybackPriority!==false;
 const nativeAudio=makeAudio(), graphAudio=makeAudio();graphAudio.crossOrigin='anonymous';let activeAudio=nativeAudio, audioContext=null, gainNode=null;
 let nativeVolume=true;try{nativeAudio.volume=.37;nativeVolume=Math.abs(nativeAudio.volume-.37)<.01;nativeAudio.volume=1}catch{nativeVolume=false}
 const mediaListeners = new Map();
@@ -93,20 +100,93 @@ function disposeAudio() {
   D.removeEventListener('touchend',unlockAudio,true);
   D.removeEventListener('click',unlockAudio,true);
 }
-if(/iPhone|iPad|iPod/.test(W.navigator.userAgent)||(W.navigator.platform==='MacIntel'&&W.navigator.maxTouchPoints>1))nativeVolume=false;
-function unlockAudio(){if(nativeVolume||mobileMedia)return;try{if(!audioContext){const C=W.AudioContext||W.webkitAudioContext;if(!C)return;audioContext=new C();gainNode=audioContext.createGain();audioContext.createMediaElementSource(graphAudio).connect(gainNode);gainNode.connect(audioContext.destination)}if(audioContext.state==='suspended')audioContext.resume().catch(()=>{})}catch{gainNode=null}}
+if(isAppleMobile)nativeVolume=false;
+// iOS often accepts mute but ignores intermediate HTMLMediaElement.volume values.
+// A running Web Audio graph must be selected before loading the song; an asynchronous
+// AudioContext.resume() must be given a bounded chance to complete first.
+let resumePending=null;
+function unlockAudio(){
+ if(nativeVolume||disposed||(isAppleMobile&&backgroundPriority()))return Promise.resolve(false);
+ try{
+  if(!audioContext){
+   const C=W.AudioContext||W.webkitAudioContext;
+   if(!C)return Promise.resolve(false);
+   audioContext=new C();gainNode=audioContext.createGain();
+   audioContext.createMediaElementSource(graphAudio).connect(gainNode);
+   gainNode.connect(audioContext.destination);
+  }
+  if(audioContext.state==='running')return Promise.resolve(true);
+  if(audioContext.state!=='suspended')return Promise.resolve(false);
+  if(!resumePending){
+   resumePending=Promise.resolve(audioContext.resume()).then(()=>audioContext?.state==='running',()=>false)
+     .finally(()=>{resumePending=null});
+  }
+  return resumePending;
+ }catch(error){
+  gainNode=null;trace('Web Audio 初始化失败：'+(error?.message||'未知错误'));
+  return Promise.resolve(false);
+ }
+}
 D.addEventListener('pointerdown',unlockAudio,true);D.addEventListener('touchend',unlockAudio,true);D.addEventListener('click',unlockAudio,true);
-function chooseAudio(alive){if(!alive())return false;activeAudio=!mobileMedia&&!nativeVolume&&gainNode&&audioContext?.state==='running'?graphAudio:nativeAudio;return true}
-function volumeCapability(){return nativeVolume||activeAudio===graphAudio&&audioContext?.state==='running'}
+async function chooseAudio(alive,forceNative=false){
+ if(!alive())return false;
+ if(!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())){
+  // Never let a suspended/resuming audio graph stall normal playback indefinitely.
+  await Promise.race([unlockAudio(),new Promise(resolve=>setTimeout(()=>resolve(false),500))]);
+ }
+ if(!alive())return false;
+ activeAudio=!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())&&gainNode&&audioContext?.state==='running'?graphAudio:nativeAudio;
+ return true;
+}
+function volumeCapability(){return nativeVolume||activeAudio===graphAudio&&!!gainNode&&audioContext?.state==='running'}
+function volumeBackend(){return volumeCapability()?(activeAudio===graphAudio?'Web Audio 增益':'原生音量'):'仅支持静音 / 系统音量'}
 let queue=[],queueIndex=-1,queueRevision=0,queuePlaylistName="",playMode=db.settings.playMode||'order',audioError='';
 function validUrl(u){try{let x=new URL(String(u||''));return ['https:','http:'].includes(x.protocol)?x.href:''}catch{return ''}}
 function durationText(v){if(!Number.isFinite(v))return '00:00';return String(Math.floor(v/60)).padStart(2,'0')+':'+String(Math.floor(v%60)).padStart(2,'0')}
 function audioTracks(){return db.playlists[selected]?.songs||[]}
 let mediaKey='';
 function updatePosition(){try{const duration=audio.duration;if(!mediaSession)return;if(Number.isFinite(duration)&&duration>0)mediaSession.setPositionState({duration,position:Math.max(0,Math.min(duration,audio.currentTime||0)),playbackRate:audio.playbackRate||1});else mediaSession.setPositionState()}catch{}}
-function updateMedia(){if(!mediaSession)return;try{if(!playing){mediaKey='';mediaSession.metadata=null;mediaSession.playbackState='none';mediaSession.setPositionState();return}const cover=validUrl(playing.coverUrl);const key=JSON.stringify([playing.title,playing.artist,cover]);if(key!==mediaKey){mediaSession.metadata=new W.MediaMetadata({title:playing.title,artist:playing.artist,album:'声屿',artwork:cover?[{src:cover}]:[]});mediaKey=key}mediaSession.playbackState=audio.paused?'paused':'playing';updatePosition()}catch{}}
-function onMediaVisibility(){if(D.hidden&&!audio.paused)applyGain(1);updateMedia();storePlayback()}
+function updateMedia(){
+ if(!mediaSession)return;
+ if(!playing){
+   mediaKey='';
+   try{mediaSession.metadata=null}catch{}
+   try{mediaSession.playbackState='none'}catch{}
+   try{mediaSession.setPositionState?.()}catch{}
+   return;
+ }
+ const cover=validUrl(playing.coverUrl);
+ const key=JSON.stringify([playing.title,playing.artist,cover]);
+ if(key!==mediaKey&&mediaMetadataCtor){
+   try{
+     // A built-in image is available even for songs without online cover art.
+     const artwork=cover?[{src:cover},{src:fallbackArtwork,sizes:'512x512',type:'image/png'}]
+       :[{src:fallbackArtwork,sizes:'512x512',type:'image/png'}];
+     mediaSession.metadata=new mediaMetadataCtor({
+       title:String(playing.title||'声屿'),artist:String(playing.artist||'未知歌手'),
+       album:'声屿 · Sound Isle',artwork
+     });
+     mediaKey=key;
+   }catch(error){
+     // Bad remote artwork and older WebViews must not abort media updates.
+     try{
+       mediaSession.metadata=new mediaMetadataCtor({title:String(playing.title||'声屿'),artist:String(playing.artist||''),album:'声屿'});
+       mediaKey=key;
+     }catch{mediaKey=''}
+   }
+ }
+ try{mediaSession.playbackState=audio.paused?'paused':'playing'}catch{}
+ updatePosition();
+}
+function onMediaVisibility(){if(D.hidden&&!audio.paused&&!resolving)applyGain(1);updateMedia();storePlayback();if(!D.hidden)updateMini()}
 D.addEventListener('visibilitychange',onMediaVisibility);
+// pageshow/resume can run when the WebView is restored; no forced autoplay
+// because app termination and OS media interruptions are controlled by the host.
+const onMediaRestore=()=>{if(!disposed){updateMedia();storePlayback();updateMini()}};
+const onMediaPageHide=()=>{if(!disposed)storePlayback()};
+W.addEventListener('pagehide',onMediaPageHide);
+W.addEventListener('pageshow',onMediaRestore);
+D.addEventListener('resume',onMediaRestore);
 
 function rememberPlay(t){db.recent=db.recent.filter(x=>x.id!==t.id);db.recent.unshift({id:t.id,title:t.title,artist:t.artist,at:Date.now()});db.recent=db.recent.slice(0,100);save()}
 let fullPlayer;
@@ -261,6 +341,7 @@ let fadeGain=1;
 function targetVolume(){return Number.isFinite(+db.settings.volume)?Math.max(0,Math.min(1,+db.settings.volume)):0.8}
 function applyGain(g){fadeGain=g;const v=targetVolume()*g;if(activeAudio===graphAudio&&gainNode){gainNode.gain.value=v;graphAudio.volume=1;graphAudio.muted=false}else{try{nativeAudio.volume=v}catch{}nativeAudio.muted=targetVolume()===0}}
 function fadeTo(to,ms,epoch){if(D.hidden){applyGain(to);return Promise.resolve(true)}const from=fadeGain,start=Date.now();return new Promise(resolve=>{function step(){if(disposed||epoch!==playEpoch)return resolve(false);const x=Math.min(1,(Date.now()-start)/ms);applyGain(from+(to-from)*x);if(x<1&&!D.hidden)setTimeout(step,20);else if(x<1){applyGain(to);resolve(true)}else resolve(true)}step()})}
+function syncNativeLoop(){audio.loop=playMode==='one';}
 function clearAudio(){audio.pause();audio.removeAttribute('src');audio.load();started=false}
 function stopPlaybackWork(){
   playbackTasks.cancel();
@@ -296,7 +377,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  if(!audio.paused&&!audio.ended){await fadeTo(0,320,epoch);if(!alive())return;}
  resumePosition=resumeAt;playing=t;audioError='';actualQuality='';playbackLog=[];coverState='未检查';clearAudio();render();
  const deadline=Date.now()+95000;
- async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!chooseAudio(alive))return false;if(forceNative)activeAudio=nativeAudio;applyGain(0);audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){trace('音源已准备，请再次点击播放');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
+ async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!await chooseAudio(alive,forceNative))return false;syncNativeLoop();applyGain(D.hidden?1:0);audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){trace('音源已准备，请再次点击播放');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
  async function loadCover(id){
    if(validUrl(t.coverUrl)){coverState='已有地址';return;}
    try {
@@ -321,7 +402,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  }else if(!ok&&!manual)throw Error('请启用网易云并填写访问密钥');if(!alive())return;if(!ok)throw Error('未能加载完整音源，请查看播放诊断');resolving=false;rememberPlay(t);storePlayback();updateMedia();render();trace('播放成功：'+actualQuality+(volumeCapability()?'':' · 当前音源请使用系统音量键'));
  }catch(e){if(!alive())return;resolving=false;audioError=e.name==='NotAllowedError'?'系统要求再次点击播放':e.message;render();trace(audioError)}
 }
-function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'音量引擎：'+(activeAudio===graphAudio?'Web Audio':nativeVolume?'原生':'系统限制'),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
+function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'后台播放优先：'+String(isAppleMobile&&backgroundPriority()),'音频通道：'+(activeAudio===nativeAudio?'HTMLAudioElement':'Web Audio'),'系统媒体构造器：'+(mediaMetadataCtor?'支持':'不支持'),'音量引擎：'+volumeBackend(),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
 function nextTrack(direction=1){if(!queue.length){let tracks=audioTracks();if(!tracks.length)return;queue=tracks.slice();queueRevision++;queueIndex=0;queuePlaylistName=db.playlists[selected]?.name||'声屿';return playQueued(0)}let i=queueIndex;if(playMode==='shuffle'&&queue.length>1){let n=Math.floor(Math.random()*(queue.length-1));i=n>=i?n+1:n}else i=(i+direction+queue.length)%queue.length;playQueued(i)}
 async function toggleAudio(){
   if(resolving){stopPlaybackWork();clearAudio();trace('已取消加载，再点播放重试');render();return;}
@@ -366,7 +447,7 @@ audio.addEventListener('ended',()=>{
   } else nextTrack(1);
 });
 audio.addEventListener('play',()=>{updateMedia();updateMini()});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
-audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>5000){lastMemory=Date.now();storePlayback();updatePosition()}let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock)clock.textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration)});
+audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>(D.hidden?30000:5000)){lastMemory=Date.now();storePlayback();updatePosition()}if(D.hidden)return;let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock)clock.textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration)});
 function updateMini(){
   fullPlayer?.refresh();
   updateLegacyPlayer();
@@ -806,7 +887,7 @@ function render(){
     root.querySelector('[data-action="playpause"]').onclick=toggleAudio;
     root.querySelector('[data-action="prev"]').onclick=()=>nextTrack(-1);
     root.querySelector('[data-action="next"]').onclick=()=>nextTrack(1);
-    root.querySelector('[data-action="mode"]').onclick=()=>{playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;save();render()};
+    root.querySelector('[data-action="mode"]').onclick=()=>{playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;syncNativeLoop();save();render()};
     root.querySelector('#si-seek').oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=+e.target.value};
     root.querySelector('#si-volume').oninput=e=>{db.settings.volume=+e.target.value;applyGain(fadeGain);save()};
     const cover=root.querySelector('.si-cover');cover.onerror=()=>{cover.hidden=true};
@@ -894,7 +975,11 @@ function render(){
     previousTrackScrollReset=true;
     render();
   };
-  tools.append(filter);
+  const searchWrap=element('div','cap-lib-search-wrap');
+  const searchIcon=element('span','cap-lib-search-icon');
+  searchIcon.innerHTML=icon('search',15);
+  searchWrap.append(searchIcon,filter);
+  tools.append(searchWrap);
   const addForm=element('form','cap-library-form');
   const titleInput=element('input'),artistInput=element('input');
   titleInput.id='si-song-title';
@@ -991,7 +1076,28 @@ function render(){
     play.dataset.play=String(i);
     if(active)play.setAttribute('aria-current','true');
     play.textContent='';
-    play.append(element('span','si-song',t.title),element('small','si-muted si-song',t.artist+(t.source?' · 第'+t.source.floor+'楼':'')));
+    const art=element('span','cap-track-art');
+    art.setAttribute('aria-hidden','true');
+    const cover=validUrl(t.coverUrl);
+    if(cover){
+      const img=element('img');
+      img.loading='lazy';
+      img.decoding='async';
+      img.alt='';
+      img.src=cover.replace(/^http:/,'https:');
+      img.onerror=()=>{art.innerHTML=icon('music-note',16);};
+      art.append(img);
+    }else{
+      art.innerHTML=icon('music-note',16);
+    }
+    if(active){
+      const eq=element('span','cap-track-active-badge');
+      eq.innerHTML=icon('equalizer',14,{weight:'fill'});
+      art.append(eq);
+    }
+    const textWrap=element('span','cap-track-meta');
+    textWrap.append(element('span','si-song',t.title),element('small','si-muted si-song',t.artist+(t.source?' · 第'+t.source.floor+'楼':'')));
+    play.append(art,textWrap);
     const menu=libraryMenu(row,'歌曲操作','more',{items:()=>localTrackActions(pl,t,i)});
     menu.classList.add('cap-action-menu');
     scroller.append(row);
@@ -1164,6 +1270,7 @@ function restoreBackup(input){
   fullPlayer?.resetOnline();
   db=next;
   playMode=db.settings.playMode||'order';
+  syncNativeLoop();
   applyGain(1);
   readPlayback();
   selected='';
@@ -1200,15 +1307,15 @@ sync();
 render();
 fullPlayer=mountNowPlaying({
   D,W,audio,shared,
-  state:()=>({playing,queue,queueRevision,queueIndex,actualQuality,preferredQuality:db.settings.preferredQuality||'jymaster',canChangeQuality:!!playing?.neteaseId&&(!validUrl(playing?.audioUrl)||!!actualQuality&&actualQuality!=='手动音源')&&!!shared.online?.ready(),playMode,resolving,started,statusText,userVolume:targetVolume(),volumeSupported:volumeCapability(),diagnostic:()=>diagnostic()}),
+  state:()=>({playing,queue,queueRevision,queueIndex,actualQuality,preferredQuality:db.settings.preferredQuality||'jymaster',canChangeQuality:!!playing?.neteaseId&&(!validUrl(playing?.audioUrl)||!!actualQuality&&actualQuality!=='手动音源')&&!!shared.online?.ready(),playMode,resolving,started,statusText,userVolume:targetVolume(),volumeSupported:volumeCapability(),volumeBackend:volumeBackend(),diagnostic:()=>diagnostic()}),
   quality(level){
     if(!qualityOrder.includes(level)||resolving||!playing?.neteaseId||(validUrl(playing.audioUrl)&&actualQuality==='手动音源')||!shared.online?.ready())return;
     db.settings.preferredQuality=level;
     save();
     void playQueued(queueIndex,audio.currentTime||resumePosition||0,true);
   },
-  volume(value){db.settings.volume=Math.max(0,Math.min(1,value));applyGain(fadeGain);save()},
-  mode(){playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;save()},
+  volume(value){const requested=Math.max(0,Math.min(1,Number(value)||0));db.settings.volume=!volumeCapability()?(requested<=0.01?0:1):requested;applyGain(fadeGain);save()},
+  mode(){playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;syncNativeLoop();save()},
   toggle:toggleAudio,next:nextTrack,play:playQueued,
   move(from,to){
     if(resolving||from<0||to<0||from>=queue.length||to>=queue.length)return;
@@ -1272,6 +1379,13 @@ W[INSTANCE]={
     return playIndex(index);
   },
   title(){return (audio.paused?'':'▮▮ ')+(playing?.title||'声屿')},
+  backgroundPriority(){return backgroundPriority()},
+  setBackgroundPriority(value){
+    db.settings.backgroundPlaybackPriority=Boolean(value);save();
+    // Playing audio is not moved between audio elements mid-track.
+    // Change takes effect on the next track/restart, avoiding audible jumps.
+    return true;
+  },
   destroy(){
     if(disposed)return;
     storePlayback();
@@ -1283,6 +1397,9 @@ W[INSTANCE]={
     closeLibraryMenus(root);
     if(shared.onMusicConnectionChange===connectionChanged)delete shared.onMusicConnectionChange;
     D.removeEventListener('visibilitychange',onMediaVisibility);
+    W.removeEventListener('pageshow',onMediaRestore);
+    W.removeEventListener('pagehide',onMediaPageHide);
+    D.removeEventListener('resume',onMediaRestore);
     if(mediaSession){
       for(const action of mediaActions)try{mediaSession.setActionHandler(action,null)}catch{}
       try{mediaSession.metadata=null;mediaSession.playbackState='none';mediaSession.setPositionState()}catch{}

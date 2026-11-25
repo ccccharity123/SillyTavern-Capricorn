@@ -18,7 +18,8 @@ import { mountCloud } from './cloud.js';
 import { mountNetease } from './netease.js';
 import { detachDisabledMemory, startMemory } from './memory.js';
 import { startMusic } from './music.js';
-import { mountMobile } from './mobile.js';
+import { mountMobile, readFloatSettings } from './mobile.js';
+import { mountLauncher } from './ui-launcher.js';
 import { mountSelects, nativeSelectsEnabled, refreshSelect, setNativeSelects } from './ui-select.js';
 import { popover } from './ui-popover.js';
 import { mountSettings } from './ui-settings.js';
@@ -41,19 +42,16 @@ const shared = { flags, onIslandUpdate: null, scope, chatIdentity };
 let nativeControlsCleanup;
 const selectAdapters = [];
 let settingsUi;
-let memoryDock, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, dead = false, tab = '';
+let memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, memory, music, timer, dead = false, tab = '';
 let memoryStartup;
 let lastGeneration = '尚未生成';
 
 const root = D.createElement('div');
 root.id = 'capricorn-hub';
+root.dataset.floatMode = readFloatSettings().mode;
 root.innerHTML = `
   <button class="cap-island" aria-expanded="false" data-playing="false" aria-label="声屿音乐播放器" title="声屿">
     <span class="cap-island-colors" aria-hidden="true"></span>
-    <span class="cap-island-orb" aria-hidden="true">
-      <span class="cap-island-note-svg">${icon('music', 21)}</span>
-      <span class="cap-island-bars"><i></i><i></i><i></i></span>
-    </span>
     <span class="cap-island-lyric-wrap">
       <span class="cap-island-lyric">声屿</span>
       <span class="cap-island-translation" hidden></span>
@@ -72,7 +70,7 @@ root.innerHTML = `
       </div>
     </header>
     <small role="status"></small>
-    <section class="cap-settings" id="cap-hub-settings" role="tabpanel" aria-label="声屿设置" hidden>
+    <section class="cap-settings" id="cap-hub-settings" role="tabpanel" aria-label="摩羯座统一设置" hidden>
       <label data-cap-settings-section="appearance">外观模式
         <select data-cap-select="segment">
           <option value="auto">跟随系统</option>
@@ -168,6 +166,7 @@ shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
     }
   }
   cleanupMobile?.fit?.();
+  launcher?.onPlayback(playing);
 };
 
 const libraryNav = D.createElement('div');
@@ -210,27 +209,164 @@ function tracksByFloor(songs) {
   return byFloor;
 }
 async function showResonance(){
- const epoch=++resonanceEpoch,key=scope();resonance.dataset.scope=key;resonance.replaceChildren();
- const el=(tag,text,parent=resonance)=>{const n=D.createElement(tag);n.textContent=text;parent.append(n);return n;};
- el('p','正在读取当前聊天的剧情原声…');
- try{
- const [memories,soundtrack]=await Promise.all([memory?.timelineRows(),music?.timelineSongs()]);
- const rows=(memories||[]).sort((a,b)=>a.floor-b.floor);
- const songs=tracksByFloor(soundtrack||[]);
- if(epoch!==resonanceEpoch||key!==scope()||tab!=='resonance')return;
- resonance.replaceChildren();el('h3','共鸣 · 剧情原声');el('button','回响 · 沉浸式回忆').onclick=()=>recall?.open();
- const lock=el('button',shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）');lock.onclick=()=>{shared.recallLocked=!shared.recallLocked;lock.textContent=shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）';};
- const q=el('input','');q.placeholder='搜索歌曲、歌手、剧情';q.setAttribute('aria-label','搜索歌曲、歌手、剧情');const chapter=el('select','');chapter.dataset.capSelect='search';chapter.setAttribute('aria-label','章节');for(const c of ['',...new Set(rows.map(r=>r.chapter).filter(Boolean))]){const o=el('option',c||'全部章节',chapter);o.value=c;}
- const play=el('button','播放筛选原声带');const list=el('div','');
- const valid=()=>key===scope()&&tab==='resonance';
- function render(){list.replaceChildren();const grouped=new Map();for(const r of rows){if(chapter.value&&r.chapter!==chapter.value)continue;for(const t of songs.get(String(r.floor))??[]){if(q.value&&!fuzzy(`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter} ${r.traceText||''}`,q.value))continue;const g=grouped.get(t.id)||{t,rows:[]};if(lastItem(g.rows)!==r)g.rows.push(r);grouped.set(t.id,g);}}
- play.disabled=![...grouped.values()].some(g=>g.t.playable);play.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([...grouped.values()].filter(g=>g.t.playable).map(g=>g.t.id),chapter.value||'剧情原声带');}};
- if(!grouped.size)el('p','暂无匹配的已归档剧情音乐',list);
- for(const {t,rows:matches} of grouped.values()){const d=el('details','',list);el('summary',`${t.title} · ${t.artist} (${matches.length})`,d);const b=el('button','播放此曲',d);b.disabled=!t.playable;b.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([t.id],t.title);}};for(const r of matches){el('p',`${r.chapter||''} ${r.title} · ${r.when}`,d);const j=el('button','查看剧情便签',d);j.onclick=()=>{if(!valid())return;close();if(memoryDock)void memoryDock.open(r.floor);else memory.root.classList.remove('shiyi-collapsed');};}}
- }q.oninput=render;chapter.onchange=render;render();
- }catch(e){if(epoch===resonanceEpoch)resonance.textContent='读取失败：'+e.message;}
-}
+  const epoch = ++resonanceEpoch, key = scope();
+  resonance.dataset.scope = key;
+  resonance.replaceChildren();
+  const el = (tag, text, parent = resonance, cls = '') => {
+    const n = D.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    parent?.append(n);
+    return n;
+  };
+  el('p', '正在读取当前聊天的剧情原声…', resonance, 'cap-res-empty');
+  try {
+    const [memories, soundtrack] = await Promise.all([memory?.timelineRows(), music?.timelineSongs()]);
+    const rows = (memories || []).sort((a, b) => a.floor - b.floor);
+    const songs = tracksByFloor(soundtrack || []);
+    if (epoch !== resonanceEpoch || key !== scope() || tab !== 'resonance') return;
+    resonance.replaceChildren();
 
+    const head = el('div', null, resonance, 'cap-res-header');
+    el('h3', '共鸣 · 剧情原声', head);
+    const recallBtn = el('button', null, head, 'cap-res-recall');
+    recallBtn.type = 'button';
+    recallBtn.innerHTML = `${icon('sparkle', 14, { weight: 'duotone' })}<span>回响</span>`;
+    recallBtn.title = '打开回响 · 沉浸式剧情漫游';
+    recallBtn.onclick = () => recall?.open();
+
+    const actions = el('div', null, resonance, 'cap-res-actions');
+    const play = el('button', null, actions, 'cap-res-play-all');
+    play.type = 'button';
+    play.innerHTML = `${icon('play', 14)}<span>播放原声带</span>`;
+
+    const lock = el('button', null, actions, 'cap-res-lock');
+    lock.type = 'button';
+    const syncLock = () => {
+      const locked = !!shared.recallLocked;
+      lock.setAttribute('aria-pressed', String(locked));
+      lock.innerHTML = `${icon('lock-simple', 14, { active: locked })}<span>${locked ? '已锁切歌' : '跟随剧情'}</span>`;
+      lock.title = locked ? '点击解除音乐锁定，恢复跟随剧情切歌' : '点击锁定当前音乐，暂停剧情自动切歌';
+    };
+    syncLock();
+    lock.onclick = () => { shared.recallLocked = !shared.recallLocked; syncLock(); };
+
+    const filters = el('div', null, resonance, 'cap-res-filters');
+    const searchWrap = el('div', null, filters, 'cap-res-search-wrap');
+    const searchIco = el('span', null, searchWrap, 'cap-res-search-icon');
+    searchIco.innerHTML = icon('search', 14);
+    const q = el('input', null, searchWrap, 'cap-res-search');
+    q.type = 'search';
+    q.placeholder = '搜索歌曲、歌手或剧情';
+    q.setAttribute('aria-label', '搜索歌曲、歌手、剧情');
+
+    const chapter = el('select', null, filters, 'cap-res-chapter');
+    chapter.dataset.capSelect = 'search';
+    chapter.setAttribute('aria-label', '章节');
+    for (const c of ['', ...new Set(rows.map(r => r.chapter).filter(Boolean))]) {
+      const o = el('option', c || '全部章节', chapter);
+      o.value = c;
+    }
+
+    const list = el('div', null, resonance, 'cap-res-list');
+    const valid = () => key === scope() && tab === 'resonance';
+
+    function render() {
+      list.replaceChildren();
+      const grouped = new Map();
+      for (const r of rows) {
+        if (chapter.value && r.chapter !== chapter.value) continue;
+        for (const t of songs.get(String(r.floor)) ?? []) {
+          if (q.value && !fuzzy(`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter} ${r.traceText || ''}`, q.value)) continue;
+          const g = grouped.get(t.id) || { t, rows: [] };
+          if (lastItem(g.rows) !== r) g.rows.push(r);
+          grouped.set(t.id, g);
+        }
+      }
+      const playableIds = [...grouped.values()].filter(g => g.t.playable).map(g => g.t.id);
+      play.disabled = !playableIds.length;
+      play.onclick = () => {
+        if (valid()) {
+          shared.recallLocked = true;
+          syncLock();
+          music.playStoryQueue(playableIds, chapter.value || '剧情原声带');
+        }
+      };
+      if (!grouped.size) {
+        el('p', '暂无匹配的已归档剧情音乐', list, 'cap-res-empty');
+        return;
+      }
+      for (const { t, rows: matches } of grouped.values()) {
+        const d = el('details', null, list, 'cap-res-card');
+        const sum = el('summary', null, d, 'cap-res-summary');
+
+        const art = el('span', null, sum, 'cap-res-art');
+        art.setAttribute('aria-hidden', 'true');
+        let validCover = '';
+        try {
+          if (t.coverUrl) {
+            const u = new URL(t.coverUrl);
+            if (['https:', 'http:'].includes(u.protocol)) validCover = u.href.replace(/^http:/, 'https:');
+          }
+        } catch {}
+        if (validCover) {
+          const img = D.createElement('img');
+          img.loading = 'lazy';
+          img.decoding = 'async';
+          img.alt = '';
+          img.src = validCover;
+          img.onerror = () => { art.innerHTML = icon('music-note', 16); };
+          art.append(img);
+        } else {
+          art.innerHTML = icon('music-note', 16);
+        }
+
+        const info = el('div', null, sum, 'cap-res-track-info');
+        el('strong', t.title, info);
+        el('small', `${t.artist} · ${matches.length} 幕`, info);
+
+        const playBtn = el('button', null, sum, 'cap-res-play-btn');
+        playBtn.type = 'button';
+        playBtn.innerHTML = icon('play', 14);
+        playBtn.disabled = !t.playable;
+        playBtn.title = t.playable ? '播放此曲' : '暂无可用音源';
+        playBtn.setAttribute('aria-label', '播放 ' + t.title);
+        playBtn.onclick = event => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (valid()) {
+            shared.recallLocked = true;
+            syncLock();
+            music.playStoryQueue([t.id], t.title);
+          }
+        };
+
+        const body = el('div', null, d, 'cap-res-moments');
+        for (const r of matches) {
+          const item = el('div', null, body, 'cap-res-moment');
+          const meta = el('div', null, item, 'cap-res-moment-text');
+          el('strong', `${r.chapter ? r.chapter + ' · ' : ''}${r.title}`, meta);
+          el('small', r.when, meta);
+          const j = el('button', null, item, 'cap-res-jump');
+          j.type = 'button';
+          j.innerHTML = `<span>便签</span>${icon('external', 12)}`;
+          j.title = '查看剧情便签';
+          j.onclick = () => {
+            if (!valid()) return;
+            close();
+            if (memoryDock) void memoryDock.open(r.floor);
+            else memory.root.classList.remove('shiyi-collapsed');
+          };
+        }
+      }
+    }
+    q.oninput = render;
+    chapter.onchange = render;
+    render();
+  } catch (e) {
+    if (epoch === resonanceEpoch) resonance.textContent = '读取失败：' + e.message;
+  }
+}
 let theme = 'auto';
 try { theme = W.localStorage.getItem('capricorn_theme') || 'auto'; } catch {}
 const themeSelect = settings.querySelector('select');
@@ -279,15 +415,18 @@ function close() {
   root.dataset.panelOpen = 'false';
   island.setAttribute('aria-expanded', 'false');
   select('');
+  launcher?.onPanelChange();
 }
 
-shared.onPlayerClose=()=>island.setAttribute('aria-expanded','false');
+shared.onPlayerClose=()=>{island.setAttribute('aria-expanded','false');launcher?.onPanelChange();};
 function openHub(t) {
   nav.hidden = false;
   root.dataset.panelOpen = 'true';
   island.setAttribute('aria-expanded', 'true');
   fitHub();
   select(t);
+  launcher?.wake();
+  launcher?.onPanelChange();
 }
 shared.openPlayerAux = openHub;
 function openPlayer() {
@@ -295,6 +434,7 @@ function openPlayer() {
   close();
   music.openPlayer();
   island.setAttribute('aria-expanded', 'true');
+  launcher?.onPanelChange();
 }
 island.onclick = () => {
   if (cleanupMobile?.consumeDrag()) return;
@@ -398,7 +538,9 @@ W.__capricornExtension = {
     }
     maintenance.close();
     D.removeEventListener('visibilitychange', resume);
+    D.removeEventListener('keydown', onGlobalKeyDown);
     appearanceApi?.destroy();
+    launcher?.destroy();
     cleanupMobile?.destroy();
     memoryDock?.destroy();
     cleanupNetease?.();
@@ -417,6 +559,14 @@ function resume() {
   if (D.hidden || dead) return;
   maintenance.resume();
   tick();
+}
+
+function onGlobalKeyDown(event) {
+  if (event.key !== 'Escape' || event.defaultPrevented || dead) return;
+  if (D.querySelector('.cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
+  if (!nav.hidden) { close(); return; }
+  if (music?.isPlayerOpen?.()) { music.closePlayer(); return; }
+  if (memoryDock?.isOpen?.()) memory?.setCollapsed?.(true);
 }
 
 async function boot() {
@@ -450,6 +600,7 @@ if (memory?.root) {
 
 if (music?.root) { content.append(music.root); }
 D.addEventListener('visibilitychange',resume);
+D.addEventListener('keydown',onGlobalKeyDown);
 timer = setInterval(() => { if (!D.hidden) tick(); }, 4000);
 tick();
 
@@ -466,6 +617,46 @@ const nativeSelects = services.querySelector('[data-native-selects]');
 nativeSelects.checked = nativeSelectsEnabled(D);
 nativeSelects.onchange = () => setNativeSelects(D, nativeSelects.checked);
 settings.append(services);
+// Unified controls are displayed in the same settings hub; the host-side drawer
+// remains a lightweight compatibility entry point.
+const memoryPanel = D.createElement('section');
+memoryPanel.className = 'cap-unified-module';
+memoryPanel.dataset.capSettingsSection = 'memory';
+memoryPanel.innerHTML = `<h4>${icon('bookmark', 16)}<span>拾忆 · 剧情记忆</span></h4><p>便签、表格、人物档案共享同一份聊天记忆。</p><div class="cap-unified-actions"><button type="button" data-view="timeline">${icon('note', 15)}<span>打开便签</span></button><button type="button" data-view="table">${icon('table', 15)}<span>查看表格</span></button><button type="button" data-view="dossier">${icon('users', 15)}<span>人物档案</span></button></div><p class="cap-unified-status" role="status"></p>`;
+settings.append(memoryPanel);
+const musicPanel = D.createElement('section');
+musicPanel.className = 'cap-unified-module';
+musicPanel.dataset.capSettingsSection = 'music';
+musicPanel.innerHTML = `<h4>${icon('music', 16)}<span>声屿 · 音乐播放</span></h4><p>播放与记忆由同一个扩展管理，音频无需依赖拾忆索引运行。</p><div class="cap-unified-actions"><button type="button" data-open-music>${icon('play', 14)}<span>打开播放器</span></button><button type="button" data-open-library>${icon('library', 15)}<span>打开曲库</span></button></div><p class="cap-unified-status" role="status"></p>`;
+settings.append(musicPanel);
+for (const button of memoryPanel.querySelectorAll('[data-view]')) {
+  button.disabled = !memory;
+  button.addEventListener('click', () => {
+    const target = button.dataset.view;
+    close();
+    if (memoryDock?.navigate) memoryDock.navigate(target);
+    else if (memory) { memory.setCollapsed?.(false); memoryDock?.open?.(); }
+  });
+}
+musicPanel.querySelector('[data-open-music]').disabled = !music;
+musicPanel.querySelector('[data-open-music]').onclick = openPlayer;
+musicPanel.querySelector('[data-open-library]').disabled = !music;
+musicPanel.querySelector('[data-open-library]').onclick = () => openHub('library');
+function updateUnifiedStatus() {
+  memoryPanel.querySelector('.cap-unified-status').textContent = memory ? '拾忆已启动 · 当前聊天：' + (scope() || '未选择') : '拾忆未启用';
+  musicPanel.querySelector('.cap-unified-status').textContent = music ? '声屿已启动 · 支持悬浮球与灵动岛' : '声屿未启用';
+}
+updateUnifiedStatus();
+if(music){
+  const backgroundLabel=D.createElement('label');
+  backgroundLabel.style.cssText='display:flex;align-items:flex-start;gap:8px;margin:10px 0;line-height:1.5';
+  const backgroundInput=D.createElement('input');backgroundInput.type='checkbox';
+  backgroundInput.checked=music.backgroundPriority?.()!==false;
+  const description=D.createElement('span');
+  description.textContent='iOSTT 后台播放优先（推荐）：优先使用系统音频通道，尽量支持锁屏与系统播放控件；部分 iPhone 将不能在网页内连续调节音量。更改后下一首歌生效。';
+  backgroundLabel.append(backgroundInput,description);musicPanel.append(backgroundLabel);
+  backgroundInput.addEventListener('change',()=>music.setBackgroundPriority?.(backgroundInput.checked));
+}
 const health=D.createElement('details');health.innerHTML='<summary>运行诊断</summary><pre style="white-space:pre-wrap"></pre><button type="button">刷新诊断</button>';services.append(health);
 const updateHealth=()=>{
   const m=maintenance.status();
@@ -490,7 +681,7 @@ playerButton.hidden = !music;
 primaryTabs.querySelector('[data-tab="library"]').hidden = !music;
 primaryTabs.querySelector('[data-tab="resonance"]').hidden = !(music && memory);
 
-const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');followLabel.hidden=!music;services.append(followLabel);
+const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');followLabel.hidden=!music;musicPanel.append(followLabel);
 const result = msg => controls.querySelector('[data-result]').textContent = msg;
 let changingModule = false;
 async function setModule(k, value) {
@@ -513,23 +704,31 @@ async function setModule(k, value) {
     changingModule = false;
   }
 }
+// Module toggles live inside the unified settings center. They preserve the
+// old storage key and reload semantics to avoid data migrations.
+for (const [kind, panel, label] of [
+  ['memory', memoryPanel, '启用拾忆'], ['music', musicPanel, '启用声屿'],
+]) {
+  const line = D.createElement('label');
+  line.className = 'cap-unified-toggle';
+  const input = D.createElement('input');
+  input.type = 'checkbox';
+  input.checked = flags[kind];
+  input.addEventListener('change', async () => {
+    if (!await setModule(kind, input.checked)) input.checked = flags[kind];
+  });
+  line.append(input, D.createTextNode(label + '（切换后刷新页面，不删除数据）'));
+  panel.prepend(line);
+}
 function mountNativeControls(){
   const panel=D.createElement('div'); panel.id='capricorn-native-settings'; panel.className='inline-drawer';
-  panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon down">' + icon('down') + '</div></div><div class="inline-drawer-content" style="display:none"><p>独立模块开关 · 修改后刷新页面，保留数据。</p><div data-switches></div></div>';
+  panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon down">' + icon('down') + '</div></div><div class="inline-drawer-content" style="display:none"><p>统一设置与数据管理 · 拾忆和声屿共用一个控制中心。</p></div>';
   const body=panel.querySelector('.inline-drawer-content');
   const menu=D.createElement('div');menu.id='capricorn-native-menu';
-  function switches(host){
-    for(const [k,name] of [['music','声屿'],['memory','拾忆']]){
-      const label=D.createElement('label');label.style.cssText='display:flex;align-items:center;gap:8px;padding:6px;cursor:pointer';
-      const input=D.createElement('input');input.type='checkbox';input.dataset.capModule=k;input.checked=flags[k];
-      input.addEventListener('change',async()=>{if(!await setModule(k,input.checked))input.checked=flags[k];});
-      label.append(input, name);host.append(label);
-    }
-  }
-  switches(panel.querySelector('[data-switches]'));switches(menu);
+  const entry=D.createElement('button');entry.type='button';entry.className='menu_button';entry.textContent='摩羯座设置中心';entry.onclick=()=>openHub('settings');menu.append(entry);
   mountPresetControls(body,W,D);
   const cleanupRegex=mountGlobalRegexControl(body,W,D);
-  const open=D.createElement('button');open.className='menu_button';open.textContent='更多设置';open.onclick=()=>openHub('settings');body.append(open);
+  const open=D.createElement('button');open.className='menu_button';open.textContent='打开统一设置';open.onclick=()=>openHub('settings');body.append(open);
   function attach(){
     if (!panel.isConnected) {
       const ext=D.querySelector('#extensions_settings2')||D.querySelector('#extensions_settings');
@@ -638,7 +837,55 @@ cacheButton.onclick = () => withDataOperation(async () => {
 shared.onAccountChange=()=>{if(tab==='cloud'&&!shared.accountReady?.())select('library');else libraryNav.hidden=!['library','cloud'].includes(tab)||!shared.accountReady?.();};
 if(flags.music) cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
-if(flags.music) cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
+if(music) {
+  cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
+  launcher = mountLauncher({root,island,nav,onOpen:openPlayer,isPlayerOpen:()=>Boolean(music?.isPlayerOpen())});
+  // Keep the existing Capricorn settings and backup controls; only extend the music appearance section.
+  const floating = D.createElement('section');
+  floating.dataset.capSettingsSection='appearance';
+  floating.className='cap-float-settings';
+  floating.innerHTML=`<h4>悬浮控件</h4>
+    <label>显示样式<select data-float-mode data-cap-select="segment">
+      <option value="orb">悬浮球 · 始终显示小球</option><option value="island">灵动岛 · 播放时展开歌词</option>
+    </select></label>
+    <label>停靠位置<select data-float-dock>
+      <option value="free">自由拖动</option><option value="fixed">锁定当前位置</option>
+      <option value="top">酒馆顶栏正中下方 · 自适应</option>
+      <option value="composer">输入栏正中上方 · 自适应</option>
+    </select></label>
+    <p class="cap-float-hint">自由拖动可保存位置；自动停靠会随酒馆布局和视口调整。</p>`;
+  settings.append(floating);
+  const modeControl=floating.querySelector('[data-float-mode]');
+  const dockControl=floating.querySelector('[data-float-dock]');
+  const initial=cleanupMobile.settings();
+  modeControl.value=initial.mode;
+  dockControl.value=initial.dock;
+  modeControl.addEventListener('change',()=>cleanupMobile?.update({mode:modeControl.value}));
+  dockControl.addEventListener('change',()=>cleanupMobile?.update({dock:dockControl.value}));
+  const wake=D.createElement('section');wake.className='si-launch-settings';
+  wake.innerHTML=`<h4>隐藏与唤起</h4>
+    <label>悬浮控件显示策略<select data-launch-policy>
+      <option value="always">始终显示</option><option value="auto">自动隐藏 · 触碰时唤醒</option>
+      <option value="edge">贴边隐藏 · 保留把手</option>
+      <option value="hidden">完全隐藏 · 无入口时保留贴边把手</option>
+    </select></label>
+    <label>自动隐藏等待<select data-launch-delay><option value="3">3 秒</option><option value="5">5 秒</option><option value="10">10 秒</option><option value="20">20 秒</option></select></label>
+    <label class="si-launch-toggle"><input type="checkbox" data-launch-shortcut>键盘 Alt + M 唤起</label>
+    <label class="si-launch-toggle"><input type="checkbox" data-launch-gesture>屏幕边缘双击唤起（实验）</label>
+    <p class="cap-float-hint">隐藏不停止播放。无可用唤起入口时保留窄把手，避免失联。</p>`;
+  floating.append(wake);
+  const launcherControls={policy:wake.querySelector('[data-launch-policy]'),delay:wake.querySelector('[data-launch-delay]'),shortcut:wake.querySelector('[data-launch-shortcut]'),gesture:wake.querySelector('[data-launch-gesture]')};
+  const current=launcher.settings();
+  for (const [key,element] of Object.entries(launcherControls)) {
+    if(element.type==='checkbox')element.checked=current[key];else element.value=String(current[key]);
+    element.addEventListener('change',()=>{
+      const value=element.type==='checkbox'?element.checked:key==='delay'?Number(element.value):element.value;
+      const applied=launcher?.update({[key]:value})||current;
+      for(const [k,control] of Object.entries(launcherControls)) if(control.type==='checkbox')control.checked=applied[k];
+    });
+  }
+}
+
 try {
   appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
 } catch (error) {

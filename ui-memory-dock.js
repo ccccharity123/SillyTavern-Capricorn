@@ -52,13 +52,14 @@ function mountPosition(dock, button) {
     if (!drag || event.pointerId !== drag.id) return;
     const dy = event.clientY - drag.y;
     if (!drag.moved && Math.abs(dy) < 7) return;
-    drag.moved = true;
+    if (!drag.moved) { drag.moved = true; button.dataset.dragging = 'true'; }
     const b = bounds(viewport(W));
     ratio = Math.max(0, Math.min(1, (drag.top + dy - b.min) / Math.max(1, b.max - b.min)));
     fit();
   }
   function end(event) {
     if (!drag || event.pointerId !== drag.id) return;
+    delete button.dataset.dragging;
     suppress = drag.moved;
     drag = null;
     if (suppress) try { W.localStorage.setItem(key, String(ratio)); } catch (_) {}
@@ -79,6 +80,7 @@ function mountPosition(dock, button) {
   }
   resize();
   return () => {
+    delete button.dataset.dragging;
     for (const [name, handler] of listeners) button.removeEventListener(name, handler);
     button.removeEventListener('click', click, true);
     W.removeEventListener('resize', resize);
@@ -164,9 +166,14 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   const count = make('span', 'cap-shiyi-count', searchBox);
   count.hidden = true;
   const refresh = iconButton(make('button', '', searchBox), '刷新当前内容', 'refresh');
-  refresh.onclick = () => void render();
+  refresh.onclick = () => {
+    refresh.classList.remove('is-spinning');
+    void refresh.offsetWidth;
+    refresh.classList.add('is-spinning');
+    void render();
+  };
 
-  expand.innerHTML = icon('bookmark', 20);
+  expand.replaceChildren();
   const tabBadge = make('span', 'cap-shiyi-dot', expand);
   tabBadge.hidden = true;
   const cleanupPosition = mountPosition(dock, expand);
@@ -291,42 +298,68 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
       setCount(filtered.length);
       empty.hidden = filtered.length > 0;
       empty.textContent = rows.length ? '暂无匹配的剧情便签' : '暂无已归档摘要，请检测或导入历史。';
+      const multiPage = filtered.length > pageSize;
+      pages.hidden = !multiPage;
       previous.hidden = offset === 0;
       next.hidden = filtered.length <= offset + pageSize;
       for (const row of filtered.slice(offset, offset + pageSize)) {
         const card = make('details', 'cap-story', cards);
+        if (row.star) card.dataset.starred = 'true';
         const head = make('summary', '', card);
         const getField = name => {
           const matched = row.content.match(new RegExp('<' + name + '>([\\s\\S]*?)</' + name + '>'));
           return matched && matched[1] ? matched[1].trim() : '';
         };
         const tracks = songs.get(String(row.floor)) || [];
-        const when = make('span', 'cap-story-time', head);
+
+        const meta = make('div', 'cap-story-meta', head);
+        const metaLeft = make('div', 'cap-story-meta-left', meta);
+        const when = make('span', 'cap-story-time', metaLeft);
         when.textContent = getField('时间') || row.when;
-        const title = make('span', 'cap-story-title', head);
+        if (row.chapter) {
+          const chap = make('span', 'cap-story-chapter', metaLeft);
+          chap.textContent = row.chapter;
+        }
+        const metaRight = make('div', 'cap-story-meta-right', meta);
         if (row.star) {
-          title.insertAdjacentHTML('beforeend', icon('star', 15, {weight:'fill'}));
-          const hidden = make('span', 'cap-shiyi-visually-hidden', title);
+          const starBadge = make('span', 'cap-story-star', metaRight);
+          starBadge.innerHTML = icon('star', 13, {weight: 'fill'});
+          const hidden = make('span', 'cap-shiyi-visually-hidden', starBadge);
           hidden.textContent = '已星标 ';
         }
-        title.append(D.createTextNode((row.chapter ? row.chapter + ' · ' : '') +
-          (getField('标题') || row.title.replace(/^记忆\d+｜/, ''))));
-        const song = make('span', 'cap-story-song', head);
-        if (tracks.length) song.insertAdjacentHTML('beforeend', icon('music', 15));
-        song.append(D.createTextNode(tracks.length ? tracks.map(track => track.title + ' — ' + track.artist).join(' / ') : '暂无音乐记录'));
-        const body = make('p', '', card);
+        const floorTag = make('span', 'cap-story-floor', metaRight);
+        floorTag.textContent = '#' + row.floor;
+
+        const title = make('span', 'cap-story-title', head);
+        title.textContent = getField('标题') || row.title.replace(/^记忆\d+｜/, '');
+
+        if (tracks.length) {
+          const song = make('span', 'cap-story-song', head);
+          song.innerHTML = icon('music', 13);
+          const songText = make('span', 'cap-story-song-text', song);
+          songText.textContent = tracks.map(track => track.title + ' — ' + track.artist).join(' / ');
+        }
+
+        const body = make('p', 'cap-story-body', card);
         body.textContent = getField('摘要') || row.content;
+
+        const actionsBar = make('div', 'cap-story-actions', card);
         for (const track of tracks) {
-          const button = make('button', 'cap-story-play', card);
+          const button = make('button', 'cap-story-play', actionsBar);
           button.type = 'button';
-          button.innerHTML = icon('play', 15);
-          button.append(D.createTextNode('播放 · ' + track.title));
+          button.innerHTML = icon('play', 12);
+          const playText = make('span', '', button);
+          playText.textContent = track.title;
+          button.title = '播放 · ' + track.title;
           button.disabled = !track.playable;
           button.onclick = () => { if (valid() && music) music.playTimeline(track.id); };
         }
-        const source = make('button', '', card);
+        const source = make('button', 'cap-story-jump', actionsBar);
         source.type = 'button';
-        source.textContent = '查看原楼层';
+        const srcText = make('span', '', source);
+        srcText.textContent = '第 ' + row.floor + ' 楼';
+        source.insertAdjacentHTML('beforeend', icon('external', 12));
+        source.title = '跳转到聊天原楼层';
         source.onclick = () => { if (valid() && !memory.jump(row.floor)) W.alert('请先加载该历史楼层'); };
         if (jump && row.floor === targetFloor) {
           card.open = true;
@@ -471,6 +504,12 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     },
     isOpen,
     open,
+    navigate(id) {
+      if (destinations.some(item => item[0] === id)) {
+        memory.setCollapsed(false);
+        show(id);
+      }
+    },
     destroy() {
       closed = true;
       onCollapse();
