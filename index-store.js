@@ -1,4 +1,6 @@
-// Derived per-document cache. Old snapshot databases are left untouched.
+import { createShardStore } from './shard-store.js';
+
+// Legacy derived per-document cache. Old snapshot databases are left untouched.
 export function createIndexStore(factory = globalThis.indexedDB) {
   let opening, retryAfter = 0, closed = false;
   function open() {
@@ -93,7 +95,12 @@ export function createIndexStore(factory = globalThis.indexedDB) {
 }
 
 export async function clearIndex(scope) {
-  const store = createIndexStore();
-  try { return await store.clear(scope); }
-  finally { store.close(); }
+  const legacy = createIndexStore(), shards = createShardStore();
+  try {
+    const cleared = await Promise.all([legacy.clear(scope), shards.clear(scope)]);
+    return cleared.every(Boolean);
+  } finally {
+    legacy.close();
+    shards.close();
+  }
 }

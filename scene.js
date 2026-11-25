@@ -17,26 +17,30 @@ export function sceneQuery(chat, docs) {
   const latest = recent.at(-1);
   const user = latest?.user ? latest.text : '';
   const short = !!user && user.length <= 64 && Array.from(user).length <= 32;
-  const context = tail(recent.slice(0, -1).map(item => tail(item.text, 480)).join('\n'), short ? 480 : 240);
+  const context = tail((latest?.user ? recent.slice(0, -1) : recent).map(item => tail(item.text, 480)).join('\n'), short ? 480 : 240);
+  const normalizedUser = normalize(user);
+  const normalizedContext = normalize(context);
+  const mentioned = value => normalizedUser.includes(value) || normalizedContext.includes(value);
 
   const names = new Set();
   const aliases = new Map();
+  const canonical = new Set();
   for (const doc of docs) {
     for (const name of doc.names || []) {
-      if (name.length >= 2 && name.length <= 40) names.add(normalize(name));
+      const key = normalize(name);
+      if (name.length >= 2 && name.length <= 40 && mentioned(key)) names.add(key);
     }
     if (!doc.actor) continue;
     const name = normalize(String(doc.actor.name ?? '').trim());
     if (!name) continue;
-    for (const alias of doc.actor.aliases) {
+    canonical.add(name);
+    for (const alias of (doc.actor.aliases || [])) {
       const key = normalize(String(alias).trim());
-      if (key.length < 2 || key.length > 40 || key === name) continue;
+      if (key.length < 2 || key.length > 40 || key === name || !mentioned(key)) continue;
       if (!aliases.has(key)) aliases.set(key, new Set());
       aliases.get(key).add(name);
     }
   }
-  const normalizedUser = normalize(user);
-  const normalizedContext = normalize(context);
   const explicit = [...names].filter(name => normalizedUser.includes(name));
   const active = short && explicit.length === 0
     ? [...names]
@@ -48,7 +52,7 @@ export function sceneQuery(chat, docs) {
   const hints = explicit.length ? explicit : active;
   const officialNames = candidates => [...new Set(candidates.flatMap(alias => {
     const mapped = aliases.get(alias);
-    return mapped?.size === 1 ? [...mapped] : [];
+    return !canonical.has(alias) && mapped?.size === 1 ? [...mapped] : [];
   }))].slice(0, 3);
   const named = officialNames(explicit).filter(name => name && !normalizedUser.includes(name));
   const primary = [tail(latest?.text || '', 1200), ...named].filter(Boolean).join('\n');

@@ -98,7 +98,7 @@ export function memoryBackupSnapshot(scope, input) {
       start: nonemptyText, end: nonemptyText, keep: number, storyYear: value => text(value) || number(value),
       weaveMode: value => ['archive', 'compact', 'smart', 'deep'].includes(value),
       weaveBudget: number, weaveKinds: strings,
-      summaryMode: value => ['legacy', 'unified'].includes(value), engine: value => ['classic', 'hybrid'].includes(value),
+      summaryMode: value => ['auto', 'legacy', 'unified', 'local', 'enhanced'].includes(value), engine: value => ['classic', 'hybrid'].includes(value),
       adaptive: boolean, layers: boolean, modeAdvice: boolean,
     }, '拾忆设置'),
   } };

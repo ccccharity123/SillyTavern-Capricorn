@@ -1,12 +1,22 @@
-import {canonicalRows} from './canon.js';
+import {boundedRecall,RecallTimeout} from './recall-deadline.js';
+import {createVectorHealth} from './vector-health.js';
+import {createVectorLane} from './vector-lane.js';
+import {createMigration,embedBatch,vectorScope} from './migration.js';
+import {createVectorStore} from './vector-store.js';
+import {routeMemoryFromStats} from './memory-route.js';
+import {createMemoryData} from './memory-data.js';
+import {createMessageCatalog} from './message-catalog.js';
+import {appendMemoryProvenance} from './memory-provenance.js';
 import {sceneQuery} from './scene.js';
-import {searchMemory} from './recall-search.js';
+import {searchMemory, searchMemoryTop} from './recall-search.js';
+import {createDocumentCorpus, shardThreshold} from './memory-documents.js';
+import {maintenancePriority} from './scheduler.js';
 import {createLexicalStore} from './lexical-store.js';
 import {createVector} from './vector.js';
-import {hybrid,hybridBudget,buildDocs,cost} from './hybrid.js';
+import {hybrid,hybridBudget,buildDocs,cost,createSummaryDocCache,createEntityDocCache} from './hybrid.js';
 import {createRetrieval} from './retrieval-client.js';
 import {unified} from './unified.js';
-import {buildLedger,knowledgeForCharacter,retrieve,kinds} from './weave.js';
+import {knowledgeForCharacter,retrieve,kinds} from './weave.js';
 import {table,traces,fuzzy} from './traces.js';
 import { createDossier } from './dossier.js';
 import { memoryBackupSnapshot, restoreMemoryBackup } from './backup.js';
@@ -87,8 +97,8 @@ export async function startMemory(shared) {
   const $ = (s,root=hostDocument)=>root?.querySelector(s);
   const api = helperApi(window,hostWindow);
   const safe = s=>String(s??'').replace(/[<>"&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;','&':'&amp;'}[c]));
-  const vector=createVector();const lexicalStore=createLexicalStore();const retrieval=createRetrieval();
-  const settingsDefault={start:'<summary>',end:'</summary>',keep:5,storyYear:'',weaveMode:'smart',weaveBudget:3000,weaveKinds:kinds,summaryMode:'unified',engine:'hybrid',adaptive:false,autoHide:false,layers:true,vectorEnabled:false,vectorUrl:'',vectorModel:'',modeAdvice:true};
+  const vectorLane=createVectorLane();const vectorStore=createVectorStore();const vectorHealth=createVectorHealth(embedBatch);const vector=createVector(vectorStore,vectorLane,()=>Date.now(),vectorHealth.request);const migration=createMigration(vectorStore,vectorHealth.request,()=>Date.now(),vectorLane);let migrationRevision=-1,migrationTexts=[],migrationTextSet=new Set(),migrationScope="";const lexicalStore=createLexicalStore();const retrieval=createRetrieval();
+  const settingsDefault={start:'<summary>',end:'</summary>',keep:5,storyYear:'',weaveMode:'smart',weaveBudget:3000,weaveKinds:kinds,summaryMode:'unified',engine:'hybrid',adaptive:false,autoHide:false,layers:true,vectorEnabled:false,vectorMigration:false,vectorUrl:'',vectorModel:'',modeAdvice:true};
   const vars=()=>api('getVariables',{type:'chat'})||{};
   const saveVars=patch=>api('replaceVariables',{...vars(),shiyi_v01:patch},{type:'chat'});
   const blocked=key=>!!vars().shiyi_v01?.deletedKeys?.[key];
@@ -97,7 +107,7 @@ export async function startMemory(shared) {
     saveVars({...d,deletedKeys:{...d.deletedKeys,...Object.fromEntries(keys.map(k=>[k,true]))}});
     archiveRevision++;
   };
-  let archiveRevision=0, projectedRevision=-1;
+  let archiveRevision=0, projectedRevision='', archiveCheckedScope='', persistedTableScope='', persistedTableRevision;
   const changed=()=>{archiveRevision++;state.onChange?.();};
   const archive=()=>vars().shiyi_v01?.archiveUI||{};
   const promptKey='capricorn_weave';
@@ -119,41 +129,76 @@ export async function startMemory(shared) {
   let generation=null;
   const invalidateGeneration=()=>{
     generation=null;
-    archiveRevision++;
     if (!state.disposed) context().setExtensionPrompt?.(promptKey,'',1,4,false,0);
   };
-  const tableStable=new Map();let tableScope='';
-  function ledger(messages=getMessages(),persist=true){
-    const id=identity();if(tableScope!==id){tableScope=id;tableStable.clear();}
-    const d=vars().shiyi_v01||{}, old=d.weave?.rows||{}, now=Date.now();
-    const confirmed=d.records||{};const result=buildLedger(messages,hash,d.deletedKeys||{},archive().traceHidden||{},old,(m,k)=>{if(confirmed[k])return true;const t=tableStable.get(k);if(t===undefined){tableStable.set(k,now);return false;}return now-t>=8000;});
-    const live=new Set(messages.map(m=>`${m.message_id}:${hash(String(m.message??''))}`));for(const k of tableStable.keys())if(!live.has(k))tableStable.delete(k);
-    const next={rows:result.rows,entities:result.entities};if(persist&&JSON.stringify(d.weave||{})!==JSON.stringify(next)){check(id);saveVars({...vars().shiyi_v01,weave:next});}return result;
+  const memoryData = createMemoryData(hash);
+  const readMemory = (messages = getMessageSource()) => memoryData.read({
+    ...chatIdentity(), ...(Array.isArray(messages)?{messages}:messages), data: vars().shiyi_v01,
+  });
+  function ledger(view = readMemory()) {
+    const id = view.scope;
+    check(id);
+    const result = view.ledger();
+    if(result.revision!==undefined&&persistedTableScope===id&&persistedTableRevision===result.revision)return result;
+    const next = { rows: result.rows, entities: result.entities };
+    if (JSON.stringify(vars().shiyi_v01?.weave || {}) !== JSON.stringify(next)) {
+      check(id);
+      saveVars({ ...vars().shiyi_v01, weave: next });
+    }
+    if(result.revision!==undefined){persistedTableScope=id;persistedTableRevision=result.revision;}
+    return result;
   }
   const autoDossier=()=>ledger().entities;
-  async function recallForGeneration(chat,messages,rows,cfg,scope,guard,budget,verifySources,type){
-    if(budget===0)return {content:'',selected:[],summaries:[],estimate:0};
-    const l=ledger(messages,false), a=archive();
-    const live=new Set([...Object.keys(l.rows),...Object.keys(rows)]);
-    const manual=(a.dossier||[]).filter(r=>!(r.sources||[]).some(k=>!live.has(k)));
-    const manualIds=new Set(manual.map(r=>r.id));
-    const entities=[...manual,...l.entities.filter(r=>!manualIds.has(r.id))];
+  const summaryCache=createSummaryDocCache(),entityCache=createEntityDocCache();let summaryScope='';
+  const indexSession=globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`;
+  function indexRevision(view,cfg){
+    if(view.messageRevision==null)return null;
+    const metadata=hash(JSON.stringify([view.archive.meta,view.archive.dossier,view.archive.weavePins]));
+    return JSON.stringify([indexSession,view.scope,view.messageRevision,view.tableRevision(),view.summaryStats().revision,
+      archiveRevision,metadata,cfg.weaveMode,cfg.weaveKinds,cfg.layers]);
+  }
+  function recallInputs(chat,view,rows,cfg,budget){
+    const l=view.ledger(), a=view.archive;
+    const entities=view.activeDossiers(rows);
     const visible=sceneQuery(chat,[]).query;
     const options={mode:cfg.weaveMode,budget,pins:a.weavePins||[],categories:cfg.weaveKinds||kinds,meta:a.meta||{},adaptive:cfg.adaptive,layers:cfg.layers,visible};
-    if(cfg.summaryMode==='legacy')return retrieve(entities,visible,options);
-    if(cfg.engine!=='hybrid')return unified(rows,entities,visible,options);
+    if(cfg.summaryMode==='legacy'||cfg.engine!=='hybrid')return {l,entities,visible,options};
     const known=cfg.weaveMode==='archive'?[]:knowledgeForCharacter(l);
     if(known.length){
       entities.push(...known);
       options.categories=[...options.categories,'认知'];
     }
-    const docs=buildDocs(rows,entities,options), scene=sceneQuery(chat,docs);
-    const recall=await searchMemory(docs,scene,query=>{
+    if(Object.keys(rows).length+entities.length>=shardThreshold||view.summaryStats().estimate>=1024*1024){
+      return {l,entities,visible,options,corpus:createDocumentCorpus(rows,entities,options)};
+    }
+    const scope=identity();if(summaryScope!==scope){summaryScope=scope;summaryCache.clear();entityCache.clear();}
+    const docs=buildDocs(rows,entities,{...options,summaryCache,entityCache});
+    return {l,entities,visible,options,docs};
+  }
+  async function recallForGeneration(chat,view,rows,cfg,scope,guard,budget,verifySources,type){
+    if(budget===0)return {content:'',selected:[],summaries:[],estimate:0};
+    const {l,entities,visible,options,docs,corpus}=recallInputs(chat,view,rows,cfg,budget);
+    if(cfg.summaryMode==='legacy')return retrieve(entities,visible,options);
+    if(cfg.engine!=='hybrid')return unified(rows,entities,visible,options);
+    const scene=sceneQuery(chat,corpus?corpus.sceneEntities():docs);
+    const revision=corpus?indexRevision(view,cfg):null;
+    const recall=corpus?await searchMemoryTop(scene,async query=>{
+      verifySources();
+      const ranked=(revision&&await retrieval.top(query,scope,revision,192,guard))||
+        await retrieval.topBlocks(corpus.documents,query,192,guard);
+      return ranked.matches.flatMap(({id,score})=>{
+        const doc=corpus.resolve(id);
+        return doc?[{doc,score}]:[];
+      });
+    }):await searchMemory(docs,scene,query=>{
       if(query!==scene.primary)verifySources();
       return retrieval.scores(docs,query,scope,lexicalStore,guard);
     });
     guard();
     const sameScope=state.echoScope===scope;
+    const echo=sameScope?state.echo:{};
+    const candidates=corpus?corpus.candidates(recall.scores,scene,echo):docs;
+    const scores=corpus?candidates.map(doc=>recall.scores.get(doc.id)||0):recall.scores;
     const query=['expanded','deep'].includes(recall.stage)?scene.expanded:scene.primary;
     const limit=hybridBudget(budget,query,options.adaptive,recall);
     const actor=cfg.weaveMode==='archive'?'':activeViewpoint(scope,type);
@@ -161,13 +206,28 @@ export async function startMemory(shared) {
     const roleCost=perspective.content?cost('\n\n'+perspective.content):0;
     const result=hybrid(rows,entities,query,{
       ...options, budget:limit-roleCost, adaptive:false,
-      docs, scores:recall.scores, sceneHints:scene.hints, recallAnchor:recall.anchor, primaryQuery:scene.primary, lexicalStore,
-      echo:sameScope?state.echo:{}, advance:!sameScope||state.echoTurn!==visible,
-      vectorRank:cfg.vectorEnabled?(ranked,query)=>vector.rank(ranked,query,{...cfg,vectorKey:sessionStorage.getItem('capricorn-vector-key')||''},scope):null,
+      docs:candidates, scores, sceneHints:scene.hints, recallAnchor:recall.anchor, primaryQuery:scene.primary, lexicalStore,
+      echo, advance:!sameScope||state.echoTurn!==visible,
+      vectorRank:cfg.vectorEnabled&&vectorHealth.ready({...cfg,vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})?(ranked,query)=>vector.rank(ranked,query,{...cfg,vectorKey:sessionStorage.getItem('capricorn-vector-key')||''},scope):null,
     });
+    const publicIds = new Set(result.selected.filter(id => id.startsWith('knowledge:')));
+    const viewpointIds = new Set(perspective.selected);
+    const knowledgeSources = [];
+    if (publicIds.size || viewpointIds.size) {
+      const candidates = { knowledge: l.knowledge.filter(row => publicIds.has(row.id) || viewpointIds.has(row.id)) };
+      for (const row of knowledgeForCharacter(candidates)) {
+        if (publicIds.has(row.id) && row.sourceKey) knowledgeSources.push([row.id, row.sourceKey]);
+      }
+      if (viewpointIds.size) {
+        for (const row of knowledgeForCharacter(candidates, actor)) {
+          if (viewpointIds.has(row.id) && row.sourceKey) knowledgeSources.push([row.id, row.sourceKey]);
+        }
+      }
+    }
+    const content=[result.content,perspective.content].filter(Boolean).join('\n\n');
     return {
-      ...result, budget:limit, recallStage:recall.stage, recallConfidence:recall.confidence,
-      content:[result.content,perspective.content].filter(Boolean).join('\n\n'),
+      ...result, estimate:cost(content), budget:limit, recallStage:recall.stage, recallConfidence:recall.confidence, knowledgeSources,
+      content,
       selected:[...new Set([...result.selected,...perspective.selected])],
       viewpoint:perspective.content?actor:'',
       viewpointCount:perspective.selected.length,
@@ -182,9 +242,9 @@ export async function startMemory(shared) {
   function recycle(keys,rows){const a=archive(),trash={...a.trash};for(const k of keys)if(rows[k])trash[k]={...rows[k],deletedAt:new Date().toISOString()};archivePatch({trash});}
   function jump(floor){const el=hostDocument.querySelector(`#chat .mes[mesid="${Number(floor)}"]`);if(!el){notice('原楼层未加载，请先加载历史聊天');return false;}el.scrollIntoView({block:'center',behavior:'smooth'});return true;}
 
-  const config=(d=vars().shiyi_v01||{})=>{const saved=d.settings||{};return {...settingsDefault,...saved,summaryMode:saved.summaryMode||(Object.keys(d.records||{}).length?'unified':'legacy')};};
+  const config=(d=vars().shiyi_v01||{})=>{const saved=d.settings||{};return {...settingsDefault,...saved,summaryMode:saved.summaryMode||'auto'};};
   const records=()=>vars().shiyi_v01?.records||{};
-  const activeRecords=(messages=getMessages())=>canonicalRows(records(),messages,hash,vars().shiyi_v01?.deletedKeys);
+  const activeRecords=(messages=getMessageSource())=>readMemory(messages).summaries();
   const context=()=>hostWindow.SillyTavern?.getContext?.()||window.SillyTavern?.getContext?.()||{};
   const chatIdentity=()=>{
     if(shared.chatIdentity)return shared.chatIdentity();
@@ -206,7 +266,17 @@ export async function startMemory(shared) {
   const sourceKey=m=>`${m.message_id}:${hash(String(m.message??''))}`;
   const notice=(msg)=>{console.info('[拾忆]',msg); const el=$('#shiyi-status',state.root);if(el)el.textContent=msg;};
   const error=(e)=>{console.error('[拾忆]',e);notice('操作失败：'+(e?.message||e));};
-  function getMessages(){ const last=api('getLastMessageId');if(!Number.isInteger(last)||last < -1)throw Error('聊天尚未就绪');const list=last>=0?api('getChatMessages',`0-${last}`,{role:'assistant',hide_state:'all'}):[];if(!Array.isArray(list))throw Error('聊天读取失败');return list; }
+  const messageCatalog=createMessageCatalog({context,scope:identity,last:()=>api('getLastMessageId'),
+    read:(start,end,full)=>api('getChatMessages',full||start!==end?`${start}-${end}`:String(start),{role:'assistant',hide_state:'all'}),
+  });
+  function getMessageSource({reconcile=false,swipe=false}={}){
+    const source=messageCatalog.snapshot({reconcile});
+    const excludeFloor=swipe?source.last:undefined;
+    if(source.trusted)return {source,excludeFloor};
+    const messages=source.messages();
+    return swipe?messages.filter(message=>message.message_id!==excludeFloor):messages;
+  }
+  function getMessages(){return messageCatalog.snapshot().messages();}
   function extract(str,{start,end}=config()){let best=null,pos=-1;for(const [a,b] of [[start,end],['<summary>','</summary>'],['<摩羯纪要>','</摩羯纪要>']]){if(!a||!b)continue;const i=str.lastIndexOf(a),j=str.indexOf(b,i+a.length);if(i>=0&&j>=0&&i>pos){pos=i;best=str.slice(i+a.length,j).trim();}}return best;}
   // 剧情日期解析：支持年月日、月日、中文上午/中午/下午、起止范围和跨日。
   // 缺少年份时仅使用用户在设置中确认的剧情年份，不以现实年份填充。
@@ -302,23 +372,25 @@ export async function startMemory(shared) {
     }
     return {name,owner,names,entries,owns,matches,rows,imported};
   }
-  async function projectWorldbook(id,messages,mode){
-    const {name,owner,names,entries,owns,matches,rows,imported}=await readArchive(id);
-    if(imported){
-      check(id);
+  async function recoverArchive(id){
+    const book=await readArchive(id);
+    check(id);
+    if(book.imported){
       const latest=vars().shiyi_v01||{};
-      saveVars({...latest,records:{...rows,...latest.records},archiveVersion:2});
+      saveVars({...latest,records:{...book.rows,...latest.records},archiveVersion:2});
       changed();
     }
-    const active=activeRecords(messages);
+    archiveCheckedScope=id;
+    return book;
+  }
+  async function projectLegacyWorldbook(id,active,{name,owner,names,entries,owns,matches}){
     const content=formatRows(active);
     const intact=e=>String(e.content??'')===formatRows(e.extra.shiyi_rows||{});
     // Keep manually edited worldbook text and keep it out of automatic injection until reviewed.
     const conflict=entries.some(e=>matches(e)&&!intact(e));
     if(conflict)notice('拾忆世界书存在手动修改，已保留原内容；请在世界书中核对。');
     const existing=entries.find(e=>owns(e)&&e.extra.shiyi_chat===id&&intact(e));
-    const cfg=config();
-    const enable=(mode||cfg.summaryMode)==='legacy'&&!!content;
+    const enable=!!content;
     let projection=existing;
     if(content&&!projection){
       if(!names.includes(name)&&!await api('createWorldbook',name,[]))throw Error('世界书创建失败');
@@ -347,8 +419,31 @@ export async function startMemory(shared) {
       if((projection&&!updated.some(e=>e.uid===projection.uid))||updated.some(e=>modify(e)!==e))throw Error('拾忆世界书更新未完成');
     }
     await syncWorldbookMounts(api,check,id,enable?name:null);
+  }
+  function memoryRoute(id,view,cfg,limit){
+    const settings=cfg.summaryMode;
+    return routeMemoryFromStats(settings,settings==='auto'?view.summaryStats():undefined,
+      limit??cfg.weaveBudget,state.routeScope===id?state.routeMode:undefined,
+      cfg.engine==='hybrid'&&cfg.vectorEnabled&&!!cfg.vectorUrl&&!!cfg.vectorModel);
+  }
+  async function prepareMemoryRoute(id,messages,limit,force=false,settings){
+    let book=archiveCheckedScope!==id||force?await recoverArchive(id):undefined;
     check(id);
-    return {active,cfg};
+    let view=readMemory(messages);
+    const cfg=settings||config();
+    let route=memoryRoute(id,view,cfg,limit);
+    if(route.mode==='legacy'&&!book){
+      book=await recoverArchive(id);
+      if(book.imported){
+        view=view.withData(vars().shiyi_v01);
+        route=memoryRoute(id,view,cfg,limit);
+      }
+    }
+    if(route.mode==='legacy')await projectLegacyWorldbook(id,view.summaries(),book);
+    else await syncWorldbookMounts(api,check,id,null);
+    check(id);
+    state.routeScope=id;state.routeMode=route.mode;state.routeProfile=route.profile;state.routeReason=route.reason;
+    return {memoryView:view,cfg:{...cfg,summaryMode:route.mode,vectorEnabled:route.profile==='enhanced'}};
   }
   function writeRows(id,rows,patch={}){
     check(id);
@@ -395,25 +490,30 @@ export async function startMemory(shared) {
     return serial(async()=>{
       if(generation)return;
       check(id);
-      const messages=getMessages();
-      const revision=archiveRevision;
+      const messages=getMessageSource({reconcile:true});
+      const revision=JSON.stringify([id,archiveRevision,state.messageVersion?.()]);
+      let memoryView;
       if(force||projectedRevision!==revision){
-        await projectWorldbook(id,messages);
-        projectedRevision=revision;
+        ({memoryView}=await prepareMemoryRoute(id,messages,undefined,force));
       }
       if(generation)return;
-      ledger(messages);
-      await reconcileAutoHide(id,config().summaryMode==='unified');
+      check(id);
+      if(memoryView){
+        const current=getMessageSource();
+        if(!sameSources(messages,current))return;
+        projectedRevision=JSON.stringify([id,archiveRevision,state.messageVersion?.()]);
+      }
+      ledger(memoryView?.withData(vars().shiyi_v01) || readMemory(messages));
+      await reconcileAutoHide(id,state.routeMode==='unified');
       return messages;
     });
   }
-  const generationMessages=type=>{
-    const messages=getMessages();
-    if(type!=='swipe')return messages;
-    const last=api('getLastMessageId');
-    return messages.filter(m=>m.message_id!==last);
-  };
+  const generationMessages=type=>getMessageSource({swipe:type==='swipe'});
   function sameSources(previous,current){
+    if(!Array.isArray(previous)||!Array.isArray(current)){
+      return previous.source?.scope===current.source?.scope&&previous.source?.revision===current.source?.revision&&
+        previous.source?.last===current.source?.last&&previous.excludeFloor===current.excludeFloor;
+    }
     return previous.length===current.length&&previous.every((m,i)=>
       m.message_id===current[i].message_id&&m.message===current[i].message&&m.is_hidden===current[i].is_hidden);
   }
@@ -423,12 +523,18 @@ export async function startMemory(shared) {
     if(!id||state.disposed)return;
     const ticket={};
     generation=ticket;
+    clearTimeout(inputWarmTimer);
+    state.recallTiming='准备中';
+    migration.pause();
     const checkTicket=()=>{check(id);if(generation!==ticket)throw Error('生成期间剧情已更新，请重新发送');};
     try{
       return await serial(async()=>{
         checkTicket();
         const messages=generationMessages(type);
-        const {active,cfg}=await projectWorldbook(id,messages);
+        const rawCfg=config();
+        const routeLimit=Number.isFinite(contextSize)?Math.min(rawCfg.weaveBudget,Math.max(0,contextSize)):rawCfg.weaveBudget;
+        const {memoryView,cfg}=await prepareMemoryRoute(id,messages,routeLimit);
+        if(cfg.summaryMode==='legacy')await reconcileAutoHide(id,false);
         const revision=archiveRevision;
         const guardSources=()=>{
           checkTicket();
@@ -442,7 +548,20 @@ export async function startMemory(shared) {
           ? Math.min(configuredLimit,Math.max(0,Math.floor(contextSize))) : configuredLimit;
         let result;
         try{
-          result=await recallForGeneration(input,messages,active,cfg,id,checkTicket,budget,guardSources,type);
+          const view=memoryView.withData(vars().shiyi_v01);
+          const began=Date.now();
+          try {
+            result=await boundedRecall(guard=>recallForGeneration(input,view,view.summaries(),cfg,id,guard,budget,()=>{guard();guardSources();},type),{
+              guard:checkTicket,cancel:()=>{if(generation===ticket)retrieval.stop();},
+            });
+            state.recallTiming=`${Date.now()-began} ms`;
+          } catch(cause) {
+            if(!(cause instanceof RecallTimeout))throw cause;
+            guardSources();
+            state.recallTiming=`${Date.now()-began} ms · 超时，本轮跳过动态记忆`;
+            state.weaveResult=null;
+            return;
+          }
           guardSources();
           if(result.viewpoint&&activeViewpoint(id,type)!==result.viewpoint)throw Error('发言角色已变化，请重新发送');
           const estimate=cost(result.content);
@@ -477,39 +596,123 @@ export async function startMemory(shared) {
     if(rows.length<200&&bytes<24000)return;
     advised.add(id);notice('历史摘要已积累 '+rows.length+' 条，建议在拾忆设置中开启超长模式（不会自动切换）。');
   }
-  async function scan(){
+  let inputWarmTimer, inputWarmSnapshot;
+  function onDraftInput(event){
+    if(event.target?.id!=='send_textarea'||event.isComposing)return;
+    clearTimeout(inputWarmTimer);
+    const snapshot=inputWarmSnapshot;
+    if(!snapshot||generation||state.disposed)return;
+    inputWarmTimer=setTimeout(()=>{
+      if(snapshot!==inputWarmSnapshot||generation||state.disposed||identity()!==snapshot.id||state.messageVersion?.()!==snapshot.version||archiveRevision!==snapshot.revision)return;
+      warmLocal(snapshot.id,snapshot.messages,config());
+    },350);
+  }
+  hostDocument.addEventListener?.('input',onDraftInput);
+  let warmKey='', warmStatus='等待空闲', warming=false, warmRetryAt=0;
+  function warmLocal(id,messages,cfg){
+    if(warming||Date.now()<warmRetryAt||generation||hostDocument.hidden||state.open||state.queue.length||cfg.engine!=='hybrid'||state.routeMode!=='unified'||typeof Worker==='undefined')return;
+    const revision=archiveRevision, sourceVersion=state.messageVersion?.();
+    const key=JSON.stringify([id,revision,sourceVersion,persistedTableRevision,cfg.weaveMode,cfg.weaveKinds,cfg.layers]);
+    if(key===warmKey)return;
+    warming=true;
+    const run=async task=>{try{
+      const guard=()=>{
+        task?.check();
+        if(state.disposed||generation||identity()!==id||archiveRevision!==revision||hostDocument.hidden||sourceVersion!==state.messageVersion?.())throw Error('预热已过期');
+      };
+      guard();
+      const view=readMemory(messages), rows=view.summaries();
+      const {docs,corpus}=recallInputs([],view,rows,{...cfg,summaryMode:'unified'},cfg.weaveBudget);
+      const token=corpus?indexRevision(view,cfg):null;
+      if(corpus&&!token){warmKey=key;warmStatus='宿主消息版本不可用：按需分片检索';return;}
+      const result=corpus?await retrieval.warmBlocks(corpus.documents(),id,guard,token,task):
+        await retrieval.warm(docs,id,lexicalStore,guard);
+      guard();if(result)warmKey=key;else warmRetryAt=Date.now()+30000;warmStatus=result?'本地索引已预热':'后台线程不可用：按需检索';
+    }catch{warmRetryAt=Date.now()+3000;warmStatus='预热让位或已过期';}finally{warming=false;}};
+    if(shared.maintenance){
+      warming=false;
+      shared.maintenance.enqueue('拾忆索引',async task=>{if(warming)return;warming=true;await run(task);},maintenancePriority.index,{lane:'index',scoped:true});
+    }else if(typeof hostWindow.requestIdleCallback==='function')hostWindow.requestIdleCallback(()=>void run());
+    else setTimeout(()=>void run(),50);
+  }
+  async function scan(task){
     if(state.busy||state.disposed||generation)return;
     const id=identity();if(!id)return;
-    if(id!==state.current){retrieval.stop();vector.reset();state.closeModal?.();state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];archiveRevision++;}
+    if(id!==state.current){retrieval.stop();vector.reset();migration.reset();migrationScope="";state.closeModal?.();state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];state.reviewRevision=undefined;archiveRevision++;}
     let messages;
     state.busy=true;try{messages=await verifyGlobal(false);}catch(e){error(e);return;}finally{state.busy=false;}
     if(!messages||id!==identity()||generation)return;
+    task?.check();
     if(shared?.flags?.memory===false||state.open)return;
     state.busy=true;
     try{
       const data=vars().shiyi_v01||{}, cfg=config(data), existing=data.records||{}, deleted=data.deletedKeys||{};
       suggestMode(id);
-      const live=new Map(messages.map(m=>[m.message_id,sourceKey(m)]));
-      state.queue=state.queue.filter(q=>q.chat===id&&live.get(q.id)===q.key&&!deleted[q.key]);
+      const source=messages.source;
+      const fallback=source?null:new Map(messages.map(message=>[message.message_id,message]));
+      const at=floor=>source?source.get(floor):fallback.get(floor);
+      const liveKey=floor=>{const message=at(floor);return message&&sourceKey(message);};
+      state.queue=state.queue.filter(q=>q.chat===id&&liveKey(q.id)===q.key&&!deleted[q.key]);
       const queuedFloors=new Set(state.queue.map(q=>q.id));
-      for(const [floor,q] of state.deferred)if(q.chat!==id||live.get(floor)!==q.key||deleted[q.key])state.deferred.delete(floor);
-      for(const floor of state.stability.keys())if(!live.has(floor))state.stability.delete(floor);
+      for(const [floor,q] of state.deferred)if(q.chat!==id||liveKey(floor)!==q.key||deleted[q.key])state.deferred.delete(floor);
       const now=Date.now();
-      for(const m of messages){
+      const tags=JSON.stringify([cfg.start,cfg.end]);
+      const changedFloors=source&&tags===state.reviewTags?source.changesSince(state.reviewRevision):null;
+      const inspect=changedFloors?[...changedFloors].map(at).filter(Boolean):source?source.values():messages;
+      for(const m of inspect){
         const idNum=m.message_id;
-        const key=live.get(idNum);
+        const key=sourceKey(m);
         if(deleted[key]||state.deferred.has(idNum)||existing[key]||state.seen.has(key)||queuedFloors.has(idNum))continue;
         const content=extract(String(m.message??''),cfg);if(!content)continue;
-        // 流式输出可能提前闭合标签，正文连续稳定八秒后再审核。
         const prev=state.stability.get(idNum);
-        if(!prev||prev.key!==key){state.stability.set(idNum,{key,since:now});continue;}
-        if(now-prev.since<8000)continue;
-        queuedFloors.add(idNum);
-        state.seen.add(key);
-        state.queue.push({key,id:idNum,content,chat:id});
+        if(!prev||prev.key!==key||tags!==state.reviewTags)state.stability.set(idNum,{key,since:now,content});
       }
+      // 流式输出可能提前闭合标签，正文连续稳定八秒后再审核。
+      for(const [floor,pending] of state.stability){
+        const {key,since,content}=pending;
+        if(liveKey(floor)!==key||deleted[key]||existing[key]||state.seen.has(key))state.stability.delete(floor);
+        else if(now-since>=8000&&!queuedFloors.has(floor)&&!state.deferred.has(floor)){
+          state.stability.delete(floor);
+          state.seen.add(key);
+          state.queue.push({key,id:floor,content,chat:id});
+        }
+      }
+      state.reviewRevision=source?.revision;
+      state.reviewTags=tags;
     }catch(e){error(e);}finally{state.busy=false;}
-    if(shared?.flags?.memory!==false&&state.queue.length&&!state.open){const item=state.queue.shift();await review(item);}
+    const mc=config();
+    inputWarmSnapshot={id,messages,version:state.messageVersion?.(),revision:archiveRevision};
+    warmLocal(id,messages,mc);
+    if(vectorHealth.ready({...mc,vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})&&mc.vectorEnabled&&mc.vectorMigration&&mc.vectorUrl&&mc.vectorModel&&state.routeProfile==='enhanced'&&mc.engine==='hybrid'&&!hostDocument.hidden&&!generation){
+      const key=vectorScope(id,mc), stamp=JSON.stringify([archiveRevision,state.messageVersion?.()]);
+      if(migrationScope!==key||migrationRevision!==stamp){
+        migrationRevision=stamp;
+        const rows=activeRecords(messages), meta=archive().meta||{};
+        const nextTexts=[...new Set(Object.entries(rows).sort((a,b)=>Number(!!meta[b[0]]?.star)-Number(!!meta[a[0]]?.star)||b[1].sourceMessage-a[1].sourceMessage).map(([,r])=>r.title+' '+r.content))];
+        if(migrationScope!==key||nextTexts.length!==migrationTexts.length||nextTexts.some(t=>!migrationTextSet.has(t))){migrationScope=key;migrationTexts=migration.revise(key,nextTexts);migrationTextSet=new Set(nextTexts);}
+      }
+      const texts=migrationTexts;
+      const migrate=async vectorTask=>{
+        const release=vectorTask?.reserve(768*1024);
+        if(vectorTask&&!release)return;
+        const cancel=()=>migration.pause();
+        vectorTask?.signal.addEventListener('abort',cancel,{once:true});
+        try {
+          await migration.step(key,texts,{...mc,vectorKey:sessionStorage.getItem('capricorn-vector-key')||''},()=>{
+            if(vectorTask?.signal.aborted||generation||state.disposed||identity()!==id||hostDocument.hidden||state.routeProfile!=='enhanced'||
+              migrationRevision!==stamp||stamp!==JSON.stringify([archiveRevision,state.messageVersion?.()]))return false;
+            const current=config();
+            return current.vectorEnabled&&current.vectorMigration&&vectorScope(id,current)===key;
+          });
+        } finally {
+          vectorTask?.signal.removeEventListener('abort',cancel);
+          release?.();
+        }
+      };
+      if(shared.maintenance)shared.maintenance.enqueue('拾忆向量',migrate,maintenancePriority.vector,{lane:'vector',scoped:true});
+      else void migrate().catch(error);
+    }
+    if(shared?.flags?.memory!==false&&state.queue.length&&!state.open){const item=state.queue.shift();void review(item).catch(error);}
   }
   // 手动批量导入：只扫描当前存档的已闭合摘要；按消息楼层顺序写入。
   async function importHistory(){
@@ -567,6 +770,7 @@ export async function startMemory(shared) {
     if(!!current.is_hidden===hidden)return true;
     await api('setChatMessages',[{message_id:floor,is_hidden:hidden}],{refresh:'none'});
     check(chat);
+    messageCatalog.touch(floor);
     const updated=readFloor(floor);
     if(!updated||sourceKey(updated)!==key)return false;
     if(!!updated.is_hidden!==hidden)throw Error(`第 ${floor} 楼的隐藏状态未更新`);
@@ -579,7 +783,7 @@ export async function startMemory(shared) {
   async function reconcileAutoHide(chat, allowNew=true){
     check(chat);
     const d=vars().shiyi_v01||{}, cfg=config(d), owned={...d.autoHidden};
-    const auto=allowNew&&cfg.autoHide&&cfg.summaryMode==='unified';
+    const auto=allowNew&&cfg.autoHide&&state.routeScope===chat&&state.routeMode==='unified';
     if(!Object.keys(owned).length&&!auto)return;
     const all=getMessages(), byFloor=new Map(all.map(m=>[m.message_id,m]));
     const cutoff=api('getLastMessageId')-Math.max(12,Number(cfg.keep)*2||12);
@@ -722,8 +926,30 @@ export async function startMemory(shared) {
     const resultForChat=state.weaveResultScope===settingsChat?state.weaveResult:null;
     el.innerHTML='<label>摘要开始标签<input id="shiyi-start"></label><label>摘要结束标签<input id="shiyi-end"></label><label>剧情年份（可选，例：2026；用于补全摘要缺失的年份及星期）<input id="shiyi-year" inputmode="numeric" maxlength="4" placeholder="不确定请留空"></label><p class="shiyi-muted">第一版只支持起止标签。默认不自动隐藏旧正文；手动归档需再次确认。</p>';
     $('#shiyi-start',el).value=cfg.start;$('#shiyi-end',el).value=cfg.end;$('#shiyi-year',el).value=cfg.storyYear||'';
-    const w=hostDocument.createElement('div');w.innerHTML='<label>档案记忆模式<select id="weave-mode"><option value="archive">仅归档</option><option value="compact">精简记忆</option><option value="smart">智能记忆</option><option value="deep">深度记忆</option></select></label><label>记忆运行模式<select id="summary-mode"><option value="unified">超长模式 · 智能记忆</option><option value="legacy">简约模式 · 古法总结</option></select></label><label>检索引擎<select id="weave-engine"><option value="hybrid">凝忆 · BM25 + 实体 + 余温</option><option value="classic">原版检索</option></select></label><label>记忆注入预算（估算 Token）<input id="weave-budget" type="number" min="200" max="12000"></label><label><input id="weave-adaptive" type="checkbox"> 自适应预算（凝忆模式，上限为上述预算）</label><p>当前召回：'+(resultForChat?.selected?.length||0)+' 条；估算 '+(resultForChat?.estimate||0)+' Tokens。动态模式包含摘要与档案；旧版模式仅限制档案。摘要召回：'+(resultForChat?.summaries?.length||0)+' 条。</p>';el.append(w);const auto=hostDocument.createElement('label');auto.innerHTML='<input type="checkbox" id="auto-hide"> 自动隐藏已确认的旧 AI 正文（实验；默认关闭）';w.append(auto);const ve=hostDocument.createElement('div');ve.innerHTML='<label><input id="vector-enabled" type="checkbox"> 可选向量检索（剧情将发送到指定服务）</label><label>完整 Embedding URL<input id="vector-url" type="url"></label><label>模型<input id="vector-model"></label><label>API Key（仅本次浏览器会话）<input id="vector-key" type="password"></label>';w.append(ve);const guide=hostDocument.createElement('details');guide.innerHTML='<summary>免费向量 API 获取指南</summary><p>硅基流动提供免费模型的情况以官方价格页为准。启用后剧情文本将发送至服务商。</p><p><a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noopener noreferrer">获取 API Key</a> · <a href="https://siliconflow.cn/pricing" target="_blank" rel="noopener noreferrer">模型价格</a> · <a href="https://siliconflow.readme.io/reference/createembedding" target="_blank" rel="noopener noreferrer">接口文档</a></p><p>注册、创建密钥、复制到上方，保存设置。</p>';const fill=hostDocument.createElement('button');fill.type='button';fill.textContent='填入硅基流动 BGE-M3 配置';fill.onclick=()=>{$('#vector-url',el).value='https://api.siliconflow.cn/v1/embeddings';$('#vector-model',el).value='BAAI/bge-m3';};guide.append(fill);w.append(guide);const layer=hostDocument.createElement('label');layer.innerHTML='<input type="checkbox" id="memory-layers"> 章节索引（实验，保留原始摘要）';w.append(layer);$('#memory-layers',el).checked=cfg.layers;$('#vector-enabled',el).checked=cfg.vectorEnabled;$('#vector-url',el).value=cfg.vectorUrl;$('#vector-model',el).value=cfg.vectorModel;$('#vector-key',el).value=sessionStorage.getItem('capricorn-vector-key')||'';const vs=hostDocument.createElement('p');vs.textContent=vector.info()+"；"+retrieval.info();w.append(vs);$('#auto-hide',el).checked=cfg.autoHide;$('#weave-engine',el).value=cfg.engine;$('#weave-adaptive',el).checked=cfg.adaptive;const inspect=hostDocument.createElement('details');const caption=hostDocument.createElement('summary');caption.textContent='查看最近一次准备注入的记忆与召回原因';const pre=hostDocument.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent='召回阶段：'+(resultForChat?.recallStage||'—')+'；证据等级：'+({strong:'较强',limited:'有限',weak:'较弱',none:'无'}[resultForChat?.recallConfidence]||'—')+'\n'+(resultForChat?.details||[]).map(x=>x.id+'：'+x.reason+(x.group?' ['+x.group+']':'')).join('\n')+'\n\n'+(resultForChat?.content||'暂无');inspect.append(caption,pre);w.append(inspect);$('#summary-mode',el).value=cfg.summaryMode;$('#weave-mode',el).value=cfg.weaveMode;$('#weave-budget',el).value=cfg.weaveBudget;for(const k of kinds){const label=hostDocument.createElement('label'),c=hostDocument.createElement('input');c.type='checkbox';c.value=k;c.checked=cfg.weaveKinds.includes(k);c.dataset.weaveKind='1';label.append(c,k);w.append(label);}
-    const modeSelect=$('#summary-mode',el);const modeLabel=modeSelect.closest('label');w.prepend(modeLabel);const modeHint=hostDocument.createElement('p');modeLabel.after(modeHint);const adviceLabel=hostDocument.createElement("label"),advice=hostDocument.createElement("input");advice.type="checkbox";advice.checked=cfg.modeAdvice;adviceLabel.append(advice," 智能模式切换建议");modeHint.after(adviceLabel);const advancedIds=['weave-engine','weave-adaptive','auto-hide','memory-layers'];const updateMode=()=>{const simple=modeSelect.value==='legacy';for(const id of advancedIds)$('#'+id,el).closest('label').hidden=simple;ve.hidden=simple;guide.hidden=simple;vs.hidden=simple;modeHint.textContent=simple?'古法总结：完整世界书 + 档案检索，不调用向量服务。':'超长模式：共享已有摘要，动态召回，无需重新总结。';};modeSelect.addEventListener('change',updateMode);updateMode();
+    const w=hostDocument.createElement('div');w.innerHTML='<label>档案记忆模式<select id="weave-mode"><option value="archive">仅归档</option><option value="compact">精简记忆</option><option value="smart">智能记忆</option><option value="deep">深度记忆</option></select></label><label>记忆运行模式<select id="summary-mode"><option value="auto">智能自动（推荐）</option><option value="local">本地超长记忆</option><option value="enhanced">增强超长记忆</option><option value="legacy">简约模式 · 古法总结</option></select></label><label>检索引擎<select id="weave-engine"><option value="hybrid">凝忆 · BM25 + 实体 + 余温</option><option value="classic">原版检索</option></select></label><label>记忆注入预算（估算 Token）<input id="weave-budget" type="number" min="200" max="12000"></label><label><input id="weave-adaptive" type="checkbox"> 自适应预算（凝忆模式，上限为上述预算）</label><p>当前召回：'+(resultForChat?.selected?.length||0)+' 条；估算 '+(resultForChat?.estimate||0)+' Tokens。动态模式包含摘要与档案；旧版模式仅限制档案。摘要召回：'+(resultForChat?.summaries?.length||0)+' 条。</p>';el.append(w);const auto=hostDocument.createElement('label');auto.innerHTML='<input type="checkbox" id="auto-hide"> 自动隐藏已确认的旧 AI 正文（实验；默认关闭）';w.append(auto);const ve=hostDocument.createElement('div');ve.innerHTML='<label><input id="vector-enabled" type="checkbox"> 可选向量检索（剧情将发送到指定服务）</label><label><input id="vector-migration" type="checkbox"> 后台补全历史摘要向量（可能产生 API 费用，默认关闭）</label><label>完整 Embedding URL<input id="vector-url" type="url"></label><label>模型<input id="vector-model"></label><label>API Key（仅本次浏览器会话）<input id="vector-key" type="password"></label>';w.append(ve);const guide=hostDocument.createElement('details');guide.innerHTML='<summary>免费向量 API 获取指南</summary><p>硅基流动提供免费模型的情况以官方价格页为准。启用后剧情文本将发送至服务商。</p><p><a href="https://cloud.siliconflow.cn/account/ak" target="_blank" rel="noopener noreferrer">获取 API Key</a> · <a href="https://siliconflow.cn/pricing" target="_blank" rel="noopener noreferrer">模型价格</a> · <a href="https://siliconflow.readme.io/reference/createembedding" target="_blank" rel="noopener noreferrer">接口文档</a></p><p>注册、创建密钥、复制到上方，保存设置。</p>';const fill=hostDocument.createElement('button');fill.type='button';fill.textContent='填入硅基流动 BGE-M3 配置';fill.onclick=()=>{$('#vector-url',el).value='https://api.siliconflow.cn/v1/embeddings';$('#vector-model',el).value='BAAI/bge-m3';};guide.append(fill);w.append(guide);const layer=hostDocument.createElement('label');layer.innerHTML='<input type="checkbox" id="memory-layers"> 章节索引（实验，保留原始摘要）';w.append(layer);$('#memory-layers',el).checked=cfg.layers;$('#vector-enabled',el).checked=cfg.vectorEnabled;$('#vector-migration',el).checked=cfg.vectorMigration;$('#vector-url',el).value=cfg.vectorUrl;$('#vector-model',el).value=cfg.vectorModel;$('#vector-key',el).value=sessionStorage.getItem('capricorn-vector-key')||'';const vs=hostDocument.createElement('p');vs.textContent=vectorHealth.info({...config(),vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})+"；"+migration.info()+"；向量通道："+(vectorLane.busy()?"忙碌":"空闲")+"；"+vector.info()+"；"+retrieval.info();w.append(vs);$('#auto-hide',el).checked=cfg.autoHide;$('#weave-engine',el).value=cfg.engine;$('#weave-adaptive',el).checked=cfg.adaptive;const inspect=hostDocument.createElement('details');const caption=hostDocument.createElement('summary');caption.textContent='查看最近一次准备注入的记忆与召回原因';const pre=hostDocument.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent='召回阶段：'+(resultForChat?.recallStage||'—')+'；证据等级：'+({strong:'较强',limited:'有限',weak:'较弱',none:'无'}[resultForChat?.recallConfidence]||'—')+'\n'+(resultForChat?.details||[]).map(x=>x.id+'：'+x.reason+(x.group?' ['+x.group+']':'')).join('\n')+'\n\n'+(resultForChat?.content||'暂无');inspect.append(caption,pre);w.append(inspect);$('#summary-mode',el).value=cfg.summaryMode==='unified'?(cfg.vectorEnabled?'enhanced':'local'):cfg.summaryMode;$('#weave-mode',el).value=cfg.weaveMode;$('#weave-budget',el).value=cfg.weaveBudget;for(const k of kinds){const label=hostDocument.createElement('label'),c=hostDocument.createElement('input');c.type='checkbox';c.value=k;c.checked=cfg.weaveKinds.includes(k);c.dataset.weaveKind='1';label.append(c,k);w.append(label);}
+    const modeSelect=$('#summary-mode',el);const modeLabel=modeSelect.closest('label');w.prepend(modeLabel);const modeHint=hostDocument.createElement('p');modeLabel.after(modeHint);const adviceLabel=hostDocument.createElement("label"),advice=hostDocument.createElement("input");advice.type="checkbox";advice.checked=cfg.modeAdvice;adviceLabel.append(advice," 智能模式切换建议");modeHint.after(adviceLabel);const advancedIds=['weave-engine','weave-adaptive','auto-hide','memory-layers'];const updateMode=()=>{const simple=modeSelect.value==='legacy',local=modeSelect.value==='local';for(const id of advancedIds)$('#'+id,el).closest('label').hidden=simple;ve.hidden=simple||local;guide.hidden=simple||local;vs.hidden=simple||local;modeHint.textContent=modeSelect.value==='auto'?'自动：小规模古法，超预算后本地超长；向量可选。':simple?'古法总结：完整世界书 + 档案检索，不调用向量服务。':local?'本地超长：使用已有摘要和本地索引。':'增强超长：配置并启用向量服务后增强召回。';};modeSelect.addEventListener('change',updateMode);updateMode();
+    if (resultForChat?.knowledgeSources?.length) {
+      appendMemoryProvenance(hostDocument, inspect, () => {
+        if (identity() !== settingsChat || state.weaveResult !== resultForChat) return;
+        const view = readMemory();
+        const ledger = view.ledger();
+        const visible = knowledgeForCharacter(ledger);
+        if (resultForChat.viewpoint && activeViewpoint(settingsChat) === resultForChat.viewpoint) {
+          visible.push(...knowledgeForCharacter(ledger, resultForChat.viewpoint));
+        }
+        const allowed = new Set(visible.map(row => JSON.stringify([row.id, row.sourceKey])));
+        const sources = new Map();
+        for (const [id, key] of resultForChat.knowledgeSources) {
+          if (!key || !allowed.has(JSON.stringify([id, key]))) continue;
+          const source = view.provenance('knowledge', id, { sourceKey: key })?.sources[0];
+          if (source?.active) sources.set(source.key, source);
+        }
+        if (sources.size) return {
+          origin: 'derived', active: true,
+          sources: [...sources.values()].sort((a, b) => a.floor - b.floor),
+        };
+      }, undefined, '认知来源');
+    }
     const viewpointLabel=hostDocument.createElement('label');
     const viewpointInput=hostDocument.createElement('input');
     viewpointInput.maxLength=80;
@@ -735,7 +961,24 @@ export async function startMemory(shared) {
     $('#weave-engine',el).addEventListener('change',updateViewpoint);
     w.append(viewpointLabel);
     updateViewpoint();
-    const result=await modal('拾忆 · 设置',el,[{label:'取消',value:false},{label:'保存',value:true,kind:'primary'}]);
+    const estimate=hostDocument.createElement('button');estimate.type='button';estimate.textContent='估算历史向量补全用量';
+    const usage=hostDocument.createElement('p');
+    const pause=hostDocument.createElement('button');pause.type='button';pause.textContent='暂停补全';
+    const resume=hostDocument.createElement('button');resume.type='button';resume.textContent='恢复补全';
+    estimate.onclick=async()=>{
+      check(settingsChat);
+      const records=Object.values(activeRecords());
+      const result=migration.estimate(records.map(row=>row.title+' '+row.content));
+      const storage=await vectorStore.estimate();
+      if(identity()!==settingsChat||!usage.isConnected)return;
+      usage.textContent=`最多 ${result.requests} 批 · 约 ${result.estimatedTokens} 估算 Token · ${result.skipped} 条超长或空文本跳过`+
+        (storage?` · 此站点剩余约 ${Math.floor(storage.available/1048576)} MiB`:'')+'。实际费用以所选服务计费为准。';
+    };
+    pause.onclick=()=>{check(settingsChat);migration.pause(true);};
+    resume.onclick=()=>{check(settingsChat);migration.resume();};
+    ve.append(estimate,pause,resume,usage);
+    const progressTimer=setInterval(()=>{if(vs.isConnected&&!hostDocument.hidden)vs.textContent=vectorHealth.info({...config(),vectorKey:sessionStorage.getItem('capricorn-vector-key')||''})+"；"+migration.info()+"；向量通道："+(vectorLane.busy()?"忙碌":"空闲")+"；"+vector.info()+"；"+retrieval.info();},1000);
+    let result;try{result=await modal('拾忆 · 设置',el,[{label:'取消',value:false},{label:'保存',value:true,kind:'primary'}]);}finally{clearInterval(progressTimer);}
     if(!result)return;
     try{
       check(settingsChat);
@@ -748,7 +991,7 @@ export async function startMemory(shared) {
       await saveSettings(settingsChat,{
         ...cfg,start,end,storyYear,modeAdvice:advice.checked,
         layers:$('#memory-layers',el).checked,vectorEnabled:$('#vector-enabled',el).checked,
-        vectorUrl:$('#vector-url',el).value.trim(),vectorModel:$('#vector-model',el).value.trim(),
+        vectorMigration:$('#vector-migration',el).checked,vectorUrl:$('#vector-url',el).value.trim(),vectorModel:$('#vector-model',el).value.trim(),
         engine:$('#weave-engine',el).value,adaptive:$('#weave-adaptive',el).checked,
         autoHide:$('#auto-hide',el).checked,summaryMode:$('#summary-mode',el).value,
         weaveMode:$('#weave-mode',el).value,
@@ -769,8 +1012,8 @@ export async function startMemory(shared) {
       let touched=false;
       try{
         if(project){
-          if(next.summaryMode==='legacy')await reconcileAutoHide(id,false);
-          await projectWorldbook(id,getMessages(),next.summaryMode);
+          await prepareMemoryRoute(id,getMessages(),next.weaveBudget,false,next);
+          if(state.routeMode==='legacy')await reconcileAutoHide(id,false);
         }
         check(id);
         touched=true;
@@ -786,16 +1029,48 @@ export async function startMemory(shared) {
             if(previousKey===null)sessionStorage.removeItem('capricorn-vector-key');
             else sessionStorage.setItem('capricorn-vector-key',previousKey);
           }
-          if(project)try{await projectWorldbook(id,getMessages(),previousMode);}catch(rollbackError){error(rollbackError);}
+          if(project)try{await prepareMemoryRoute(id,getMessages(),undefined,false,config(before));}catch(rollbackError){error(rollbackError);}
         }
         throw e;
       }
       if(next.summaryMode!==previousMode||next.engine!==config(before).engine)retrieval.stop();
-      if(next.summaryMode==='legacy'||!next.vectorEnabled||next.engine!=='hybrid'||
-        next.vectorUrl!==before.settings?.vectorUrl||next.vectorModel!==before.settings?.vectorModel)vector.reset();
+      if(next.summaryMode!==previousMode||!next.vectorEnabled||next.engine!=='hybrid'||
+        next.vectorUrl!==before.settings?.vectorUrl||next.vectorModel!==before.settings?.vectorModel||
+        key!==undefined&&key!==previousKey)vector.reset();
+      migration.reset();migrationScope="";
       archiveRevision++;
     });
 
+  }
+  async function showTables(){
+    if(state.open)return;const id=identity();if(!id)return;
+    const view=readMemory();
+    check(id);
+    const rows=Object.entries(view.ledger().rows).sort((a,b)=>b[1].floor-a[1].floor);
+    const D=hostDocument,box=D.createElement('div'),q=D.createElement('input'),cat=D.createElement('select'),list=D.createElement('div'),nav=D.createElement('div');
+    q.placeholder='搜索人物、事件或字段';const categories=[...new Set(rows.flatMap(([,r])=>Object.keys(r.value)))];
+    for(const k of ['',...categories]){const o=D.createElement('option');o.value=k;o.textContent=k||'全部分类';cat.append(o);}
+    const prev=D.createElement('button'),next=D.createElement('button'),status=D.createElement('span');prev.textContent='上一页';next.textContent='下一页';nav.append(prev,status,next);box.append(q,cat,list,nav);let page=0;
+    const field=(parent,k,v)=>{const line=D.createElement('div');line.style.overflowWrap='anywhere';const label=D.createElement('strong');label.textContent=k+'：';line.append(label);if(v&&typeof v==='object'){const nested=D.createElement('div');nested.style.paddingInlineStart='12px';for(const [key,val] of Object.entries(v))field(nested,Array.isArray(v)?String(Number(key)+1):key,val);line.append(nested);}else line.append(D.createTextNode(String(v??'—')));parent.append(line);};
+    function render(){check(id);list.replaceChildren();const term=q.value.trim().toLowerCase(),filtered=rows.filter(([,r])=>(!cat.value||Object.hasOwn(r.value,cat.value))&&(!term||JSON.stringify(cat.value?r.value[cat.value]:r.value).toLowerCase().includes(term)));const pages=Math.max(1,Math.ceil(filtered.length/20));page=Math.min(page,pages-1);status.textContent=` ${page+1}/${pages} · ${filtered.length} 楼 `;prev.disabled=page===0;next.disabled=page+1>=pages;
+      for(const [key,row] of filtered.slice(page*20,page*20+20)){
+        const item=D.createElement('details'),title=D.createElement('summary'),body=D.createElement('div');
+        title.textContent=`第 ${row.floor} 楼 · ${Object.keys(row.value).join(' / ')}`;
+        item.append(title,body);
+        item.addEventListener('toggle',()=>{
+          if(!item.open||body.childNodes.length||identity()!==id)return;
+          for(const [fieldName,value] of Object.entries(row.value))if(!cat.value||fieldName===cat.value)field(body,fieldName,value);
+          appendMemoryProvenance(D,body,()=>identity()===id&&view.provenance('table',key),source=>{
+            if(!jumpToSource(source))return false;
+            state.closeModal?.();
+            return true;
+          });
+        });
+        list.append(item);
+      }
+      if(!filtered.length)list.textContent='暂无匹配的已归档表格';
+    }
+    let timer;q.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(state.open&&identity()===id&&box.isConnected){page=0;render();}},180);};cat.onchange=()=>{page=0;render();};prev.onclick=()=>{page--;render();};next.onclick=()=>{page++;render();};render();await modal('表格档案 · 只读',box,[{label:'关闭',value:'close'}]);clearTimeout(timer);
   }
   function ui(){
     state.root?.remove(); state.style?.remove();
@@ -839,15 +1114,22 @@ export async function startMemory(shared) {
     $('#shiyi-review',state.root).onclick=async()=>{if(state.open)return;const pending=state.queue.shift()||[...state.deferred.values()].find(Boolean);if(pending){state.deferred.delete(pending.id);await review(pending);}else notice('暂无待审核记忆');};
     $('#shiyi-manage',state.root).onclick=()=>manage();
     $('#shiyi-settings',state.root).onclick=()=>settings();
-    const dossierButton=hostDocument.createElement('button');dossierButton.textContent='留痕档案';$('#shiyi-settings',state.root).before(dossierButton);dossierButton.onclick=()=>{if(!state.open)createDossier({D:hostDocument,modal,identity,check,archive,archivePatch,records:activeRecords,getMessages,hash,serial,jump,notice,autoDossier}).open().catch(error);};
+    const tableButton=hostDocument.createElement('button');tableButton.textContent='表格档案';$('#shiyi-settings',state.root).before(tableButton);tableButton.onclick=()=>showTables().catch(error);
+    const dossierButton=hostDocument.createElement('button');dossierButton.textContent='留痕档案';$('#shiyi-settings',state.root).before(dossierButton);dossierButton.onclick=()=>{if(!state.open)createDossier({D:hostDocument,modal,identity,check,archive,archivePatch,serial,jumpSource:jumpToSource,notice,read:readMemory}).open().catch(error);};
   }
   state.destroy=()=>{
     if(state.disposed)return;
     invalidateGeneration();
     state.disposed=true;
+    clearTimeout(inputWarmTimer);
+    hostDocument.removeEventListener?.('input',onDraftInput);
+    inputWarmSnapshot=null;
+    messageCatalog.destroy();
     retrieval.stop();
     lexicalStore.close();
+    migration.reset();
     vector.reset();
+    vectorStore.close();
     state.closeModal?.();
     state.root?.remove();
     state.style?.remove();
@@ -863,13 +1145,17 @@ export async function startMemory(shared) {
     }
   } catch(e) { console.warn('[拾忆] 脚本按钮绑定失败',e); }
   state.validate=verifyGlobal;
-  state.tick=()=>scan().catch(error);
+  state.messageVersion=messageCatalog.version;
+  state.tick=task=>scan(task).catch(e=>{if(!task?.signal.aborted)error(e);});
   state.pending=()=>state.queue.length+state.deferred.size;
   state.diagnostics=()=>{
     const id=identity();
     const prepared=state.weaveResultScope===id?state.weaveResult:null;
     let mode='等待聊天';
-    if(id)try{mode=config().summaryMode==='legacy'?'简约':'超长';}catch{mode='等待酒馆助手';}
+    if(id)try{
+      const effective=state.routeScope===id?state.routeProfile||state.routeMode:config().summaryMode;
+      mode=({legacy:'古法记忆',local:'本地超长记忆',enhanced:'增强超长记忆',unified:'超长记忆'})[effective]||'自动待判定';
+    }catch{mode='等待酒馆助手';}
     return {
       '记忆模式':mode,
       '最近动态注入':prepared?`${prepared.summaries?.length||0} 条摘要 / ${prepared.estimate||0} 估算 Token（上限 ${prepared.budget}）`:'暂无',
@@ -877,6 +1163,10 @@ export async function startMemory(shared) {
       '未结伏笔':prepared?.threadCount??0,
       '角色视角':prepared?.viewpoint?`${prepared.viewpoint} · ${prepared.viewpointCount} 条认知`:'公开认知',
       '检索':retrieval.info(),
+      '宿主历史读取':`${messageCatalog.metrics().fullReads} 次全量 / ${messageCatalog.metrics().rangeReads} 次分段`,
+      '表格来源读取':memoryData.tableMetrics()?.sourceReads??'—',
+      '本地预热':warmStatus,
+      '生成前检索耗时':state.recallTiming||'暂无',
       '向量':vector.info(),
     };
   };
@@ -892,14 +1182,37 @@ export async function startMemory(shared) {
     .filter(r=>r.kind==='人物').map(r=>({id:r.id,title:r.title,sources:r.sources||[]}));
   state.timelineRows=async()=>{
     const messages=getMessages();
-    const byFloor=new Map(messages.map(m=>[m.message_id,table(m.message)]));
-    return Object.entries(numbered(activeRecords(messages))).filter(([,r])=>Number.isInteger(r.sourceMessage)).map(([key,r])=>({
-      floor:r.sourceMessage,title:r.title,content:r.content,
-      when:byFloor.get(r.sourceMessage)?.时间||r.storyTime||parseStoryTime(r.content)||'日期未识别',
-      traceText:JSON.stringify(byFloor.get(r.sourceMessage)||{}),sourceHash:r.sourceHash||key.split(':')[1],
-      chapter:archive().meta?.[key]?.chapter||'',star:!!archive().meta?.[key]?.star,
-    }));
+    const byFloor=new Map(messages.map(m=>[m.message_id,m]));
+    const view=readMemory(messages), meta=view.archive.meta||{};
+    return Object.entries(numbered(view.summaries())).filter(([,r])=>Number.isInteger(r.sourceMessage)).map(([key,r])=>{
+      const trace=view.rawTable(byFloor.get(r.sourceMessage));
+      return {
+        floor:r.sourceMessage,title:r.title,content:r.content,
+        when:trace?.时间||r.storyTime||parseStoryTime(r.content)||'日期未识别',
+        traceText:JSON.stringify(trace||{}),sourceHash:r.sourceHash||key.split(':')[1],sourceKey:key,
+        chapter:meta[key]?.chapter||'',star:!!meta[key]?.star,
+      };
+    });
   };
+  state.provenance = (kind, id) => {
+    const scope = identity();
+    if (!scope || state.disposed || kind === 'knowledge') return;
+    const view = readMemory();
+    check(scope);
+    return view.provenance(kind, id);
+  };
+  function jumpToSource(source) {
+    if (!source.active || !Number.isSafeInteger(source.floor) || state.disposed || identity() !== source.scope) return false;
+    try {
+      const message = readFloor(source.floor);
+      if (!message || hash(String(message.message ?? '')) !== source.version || blocked(source.key) || identity() !== source.scope) return false;
+      return jump(source.floor);
+    } catch (cause) {
+      error(cause);
+      return false;
+    }
+  }
+  state.jumpToSource = jumpToSource;
   state.jump=jump;
   state.backup=async()=>serial(async()=>{
     const id=identity();

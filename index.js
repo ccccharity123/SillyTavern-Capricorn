@@ -1,4 +1,4 @@
-import { createScheduler } from './scheduler.js';
+import { createScheduler, maintenancePriority } from './scheduler.js';
 import { mountPresetControls } from './preset.js';
 import { createGenerationLifecycle } from './generation-lifecycle.js';
 import { getChatIdentity, getHostContext } from './host-context.js';
@@ -165,8 +165,9 @@ async function showResonance(){
  const el=(tag,text,parent=resonance)=>{const n=D.createElement(tag);n.textContent=text;parent.append(n);return n;};
  el('p','正在读取当前聊天的剧情原声…');
  try{
- const rows=(await memory?.timelineRows()||[]).sort((a,b)=>a.floor-b.floor);
- const songs=tracksByFloor(music?.timelineSongs()||[]);
+ const [memories,soundtrack]=await Promise.all([memory?.timelineRows(),music?.timelineSongs()]);
+ const rows=(memories||[]).sort((a,b)=>a.floor-b.floor);
+ const songs=tracksByFloor(soundtrack||[]);
  if(epoch!==resonanceEpoch||key!==scope()||tab!=='resonance')return;
  resonance.replaceChildren();el('h3','共鸣 · 剧情原声');el('button','回响 · 沉浸式回忆').onclick=()=>recall?.open();
  const lock=el('button',shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）');lock.onclick=()=>{shared.recallLocked=!shared.recallLocked;lock.textContent=shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）';};
@@ -192,8 +193,9 @@ async function refreshTimeline(targetFloor) {
   note.textContent = '正在读取剧情便签…';
   timeline.append(note);
   try {
-    const memories = (await memory.timelineRows()).sort((a,b)=>a.floor-b.floor);
-    const songs = tracksByFloor(music?.timelineSongs() || []);
+    const [rows, soundtrack] = await Promise.all([memory.timelineRows(), music?.timelineSongs()]);
+    const memories = rows.sort((a,b)=>a.floor-b.floor);
+    const songs = tracksByFloor(soundtrack || []);
     if (epoch !== timelineEpoch || key !== scope() || !memoryOpen()) return;
     note.textContent = memories.length ? `已归档 ${memories.length} 条剧情便签` : '暂无已归档摘要，请检测或导入历史。';
     const query=D.createElement('input');query.placeholder='搜索剧情便签';timeline.append(query);const cards=D.createElement('div');timeline.append(cards);
@@ -290,14 +292,17 @@ nav.querySelector('[data-close]').onclick = ()=>{close();music?.openPlayer();isl
 nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {if(b.dataset.tab==='music'){close();music?.openPlayer();}else select(b.dataset.tab);});
 
 const maintenance=createScheduler(W,()=>D.hidden);
+shared.maintenance = maintenance;
 function tick() {
   if (dead) return;
   try {
     generation.bind();
     recall?.check();
-    if (music) maintenance.enqueue('声屿', () => music.tick());
-    if (memory) maintenance.enqueue('拾忆', () => memory.tick(), 1);
     const key = scope();
+    maintenance.setContext(key, memory?.messageVersion?.());
+    if (music) maintenance.enqueue('声屿', task => music.tick(task), maintenancePriority.audio,
+      { lane: 'audio', scoped: true, duringForeground: true });
+    if (memory) maintenance.enqueue('拾忆', task => memory.tick(task), maintenancePriority.memory, { scoped: true });
     if (shownScope !== key && memoryOpen()) void refreshTimeline();
     if (tab === 'resonance' && resonance.dataset.scope !== key) {
       unlockRecall();
@@ -346,13 +351,19 @@ const generation = createGenerationLifecycle({
   },
   refresh: tick,
 });
-W.capricornPrepareGeneration = generation.prepare;
+async function prepareGeneration(...args) {
+  maintenance.setContext(scope(), memory?.messageVersion?.());
+  const release = maintenance.beginForeground();
+  try { return await generation.prepare(...args); }
+  finally { release(); }
+}
+W.capricornPrepareGeneration = prepareGeneration;
 
 W.__capricornExtension = {
   destroy() {
     if (dead) return;
     dead = true;
-    if (W.capricornPrepareGeneration === generation.prepare) delete W.capricornPrepareGeneration;
+    if (W.capricornPrepareGeneration === prepareGeneration) delete W.capricornPrepareGeneration;
     generation.destroy();
     stopIslandArtwork();
     if (memoryViewFrame != null) cancelAnimationFrame(memoryViewFrame);
@@ -537,6 +548,7 @@ settings.append(controls);
 const health=D.createElement('details');health.innerHTML='<summary>运行诊断</summary><pre style="white-space:pre-wrap"></pre><button type="button">刷新诊断</button>';controls.append(health);
 const updateHealth=()=>{
   const m=maintenance.status();
+  const buffer = maintenance.budget();
   const moduleInfo = [memory?.diagnostics?.(), music?.diagnostics?.()].flatMap(info =>
     typeof info === 'string' ? [info] : Object.entries(info || {}).map(([k,v])=>`${k}：${v}`));
   health.querySelector('pre').textContent=[
@@ -544,8 +556,9 @@ const updateHealth=()=>{
     `声屿：${music?'已启动':'未启动'}`,
     `生成注入：${lastGeneration}`,
     `后台维护：${m.running?'执行中':'空闲'} / 等待 ${m.pending}`,
+    `后台缓冲：${Math.ceil(buffer.reserved/1024)} KiB / ${buffer.maxBytes/1024/1024} MiB`,
     ...moduleInfo,
-    ...Object.entries(m.stats).map(([k,v])=>`${k}：${v.runs} 次 / 异常 ${v.errors} / 最近 ${v.lastMs}ms`),
+    ...Object.entries(m.stats).map(([k,v])=>`${k}：${v.runs} 次 / 异常 ${v.errors} / 取消 ${v.cancelled||0} / 最近 ${v.lastMs}ms`),
   ].join('\n');
 };
 health.querySelector('button').onclick=updateHealth;

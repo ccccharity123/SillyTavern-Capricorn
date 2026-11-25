@@ -462,6 +462,7 @@ function readStoryMessages(){
 const bgmIndex=createBgmIndex(parseBgm,hash);
 const pendingTags=new Map(),dirtyFloors=new Set();
 let indexScope=null,fullScan=true,lastFullAt=0,lastVisitCount=0;
+let indexRevision=0,indexWork,lastSliceCount=0,cancelledBgmScans=0;
 let scanFollowSignature=null,pendingScope=null,pendingAt=0,pendingSwitch=false,followTimer=null,observedStory=null;
 let indexedStory=null,confirmedStory=null;
 
@@ -470,8 +471,9 @@ function storySnapshot(scope, { messages, incremental }) {
   return { scope, length: messages.length, first: sample(messages[0]), last: sample(messages.at(-1)) };
 }
 
-function updateBgmIndex(scope,force=false){
-  const needsFull=force||fullScan||indexScope!==scope||Date.now()-lastFullAt>=60000;
+async function updateBgmIndex(scope,task){
+  if(indexWork?.scope===scope&&indexWork.revision===indexRevision)return indexWork.promise;
+  const needsFull=fullScan||indexScope!==scope||Date.now()-lastFullAt>=60000;
   if(!needsFull&&!dirtyFloors.size)return true;
   const source=readStoryMessages();
   if(!source)return false;
@@ -481,9 +483,35 @@ function updateBgmIndex(scope,force=false){
     // A new chat ID can be visible while the native message array still belongs to the previous chat.
     return false;
   }
-  const result=bgmIndex.update(scope,source.messages,needsFull||!source.incremental?null:dirtyFloors);
+  const shiftedPrefix=source.incremental&&indexedStory?.scope===scope&&indexedStory.length>0&&
+    indexedStory.length!==snapshot.length&&(indexedStory.first!==snapshot.first||source.messages[indexedStory.length-1]!==indexedStory.last);
+  const job={scope,revision:indexRevision};
+  const check=()=>{
+    task?.check();
+    if(disposed||D.hidden||storyKey()!==scope||indexRevision!==job.revision)throw new DOMException('剧情音乐已更新','AbortError');
+  };
+  const yieldControl=task?.yield||(()=>new Promise(resolve=>W.setTimeout(resolve,0)));
+  job.promise=(async()=>{
+    const release=task?.reserve(1024*1024);
+    if(task&&!release)return false;
+    try {
+      const commit=await bgmIndex.prepareChunked(scope,source.messages,needsFull||shiftedPrefix||!source.incremental?null:dirtyFloors,{check,yieldControl});
+      publishBgmIndex(scope,snapshot,commit());
+      return true;
+    } finally { release?.(); }
+  })().catch(error=>{
+    if(error?.name!=='AbortError')throw error;
+    cancelledBgmScans++;
+    return false;
+  }).finally(()=>{if(indexWork===job)indexWork=undefined;});
+  indexWork=job;
+  return job.promise;
+}
+
+function publishBgmIndex(scope,snapshot,result){
   indexedStory=snapshot;
   lastVisitCount=result.visited;
+  lastSliceCount=result.slices;
   if(result.full){
     lastFullAt=Date.now();
     for(const position of pendingTags.keys()){
@@ -504,16 +532,19 @@ function updateBgmIndex(scope,force=false){
   indexScope=scope;
   fullScan=false;
   dirtyFloors.clear();
-  return true;
 }
 
-function scan(force=false){
+async function scan(force=false,task){
   if(scanBusy||disposed||shared.flags.music===false)return;
   const ch=character(),scope=storyKey(),chat=chatId();
   if(!ch||!scope||chat==='unknown'||(pendingScope&&!force))return;
   scanBusy=true;
+  if(force)markFull();
+  const revision=indexRevision;
   try{
-    if(!updateBgmIndex(scope,force))return;
+    if(!await updateBgmIndex(scope,task))return;
+    task?.check();
+    if(disposed||scope!==storyKey()||revision!==indexRevision)return;
     const pl=playlist(ch.id,ch.name+' · 故事原声');
     let added=0,changed=false,knownIds;
     const now=Date.now();
@@ -542,13 +573,16 @@ function scan(force=false){
     queuePlaylistName=pl.name;
     void playQueued(queue.indexOf(track));
   }catch(error){
-    fullScan=true;
-    console.warn('[声屿] 扫描失败',error);
+    if(error?.name!=='AbortError'){
+      markFull();
+      console.warn('[声屿] 扫描失败',error);
+    }
   }finally{scanBusy=false;}
 }
 function sync(){const ch=character();if(!ch)return;if(current!==ch.id){current=ch.id;playlist(ch.id,ch.name+' · 故事原声');if(!selected||db.playlists[selected]?.kind==='character')selected=ch.id;render()}}
 let storyEventSource=null,storyEventName=null,scanEvents=[];
 function markScan(id){
+  indexRevision++;
   const position=typeof id==='number'?id:typeof id==='string'&&/^\d+$/.test(id)?Number(id):NaN;
   if(Number.isSafeInteger(position)&&position>=0)dirtyFloors.add(position);
   else fullScan=true;
@@ -556,9 +590,9 @@ function markScan(id){
 function markTail(){
   const chat=context().chat;
   if(Array.isArray(chat)&&chat.length)markScan(chat.length-1);
-  else fullScan=true;
+  else markFull();
 }
-function markFull(){fullScan=true;}
+function markFull(){indexRevision++;fullScan=true;}
 function unbind(event,listener){
   if(storyEventSource?.removeListener)storyEventSource.removeListener(event,listener);
   else storyEventSource?.off?.(event,listener);
@@ -608,7 +642,7 @@ async function followStory(){
     bgmIndex.clear();
     dirtyFloors.clear();
     indexScope=null;
-    fullScan=true;
+    markFull();
     scanFollowSignature=null;
     if(switching){
       resetStoryJobs();
@@ -622,7 +656,8 @@ async function followStory(){
   }
   if(pendingScope!==scope)return;
   if(Date.now()<pendingAt){scheduleFollow(pendingAt-Date.now());return;}
-  if(D.hidden||!updateBgmIndex(scope))return;
+  const revision=indexRevision;
+  if(D.hidden||!await updateBgmIndex(scope)||disposed||storyKey()!==scope||pendingScope!==scope||revision!==indexRevision)return;
   pendingScope=null;
   if(!shouldFollowStory())return;
   const pl=playlist(ch.id,ch.name+' · 故事原声');
@@ -694,7 +729,7 @@ root.querySelectorAll('[data-search]').forEach(el=>el.onclick=()=>{let t=tracks[
 root.querySelector('[data-action="add"]').onclick=async()=>{if(!pl)return status('请先选择歌单');let title=root.querySelector('#si-song-title').value.trim(),artist=root.querySelector('#si-song-artist').value.trim();if(!title&&!artist)return status('请输入歌名或歌手关键词');const pick=await songPicker([title,artist].filter(Boolean).join(' '),'确认添加',!!title&&!!artist);if(!pick||disposed||db.playlists[pl.id]!==pl)return;if(pick.local){status(addSong(pl,{id:trackId(title,artist),title,artist},null)?'已添加本地歌曲':'歌曲已存在');render();return}title=String(pick.title);artist=(Array.isArray(pick.artists)?pick.artists:[]).join('/')||'未知歌手';const id=String(pick.id);if(pl.songs.some(t=>String(t.neteaseId)===id)){status('歌曲已存在');return}const existing=pl.songs.find(t=>t.id===trackId(title,artist)&&!t.neteaseId);const coverUrl=validUrl(pick.cover).replace(/^http:/,'https:');if(existing){noteManualMatch(existing);cancelTrackLoad(existing);existing.neteaseId=id;existing.autoMatchDisabled=false;if(coverUrl&&!validUrl(existing.coverUrl))existing.coverUrl=coverUrl;save();status('已关联现有歌曲')}else{const base=trackId(title,artist);status(addSong(pl,{id:pl.songs.some(t=>t.id===base)?base+'|netease:'+id:base,title,artist,neteaseId:id,coverUrl},null)?'已添加歌曲':'歌曲已存在')}render()};
 root.querySelector('[data-action="new"]').onclick=()=>{let name=root.querySelector('#si-playlist-name').value.trim();if(!name)return status('请输入歌单名称');let id='custom:'+Date.now()+':'+hash(name);playlist(id,name,'custom');selected=id;render()};
 root.querySelector('[data-action="batch-meta"]').onclick=()=>batchMetadata();
- root.querySelector('[data-action="scan"]').onclick=()=>{scan(true);status('正在检查当前聊天，内容稳定9秒后收录')};
+ root.querySelector('[data-action="scan"]').onclick=()=>{void scan(true);status('正在检查当前聊天，内容稳定9秒后收录')};
 root.querySelector('[data-action="export-csv"]').onclick=()=>{if(!pl)return status('请先选择歌单');const q=x=>'"'+String(x??'').replace(/"/g,'""')+'"';let rows=[['歌曲名称','歌手','网易云歌曲ID','来源角色','来源聊天ID','来源楼层','音源URL','封面URL'],...pl.songs.map(t=>[t.title,t.artist,t.neteaseId||'',t.source?.character||'',t.source?.chat||'',t.source?.floor??'',t.audioUrl||'',t.coverUrl||''])];let csv='\uFEFF'+rows.map(r=>r.map(q).join(',')).join('\r\n');let blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=D.createElement('a');a.href=url;a.download='声屿_'+pl.name.replace(/[\\/:*?"<>|]/g,'_')+'_歌单.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);status('已导出当前歌单CSV（含来源记录）')};
  root.querySelector('[data-action="diagnostics"]').onclick=()=>W.prompt('复制播放诊断（不含密钥和音源链接）',diagnostic());
 root.querySelector('[data-action="export"]').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=D.createElement('a');a.href=url;a.download='声屿_音乐库备份.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
@@ -775,9 +810,10 @@ function restoreBackup(input){
   render();
   return 'merged';
 }
-function timelineSongs(){
+async function timelineSongs(){
   const ch=character(),scope=storyKey();
-  if(!ch||!scope||chatId()==='unknown'||!updateBgmIndex(scope))return [];
+  const revision=indexRevision;
+  if(!ch||!scope||chatId()==='unknown'||!await updateBgmIndex(scope)||disposed||storyKey()!==scope||revision!==indexRevision)return [];
   const tracks=new Map((db.playlists[ch.id]?.songs||[]).map(track=>[track.id,track]));
   const online=shared.online?.ready();
   return bgmIndex.entries().flatMap(({id,found})=>found.map(track=>{
@@ -842,9 +878,9 @@ W[INSTANCE]={
   restoreBackup,
   restore:restoreBackup,
   diagnostics(){
-    return {'声屿索引上次访问楼层':lastVisitCount,'声屿待稳定标签':pendingTags.size,'声屿音源加载':resolving?'进行中':'空闲'};
+    return {'声屿索引上次访问楼层':lastVisitCount,'声屿索引上次分片':lastSliceCount,'声屿索引作废次数':cancelledBgmScans,'声屿待稳定标签':pendingTags.size,'声屿音源加载':resolving?'进行中':'空闲'};
   },
-  tick(){if(!disposed){checkStory();scan();if(!pendingScope)void autoMatch()}},
+  async tick(task){if(!disposed){checkStory();await scan(false,task);if(!disposed&&!task?.signal.aborted&&!pendingScope)void autoMatch()}},
   show(){opened=true;render()},
   hide(){opened=false;render()},
   playCloud(rows,index,name){

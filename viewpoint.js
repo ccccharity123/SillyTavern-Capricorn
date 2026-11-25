@@ -16,18 +16,19 @@ export function speakingCharacter(context, type = 'normal') {
 
 export function recallViewpoint(ledger, actor, query, budget) {
   const selected = [];
-  if (!actor || !query || budget <= 0) return { content: '', selected };
+  if (!viewpointName(actor) || typeof query !== 'string' || !query || budget <= 0) return { content: '', selected };
   const normalized = query.normalize('NFKC').toLowerCase();
   const words = [...new Set(tokenize(query))].filter(word => word.length > 1);
+  const actorKey = actor.normalize('NFKC').toLowerCase();
   const candidates = [];
   for (const item of knowledgeForCharacter(ledger, actor)) {
     if (Object.hasOwn(item.fields, '已公开事实')) continue;
     const facts = Object.entries(item.fields).filter(([key]) => key !== '角色')
       .map(([key, value]) => `${key}：${value}`).join('。');
-    const text = `${item.title} ${facts}`.normalize('NFKC').toLowerCase();
     const topic = item.title.normalize('NFKC').toLowerCase();
-    const explicit = topic.length >= 2 && topic !== `${actor.toLowerCase()}的认知` && normalized.includes(topic);
-    const hits = words.filter(word => text.includes(word)).length;
+    const explicit = topic.length >= 2 && topic !== `${actorKey}的认知` && normalized.includes(topic);
+    const evidence = facts.replace(/^角色：[^。]*。?/u, '').normalize('NFKC').toLowerCase();
+    const hits = words.filter(word => !actorKey.includes(word) && (evidence.includes(word) || (topic !== `${actorKey}的认知` && topic.includes(word)))).length;
     if (explicit || hits >= 2) candidates.push({ item, facts, rank: (explicit ? 10 : 0) + hits });
   }
   candidates.sort((a, b) => b.rank - a.rank);
