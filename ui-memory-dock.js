@@ -155,6 +155,10 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     isActive: el => el.getAttribute('aria-pressed') === 'true',
   });
   const actions = make('div', 'cap-shiyi-icon-actions', primary);
+  if (openRecall) {
+    const recallTopBtn = iconButton(make('button', 'cap-shiyi-recall-btn', actions), '回响 · 沉浸式剧情漫游', 'sparkle');
+    recallTopBtn.onclick = () => openRecall();
+  }
   const style = iconButton(make('button', 'cap-note-style-btn', actions), '拾忆外观、字体与自定义 CSS', 'palette');
   style.onclick = () => { if (openAppearance) openAppearance(); };
   const more = iconButton(make('button', '', actions), '拾忆管理与设置', 'more');
@@ -192,6 +196,16 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   tabBadge.hidden = true;
   const cleanupPosition = mountPosition(dock, expand);
 
+  const reviewBanner = make('button', 'cap-shiyi-review-banner', original);
+  reviewBanner.type = 'button';
+  reviewBanner.hidden = true;
+  reviewBanner.innerHTML = `<span class="cap-review-banner-dot" aria-hidden="true"></span><span class="cap-review-banner-text"></span><span class="cap-review-banner-cta">立即核对${icon('right', 13)}</span>`;
+  const reviewBannerText = reviewBanner.querySelector('.cap-review-banner-text');
+  reviewBanner.onclick = () => {
+    const btn = find('review');
+    if (btn) { btn.click(); updateBadges(); }
+  };
+
   const scroller = make('div', 'cap-shiyi-scroll', original);
   const onScroll = () => { heading.dataset.scrolled = scroller.scrollTop > 2 ? 'true' : 'false'; };
   scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -209,9 +223,9 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     recall.textContent = '回响';
     recall.onclick = openRecall;
   }
-  const management = [
-    ['scan', 'search'], ['import', 'folder-open'], ['archive', 'archive'],
-    ['review', 'check'], ['manage', 'user-list'], ['recall', 'sparkle'], ['settings', 'settings'],
+  const managementSections = [
+    { heading: '剧情采集与归档', entries: [['review', 'check'], ['scan', 'search'], ['import', 'folder-open'], ['archive', 'archive']] },
+    { heading: '管理与配置', entries: [['manage', 'user-list'], ['recall', 'sparkle'], ['settings', 'settings']] },
   ];
   function closeFallback() {
     tools.hidden = true;
@@ -219,17 +233,23 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   }
   more.onclick = () => {
     if (!tools.hidden) return closeFallback();
-    const items = management.map(([id, glyph]) => {
-      const button = find(id);
-      if (!button) return null;
-      const n = id === 'review' ? Number(memory.pending()) : 0;
-      return {
-        label: button.textContent + (n ? ' · ' + n : ''),
-        icon: glyph,
-        disabled: button.disabled,
-        action: () => { button.click(); updateBadges(); },
-      };
-    }).filter(Boolean);
+    const items = [];
+    for (const sec of managementSections) {
+      const groupItems = sec.entries.map(([id, glyph]) => {
+        const button = find(id);
+        if (!button) return null;
+        const n = id === 'review' ? Number(memory.pending()) : 0;
+        return {
+          label: button.textContent + (n ? ' · ' + n : ''),
+          icon: glyph,
+          disabled: button.disabled,
+          action: () => { button.click(); updateBadges(); },
+        };
+      }).filter(Boolean);
+      if (groupItems.length) {
+        items.push({ heading: sec.heading }, ...groupItems);
+      }
+    }
     if (!popover.open({anchor: more, items, role: 'menu', label: '拾忆管理与设置'})) {
       tools.hidden = false;
       more.setAttribute('aria-expanded', 'true');
@@ -259,6 +279,8 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
       node.hidden = pending <= 0;
       if (node.textContent !== text) node.textContent = text;
     }
+    reviewBanner.hidden = pending <= 0;
+    if (pending > 0) reviewBannerText.textContent = `有 ${pending} 条新剧情待审核`;
     const suffix = pending ? '（' + pending + ' 条待审核）' : '';
     expand.dataset.pending = pending ? String(pending) : '';
     label(expand, '展开拾忆' + suffix + '，可拖动调整位置');
@@ -596,6 +618,13 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
         show(id);
         navSlider.sync(true);
       }
+    },
+    trigger(id) {
+      const btn = find(id);
+      if (!btn || btn.disabled) return false;
+      btn.click();
+      updateBadges();
+      return true;
     },
     destroy() {
       closed = true;

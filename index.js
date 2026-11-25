@@ -27,6 +27,7 @@ import { viewport } from './viewport.js';
 import { mountMemoryDock } from './ui-memory-dock.js';
 import { attachSegmentSlider, prefersReducedMotion } from './ui-motion.js';
 import { uiAlert, uiConfirm, uiToast } from './ui-dialog.js';
+import { createSpotlight } from './ui-spotlight.js';
 
 const W = window, D = document;
 W.__capricornExtension?.destroy?.();
@@ -44,7 +45,7 @@ const shared = { flags, onIslandUpdate: null, scope, chatIdentity };
 let nativeControlsCleanup;
 const selectAdapters = [];
 let settingsUi;
-let memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, memory, music, timer, dead = false, tab = '';
+let memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, cleanupUnifiedRegex, spotlight, memory, music, timer, dead = false, tab = '';
 let memoryStartup;
 let preparingGeneration = 0;
 let changingModule = false;
@@ -69,6 +70,7 @@ root.innerHTML = `
         <button type="button" data-tab="settings" role="tab" aria-controls="cap-hub-settings"><span aria-hidden="true">${icon('settings', 15)}</span><span>设置</span></button>
       </div>
       <div class="cap-hub-actions">
+        <button type="button" data-spotlight aria-label="全局功能速达（Alt+K）" title="功能速达（Alt+K）">${icon('search', 16)}</button>
         <button type="button" data-open-player aria-label="打开播放器" title="打开播放器">${icon('play', 17)}</button>
         <button type="button" data-close aria-label="关闭声屿" title="关闭声屿">${icon('close', 17)}</button>
       </div>
@@ -93,6 +95,7 @@ const islandLyric = root.querySelector('.cap-island-lyric');
 const islandTranslation = root.querySelector('.cap-island-translation');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
 const primaryTabs = nav.querySelector('.cap-hub-primary');
+const spotlightButton = nav.querySelector('[data-spotlight]');
 const playerButton = nav.querySelector('[data-open-player]');
 const closeButton = nav.querySelector('[data-close]');
 
@@ -487,7 +490,7 @@ function onOutsideHubPointerDown(event) {
   if (nav.hidden || hubCloseAnim || dead) return;
   const t = event.target;
   if (!t || root.contains(t)) return;
-  if (t.closest?.('.cap-ui-portal, .cap-dialog-overlay, .cap-song-picker-overlay, .shiyi-overlay, .cap-recall')) return;
+  if (t.closest?.('.cap-ui-portal, .cap-dialog-overlay, .cap-spotlight-overlay, .cap-song-picker-overlay, .shiyi-overlay, .cap-recall')) return;
   close();
 }
 island.onclick = () => {
@@ -496,8 +499,18 @@ island.onclick = () => {
   openPlayer();
 };
 closeButton.onclick = () => close();
+if (spotlightButton) spotlightButton.onclick = () => spotlight?.open();
 playerButton.onclick = openPlayer;
-nav.querySelectorAll('[data-tab]').forEach(button => { button.onclick = () => select(button.dataset.tab); });
+nav.querySelectorAll('[data-tab]').forEach(button => {
+  button.onclick = () => {
+    const target = button.dataset.tab;
+    if (target === 'settings' && tab === 'settings' && settingsUi && !settingsUi.isHome?.()) {
+      settingsUi.home();
+      return;
+    }
+    select(target);
+  };
+});
 function navigateTabs(event) {
   const buttons = Array.from(event.currentTarget.querySelectorAll('button:not([hidden])'));
   const current = buttons.indexOf(event.target);
@@ -530,6 +543,7 @@ function tick() {
       { lane: 'audio', scoped: true, duringForeground: true });
     if (memory && flags.memory) maintenance.enqueue('拾忆', task => memory.tick(task), maintenancePriority.memory, { scoped: true });
     if (flags.memory) memoryDock?.tick();
+    if (!nav.hidden && tab === 'settings') updateUnifiedStatus();
     if (flags.memory && tab === 'resonance' && resonance.dataset.scope !== key) {
       unlockRecall();
       void showResonance();
@@ -604,6 +618,8 @@ W.__capricornExtension = {
     launcher?.destroy();
     cleanupMobile?.destroy();
     memoryDock?.destroy();
+    spotlight?.destroy();
+    cleanupUnifiedRegex?.();
     cleanupNetease?.();
     cloud?.destroy();
     clearInterval(timer);
@@ -627,9 +643,24 @@ function resume() {
 }
 
 function onGlobalKeyDown(event) {
-  if (event.key !== 'Escape' || event.defaultPrevented || dead) return;
-  if (D.querySelector('.cap-dialog-overlay, .cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
-  if (!nav.hidden) { close(); return; }
+  if (event.defaultPrevented || dead) return;
+  if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key?.toLowerCase() === 'k') {
+    if (event.target?.closest?.('input,textarea,select,[contenteditable="true"]')) return;
+    event.preventDefault();
+    if (spotlight?.isOpen?.()) spotlight.close();
+    else spotlight?.open();
+    return;
+  }
+  if (event.key !== 'Escape') return;
+  if (D.querySelector('.cap-dialog-overlay, .cap-spotlight-overlay, .cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
+  if (!nav.hidden) {
+    if (tab === 'settings' && settingsUi && !settingsUi.isHome?.()) {
+      settingsUi.home();
+      return;
+    }
+    close();
+    return;
+  }
   if (music?.isPlayerOpen?.()) { music.closePlayer(); return; }
   if (memoryDock?.isOpen?.()) { if (memoryDock.close) memoryDock.close(); else memory?.setCollapsed?.(true); }
 }
@@ -713,6 +744,14 @@ memoryPanel.innerHTML = `
     <button type="button" class="cap-tile-btn" data-view="table">${icon('table', 20)}<span>查看表格</span></button>
     <button type="button" class="cap-tile-btn" data-view="dossier">${icon('users', 20)}<span>人物档案</span></button>
   </div>
+  <div class="cap-ios-group cap-mem-tools-group">
+    <button type="button" class="cap-ios-action-row" data-mem-action="recall"><span class="cap-ios-row-ico">${icon('sparkle', 16)}</span><span class="cap-ios-row-label">回响 · 剧情漫游</span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+    <button type="button" class="cap-ios-action-row" data-mem-action="review"><span class="cap-ios-row-ico">${icon('check', 16)}</span><span class="cap-ios-row-label">审核待入库摘要</span><span class="cap-ios-row-badge" data-mem-pending hidden></span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+    <button type="button" class="cap-ios-action-row" data-mem-action="import"><span class="cap-ios-row-ico">${icon('folder-open', 16)}</span><span class="cap-ios-row-label">全量检测 / 历史补录</span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+    <button type="button" class="cap-ios-action-row" data-mem-action="archive"><span class="cap-ios-row-ico">${icon('archive', 16)}</span><span class="cap-ios-row-label">正文归档与隐藏</span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+    <button type="button" class="cap-ios-action-row" data-mem-action="manage"><span class="cap-ios-row-ico">${icon('list', 16)}</span><span class="cap-ios-row-label">剧情档案管理与回收站</span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+    <button type="button" class="cap-ios-action-row" data-mem-action="settings"><span class="cap-ios-row-ico">${icon('sliders-horizontal', 16)}</span><span class="cap-ios-row-label">拾忆核心与向量设置</span><span class="cap-ios-row-chev">${icon('right', 14)}</span></button>
+  </div>
   <p class="cap-ios-footnote">便签、随层表格与留痕档案共享同一份聊天记忆；已启动的拾忆可免刷新暂停与恢复；首次启用及声屿开关仍需刷新。历史数据保留。</p>
 `;
 settings.append(memoryPanel);
@@ -744,10 +783,21 @@ for (const button of memoryPanel.querySelectorAll('[data-view]')) {
   button.disabled = !memory;
   button.addEventListener('click', () => {
     const target = button.dataset.view;
-    close();
+    close(true);
     if (!flags.memory) return;
     if (memoryDock?.navigate) memoryDock.navigate(target);
     else if (memory) { memory.setCollapsed?.(false); memoryDock?.open?.(); }
+  });
+}
+for (const button of memoryPanel.querySelectorAll('[data-mem-action]')) {
+  button.disabled = !memory;
+  button.addEventListener('click', () => {
+    const action = button.dataset.memAction;
+    close(true);
+    if (!flags.memory || !memory) return;
+    if (action === 'recall') { recall?.open(); return; }
+    if (memoryDock?.trigger) memoryDock.trigger(action);
+    else memory.root?.querySelector('#shiyi-' + action)?.click();
   });
 }
 musicPanel.querySelector('[data-open-music]').disabled = !music;
@@ -758,12 +808,20 @@ musicPanel.querySelector('[data-open-library]').onclick = () => openHub('library
 function updateUnifiedStatus() {
   const memHead = memoryPanel.querySelector('[data-module-head="memory"]');
   const musHead = musicPanel.querySelector('[data-module-head="music"]');
-  memHead.dataset.active = String(Boolean(memory && flags.memory));
-  for (const button of memoryPanel.querySelectorAll('[data-view]')) button.disabled = !memory || !flags.memory;
-  primaryTabs.querySelector('[data-tab="resonance"]').hidden = !(music && memory && flags.memory);
+  const memReady = Boolean(memory && flags.memory);
+  memHead.dataset.active = String(memReady);
+  for (const button of memoryPanel.querySelectorAll('[data-view], [data-mem-action]')) button.disabled = !memReady;
+  const pendingEl = memoryPanel.querySelector('[data-mem-pending]');
+  if (pendingEl) {
+    const pending = memReady ? Number(memory?.pending?.() || 0) : 0;
+    pendingEl.hidden = pending <= 0;
+    pendingEl.textContent = pending > 0 ? String(pending) : '';
+  }
+  primaryTabs.querySelector('[data-tab="resonance"]').hidden = !(music && memReady);
   musHead.dataset.active = String(Boolean(music));
-  memoryPanel.querySelector('.cap-unified-status').textContent = memory && flags.memory ? '运行中 · 当前聊天已接入' : '已暂停 / 未启用';
+  memoryPanel.querySelector('.cap-unified-status').textContent = memReady ? '运行中 · 当前聊天已接入' : '已暂停 / 未启用';
   musicPanel.querySelector('.cap-unified-status').textContent = music ? '运行中 · 悬浮球 / 灵动岛就绪' : '未启用';
+  settingsUi?.refreshSummaries?.();
 }
 updateUnifiedStatus();
 
@@ -1003,7 +1061,7 @@ shared.onAccountChange=()=>{cloud?.invalidate();if(tab==='cloud'&&!shared.accoun
 if(flags.music) cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 if(music) {
-  cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
+  cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick(), onLongPress: () => spotlight?.open() });
   launcher = mountLauncher({root,island,nav,onOpen:openPlayer,isPlayerOpen:()=>Boolean(music?.isPlayerOpen())});
   // Keep the existing Capricorn settings and backup controls; only extend the music appearance section.
   const floating = D.createElement('section');
@@ -1051,13 +1109,89 @@ if(music) {
   }
 }
 
+const presetSection = D.createElement('section');
+presetSection.className = 'cap-unified-preset';
+presetSection.dataset.capSettingsSection = 'preset';
+mountPresetControls(presetSection, W, D);
+cleanupUnifiedRegex = mountGlobalRegexControl(presetSection, W, D);
+settings.append(presetSection);
+
 try {
   appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
 } catch (error) {
   console.warn('[Capricorn] 出现外观设置错误', error);
 }
-try { settingsUi = mountSettings(settings); }
+
+function readSettingsSummary(id) {
+  const matMap = { glass: '液态玻璃', frost: '磨砂', solid: '实色' };
+  const bgMap = { auto: '默认', album: '专辑铺满', color: '专辑取色', custom: '自定义图' };
+  const privMap = { local: '本地', gd: 'GD 免登录', online: '在线', full: '完整云端' };
+  if (id === 'memory') {
+    if (!memory || !flags.memory) return { text: '已暂停', tone: 'muted' };
+    const p = Number(memory.pending?.() || 0);
+    return p > 0 ? { text: p + ' 条待审', tone: 'warn' } : { text: '运行中', tone: 'ok' };
+  }
+  if (id === 'music') return music ? { text: '运行中', tone: 'ok' } : { text: '未启用', tone: 'muted' };
+  if (id === 'appearance') {
+    const m = matMap[D.body.dataset.capMaterial] || '液态玻璃';
+    const f = root.dataset.floatMode === 'orb' ? '悬浮球' : '灵动岛';
+    return `${m} · ${f}`;
+  }
+  if (id === 'background') return bgMap[D.body.dataset.capBgSource] || '默认';
+  if (id === 'fonts') return D.body.dataset.capHasPlayerFont === '1' || D.body.dataset.capHasNoteFont === '1' ? '自定义字体' : '系统默认';
+  if (id === 'services') {
+    let pm = 'local';
+    try { pm = W.localStorage.getItem('capricorn_privacy_mode') || 'local'; } catch {}
+    return privMap[pm] || '本地';
+  }
+  if (id === 'preset') return '条目与隐藏';
+  if (id === 'backup') return '导出 / 恢复';
+  return '';
+}
+
+try { settingsUi = mountSettings(settings, { getSummary: readSettingsSummary }); }
 catch (error) { console.warn('[Capricorn] 设置分类回退', error); }
+
+function openSettingsPage(pageId) {
+  openHub('settings');
+  if (pageId) settingsUi?.activate?.(pageId);
+  else settingsUi?.home?.();
+}
+
+spotlight = createSpotlight({
+  D, W,
+  getItems() {
+    const memReady = Boolean(memory && flags.memory);
+    const pending = memReady ? Number(memory?.pending?.() || 0) : 0;
+    return [
+      { group: '常用速达', title: '打开音乐播放器', subtitle: '展开悬浮播控与歌词', icon: 'play', keywords: 'player play 播放 歌词', hidden: !music, action: openPlayer },
+      { group: '常用速达', title: '打开拾忆便签', subtitle: '查看剧情时间轴与关联原声', icon: 'note', keywords: 'shiyi timeline note 记忆 便签', hidden: !memReady, badge: pending ? `${pending} 待审` : '', action: () => { close(true); memoryDock?.navigate?.('timeline'); } },
+      { group: '常用速达', title: '回响 · 剧情漫游', subtitle: '沉浸式回顾章节、人物与伏笔线索', icon: 'sparkle', keywords: 'recall echo 漫游 伏笔 回忆', hidden: !memReady, action: () => { close(true); recall?.open(); } },
+      { group: '常用速达', title: '共鸣 · 剧情原声', subtitle: '按曲目与章节回溯剧情 BGM', icon: 'resonance', keywords: 'soundtrack bgm 原声 音乐', hidden: !(music && memReady), action: () => openHub('resonance') },
+
+      { group: '拾忆 · 剧情记忆', title: '审核待入库摘要', subtitle: pending ? `当前有 ${pending} 条待审核` : '核对最新剧情摘要', icon: 'check', keywords: 'review pending 审核 注入', hidden: !memReady, badge: pending ? String(pending) : '', action: () => { close(true); memoryDock?.trigger?.('review'); } },
+      { group: '拾忆 · 剧情记忆', title: '随层表格档案', subtitle: '按楼层与分类检索结构化状态', icon: 'table', keywords: 'table ledger 表格 随层', hidden: !memReady, action: () => { close(true); memoryDock?.navigate?.('table'); } },
+      { group: '拾忆 · 剧情记忆', title: '留痕 · 人物与伏笔档案', subtitle: '关系演变、关联档案与核心记忆', icon: 'users', keywords: 'dossier people 人物 关系 伏笔', hidden: !memReady, action: () => { close(true); memoryDock?.navigate?.('dossier'); } },
+      { group: '拾忆 · 剧情记忆', title: '全量检测 / 补录历史', subtitle: '扫描历史楼层补齐未归档摘要', icon: 'folder-open', keywords: 'scan import 扫描 补录 历史', hidden: !memReady, action: () => { close(true); memoryDock?.trigger?.('import'); } },
+      { group: '拾忆 · 剧情记忆', title: '正文归档与隐藏', subtitle: '预览并手动隐藏已归档旧楼层', icon: 'archive', keywords: 'archive hide 归档 隐藏 正文', hidden: !memReady, action: () => { close(true); memoryDock?.trigger?.('archive'); } },
+      { group: '拾忆 · 剧情记忆', title: '剧情档案管理与回收站', subtitle: '批量删除、星标、章节与历史回退', icon: 'list', keywords: 'manage trash 管理 回收站 章节', hidden: !memReady, action: () => { close(true); memoryDock?.trigger?.('manage'); } },
+      { group: '拾忆 · 剧情记忆', title: '拾忆核心与向量设置', subtitle: '标签、记忆运行模式、预算与向量 API', icon: 'sliders-horizontal', keywords: 'vector budget engine 向量 预算 凝忆', hidden: !memReady, action: () => { close(true); memoryDock?.trigger?.('settings'); } },
+
+      { group: '声屿 · 音乐', title: '本地 / 角色曲库', subtitle: '管理角色歌单、手动音源与封面', icon: 'library', keywords: 'library playlist 曲库 歌单 封面', hidden: !music, action: () => openHub('library') },
+      { group: '声屿 · 音乐', title: '网易云云端曲库', subtitle: '浏览并同步网易云歌单', icon: 'music', keywords: 'cloud netease 网易云 云端', hidden: !(music && shared.accountReady?.()), action: () => openHub('cloud') },
+
+      { group: '设置中心', title: '设置首页', subtitle: '浏览全部模块与偏好设置', icon: 'settings', keywords: 'settings home 设置 首页', action: () => openSettingsPage('') },
+      { group: '设置中心', title: '外观与悬浮控件', subtitle: '日夜模式、液态玻璃、悬浮球与隐身唤起', icon: 'swatches', keywords: 'theme glass orb island 外观 材质 悬浮球 灵动岛 贴边', action: () => openSettingsPage('appearance') },
+      { group: '设置中心', title: '背景与封面定制', subtitle: '专辑铺满、模糊遮罩、封面形状与边框', icon: 'image', keywords: 'background cover 背景 封面 模糊 圆角', action: () => openSettingsPage('background') },
+      { group: '设置中心', title: '字体与自定义 CSS', subtitle: '导入 TTF 字体、拾忆与播放器样式代码', icon: 'note-pencil', keywords: 'font ttf css 字体 样式', action: () => openSettingsPage('fonts') },
+      { group: '设置中心', title: '音源与运行服务', subtitle: '隐私模式、GD 音源、网易云网关与诊断', icon: 'sliders-horizontal', keywords: 'netease gd privacy 音源 隐私 网易云 诊断', action: () => openSettingsPage('services') },
+      { group: '设置中心', title: '预设与隐藏正则', subtitle: '安装摘要/档案/BGM 预设条目与全局隐藏正则', icon: 'package', keywords: 'preset regex 预设 正则 隐藏', action: () => openSettingsPage('preset') },
+      { group: '设置中心', title: '数据备份与索引', subtitle: '导出/恢复统一备份、清理检索缓存', icon: 'archive', keywords: 'backup restore cache 备份 恢复 缓存', action: () => openSettingsPage('backup') },
+      { group: '设置中心', title: '拾忆模块总控', subtitle: '免刷新暂停或恢复拾忆与快捷工具', icon: 'bookmark', keywords: 'memory module 拾忆 暂停 开关', action: () => openSettingsPage('memory') },
+      { group: '设置中心', title: '声屿模块总控', subtitle: '剧情自动切歌、角色卡切歌与 iOS 后台策略', icon: 'music', keywords: 'music module 声屿 后台 音量 切歌', action: () => openSettingsPage('music') },
+    ];
+  },
+});
 mountSelectRoot(root);
 mountSelectRoot(memory?.root);
 }

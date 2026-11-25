@@ -3157,3 +3157,306 @@ body[data-cap-paper="ink"] #shiyi-dock .cap-memory-primary-nav.cap-has-slider .c
     transition: none !important;
   }
 }
+/* =========================================================================
+   Capricorn v4.6.0 · Apple Discoverability & Story UX Layer
+   (iOS Settings Home + Push/Pop · Spotlight · Shiyi Review Banner ·
+    v4.6.0 Relationship Timeline / Linked Dossiers / Recall Story Threads)
+   ========================================================================= */
+
+/* ---------- 1. iOS Settings Home List & Drill-Down Subpages (ui-settings.js) ---------- */
+@keyframes capSettingsPush { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes capSettingsPop { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+
+#capricorn-hub .cap-settings.cap-settings-paged {
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px 14px;
+}
+#capricorn-hub .cap-settings-home {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 2px;
+}
+#capricorn-hub .cap-settings-home.is-pop {
+  animation: capSettingsPop 0.24s var(--cap-spring) both;
+}
+#capricorn-hub .cap-settings-group-title {
+  margin: 0 0 6px 8px;
+  font-size: 11.5px;
+  font-weight: 660;
+  letter-spacing: 0.03em;
+  color: var(--cap-text-secondary);
+}
+#capricorn-hub .cap-settings-list-card {
+  border-radius: 18px;
+  border: 1px solid var(--cap-glass-hairline);
+  background: var(--glass-card);
+  box-shadow: inset 0 1px 0 var(--glass-highlight);
+  overflow: hidden;
+}
+#capricorn-hub .cap-settings-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 52px;
+  margin: 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cap-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+}
+#capricorn-hub .cap-settings-row + .cap-settings-row {
+  border-top: 0.5px solid var(--cap-glass-hairline);
+}
+@media (hover: hover) {
+  #capricorn-hub .cap-settings-row:hover { background: var(--glass-control); }
+}
+#capricorn-hub .cap-settings-row:active { background: var(--glass-control-hover); transform: none; }
+#capricorn-hub .cap-settings-row-ico {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 10px;
+  background: var(--glass-control);
+  color: var(--cap-text-primary);
+  box-shadow: inset 0 0.5px 0 var(--glass-highlight);
+}
+#capricorn-hub .cap-settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+#capricorn-hub .cap-settings-row-text strong { font-size: 13.8px; font-weight: 610; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#capricorn-hub .cap-settings-row-text small { font-size: 11.5px; color: var(--cap-text-secondary); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#capricorn-hub .cap-settings-row-summary {
+  flex: none;
+  max-width: 104px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--glass-control);
+  color: var(--cap-text-secondary);
+  font-size: 11px;
+  font-weight: 580;
+}
+#capricorn-hub .cap-settings-row-summary[data-tone="ok"] { background: rgba(52, 199, 89, 0.14); color: #1f8a3d; }
+#capricorn-hub .cap-settings-row-summary[data-tone="warn"] { background: rgba(255, 149, 0, 0.15); color: #b45309; }
+body[data-cap-look="dark"] #capricorn-hub .cap-settings-row-summary[data-tone="ok"] { color: #6ee78e; }
+body[data-cap-look="dark"] #capricorn-hub .cap-settings-row-summary[data-tone="warn"] { color: #fbbf24; }
+#capricorn-hub .cap-settings-row-chev { display: inline-flex; flex: none; color: var(--cap-text-secondary); opacity: 0.55; }
+
+/* Subpage Sticky Back Bar */
+#capricorn-hub .cap-settings-subhead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) 74px;
+  align-items: center;
+  min-height: 38px;
+  margin: -4px -10px 10px;
+  padding: 4px 10px 8px;
+  border-bottom: 0.5px solid var(--cap-glass-hairline);
+  background: color-mix(in srgb, var(--glass-bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(22px);
+  backdrop-filter: blur(22px);
+}
+#capricorn-hub .cap-settings-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  justify-self: start;
+  min-height: 32px;
+  padding: 4px 10px 4px 6px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--glass-control);
+  color: var(--cap-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+#capricorn-hub .cap-settings-subtitle { text-align: center; font-size: 14px; font-weight: 660; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#capricorn-hub .cap-settings-view.is-push { animation: capSettingsPush 0.26s var(--cap-spring) both; }
+
+/* Control Center Shiyi Quick Action List */
+#capricorn-hub .cap-ios-action-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 9px 13px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cap-text-primary);
+  font-size: 13.5px;
+  font-weight: 550;
+  text-align: left;
+  cursor: pointer;
+}
+#capricorn-hub .cap-ios-action-row + .cap-ios-action-row { border-top: 0.5px solid var(--cap-glass-hairline); }
+@media (hover: hover) { #capricorn-hub .cap-ios-action-row:hover:not(:disabled) { background: var(--glass-control); } }
+#capricorn-hub .cap-ios-action-row:disabled { opacity: 0.42; cursor: default; }
+#capricorn-hub .cap-ios-row-ico { display: inline-flex; flex: none; color: var(--cap-text-secondary); }
+#capricorn-hub .cap-ios-row-chev { display: inline-flex; flex: none; opacity: 0.5; }
+#capricorn-hub .cap-ios-row-badge {
+  flex: none;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  display: inline-grid;
+  place-items: center;
+}
+#capricorn-hub .cap-unified-preset { display: flex; flex-direction: column; gap: 10px; }
+#capricorn-hub .cap-hub-actions button { width: 38px; height: 38px; }
+
+/* ---------- 2. Apple Spotlight Global Launcher (ui-spotlight.js) ---------- */
+.cap-spotlight-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(10vh, env(safe-area-inset-top, 24px)) 14px max(16px, env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.30);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: capDialogOverlayIn 0.2s ease both;
+}
+.cap-spotlight-overlay.is-closing { pointer-events: none; animation: capDialogOverlayOut 0.16s ease both; }
+.cap-spotlight-card {
+  width: min(460px, 100%);
+  max-height: 74dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 0.5px solid rgba(0, 0, 0, 0.10);
+  background: rgba(250, 250, 250, 0.86);
+  color: #1c1c1e;
+  -webkit-backdrop-filter: blur(36px) saturate(195%);
+  backdrop-filter: blur(36px) saturate(195%);
+  box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.92), 0 28px 72px rgba(0, 0, 0, 0.26), 0 4px 12px rgba(0, 0, 0, 0.08);
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  animation: capDialogCardIn 0.26s var(--cap-spring) both;
+}
+.cap-spotlight-overlay.is-closing .cap-spotlight-card { animation: capDialogCardOut 0.16s var(--cap-spring) both; }
+body[data-cap-look="dark"] .cap-spotlight-card {
+  background: rgba(32, 32, 32, 0.88);
+  color: #f5f5f5;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.22), 0 30px 76px rgba(0, 0, 0, 0.62);
+}
+.cap-spot-head { display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 16px; border-bottom: 0.5px solid rgba(128, 128, 128, 0.22); }
+.cap-spot-search-ico { display: inline-flex; opacity: 0.6; flex: none; }
+.cap-spot-input { appearance: none; -webkit-appearance: none; flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: inherit; font: 500 15px/1.35 inherit; }
+@media (pointer: coarse) { .cap-spot-input { font-size: 16px; } }
+.cap-spot-input::placeholder { opacity: 0.52; color: inherit; }
+.cap-spot-close { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; border: 0; border-radius: 50%; background: rgba(128, 128, 128, 0.14); color: inherit; cursor: pointer; }
+.cap-spot-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 10px 10px 12px; display: flex; flex-direction: column; gap: 12px; }
+.cap-spot-group-title { margin: 0 0 5px 8px; font-size: 11px; font-weight: 660; letter-spacing: 0.03em; opacity: 0.58; }
+.cap-spot-rows { display: flex; flex-direction: column; gap: 2px; }
+.cap-spot-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; border-radius: 13px; background: transparent; color: inherit; text-align: left; cursor: pointer; transition: background-color 0.14s ease; }
+.cap-spot-row[data-active="true"], .cap-spot-row:focus-visible { background: rgba(128, 128, 128, 0.16); outline: none; }
+.cap-spot-ico { display: inline-grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: 9px; background: rgba(128, 128, 128, 0.12); }
+.cap-spot-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.cap-spot-meta strong { font-size: 13.5px; font-weight: 610; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-spot-meta small { font-size: 11.5px; opacity: 0.62; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap-spot-badge { flex: none; padding: 2px 7px; border-radius: 999px; background: #ff3b30; color: #ffffff; font-size: 10.5px; font-weight: 700; }
+.cap-spot-chev { display: inline-flex; flex: none; opacity: 0.45; }
+.cap-spot-empty { text-align: center; font-size: 13px; opacity: 0.6; padding: 28px 12px; margin: 0; }
+.cap-spot-foot { display: flex; justify-content: space-between; gap: 8px; padding: 8px 16px; border-top: 0.5px solid rgba(128, 128, 128, 0.18); font-size: 11px; opacity: 0.56; }
+
+/* ---------- 3. Shiyi Pending Review Banner ---------- */
+#shiyi-dock .cap-shiyi-review-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 24px);
+  min-height: 36px;
+  margin: 8px 12px 0;
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--note-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--note-accent) 12%, var(--note-card));
+  color: var(--note-fg);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  flex: none;
+  animation: capNoteBodyIn 0.24s var(--cap-spring) both;
+}
+#shiyi-dock .cap-review-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.18); flex: none; }
+#shiyi-dock .cap-review-banner-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#shiyi-dock .cap-review-banner-cta { display: inline-flex; align-items: center; gap: 2px; flex: none; color: var(--note-accent); font-weight: 650; }
+
+/* ---------- 4. v4.6.0 Dossier Relationship Timeline & Linked Dossier Sub-Cards ---------- */
+.cap-dossier-subbox { margin: 4px 0 2px; padding: 7px 10px; border-radius: 13px; border: 0.5px solid color-mix(in srgb, var(--note-line) 85%, transparent); background: color-mix(in srgb, var(--note-fg) 3.5%, transparent); font-size: 12.2px; }
+.cap-dossier-subbox > summary { position: relative; padding-right: 18px; list-style: none; cursor: pointer; font-weight: 620; color: var(--note-muted); }
+.cap-dossier-subbox > summary::-webkit-details-marker { display: none; }
+.cap-dossier-subbox > summary::after { content: "›"; position: absolute; right: 2px; top: 0; font-size: 16px; line-height: 1.1; opacity: 0.6; transition: transform 0.22s var(--cap-spring); }
+.cap-dossier-subbox[open] > summary::after { transform: rotate(90deg); }
+.cap-rel-timeline { position: relative; display: flex; flex-direction: column; gap: 9px; margin-top: 9px; padding-left: 14px; border-left: 1.5px solid color-mix(in srgb, var(--note-accent) 32%, var(--note-line)); }
+.cap-rel-node { position: relative; padding: 7px 10px; border-radius: 11px; background: var(--note-card); border: 0.5px solid color-mix(in srgb, var(--note-line) 78%, transparent); }
+.cap-rel-node::before { content: ""; position: absolute; left: -19.5px; top: 11px; width: 8px; height: 8px; border-radius: 50%; background: var(--note-accent); border: 2px solid var(--note-bg); }
+.cap-rel-node[data-flashback="true"]::before { background: var(--note-muted); }
+.cap-rel-head { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 5px; }
+.cap-rel-floor { padding: 1px 6px; border-radius: 5px; background: color-mix(in srgb, var(--note-accent) 13%, transparent); color: var(--note-accent); font-size: 11px; font-weight: 660; font-variant-numeric: tabular-nums; }
+.cap-rel-frame { padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--note-fg) 7%, transparent); color: var(--note-fg); font-size: 10.8px; font-weight: 600; }
+.cap-rel-node[data-flashback="true"] .cap-rel-frame { background: rgba(217, 119, 6, 0.14); color: #b45309; }
+body[data-cap-paper-mode="dark"] .cap-rel-node[data-flashback="true"] .cap-rel-frame,
+body[data-cap-paper="ink"] .cap-rel-node[data-flashback="true"] .cap-rel-frame { color: #fbbf24; }
+.cap-rel-when { font-size: 11px; color: var(--note-muted); }
+.cap-rel-changes { display: flex; flex-direction: column; gap: 3px; }
+.cap-rel-kv { display: flex; flex-wrap: wrap; gap: 4px 6px; font-size: 12px; line-height: 1.48; }
+.cap-rel-key { font-weight: 620; color: var(--note-muted); }
+.cap-rel-val { color: var(--note-fg); }
+.cap-linked-list { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
+.cap-linked-card { padding: 8px 10px; border-radius: 11px; background: var(--note-card); border: 0.5px solid color-mix(in srgb, var(--note-line) 78%, transparent); }
+.cap-linked-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.cap-linked-title { font-size: 13px; font-weight: 630; }
+.cap-dossier-submore, .cap-dossier-more { display: block; margin: 8px auto 2px; min-height: 30px; padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 580; }
+
+/* ---------- 5. v4.6.0 Recall Story Threads Dark Frosted Cards ---------- */
+.cap-thread-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.cap-thread-card { padding: 10px 12px; border-radius: 14px; background: rgba(255, 255, 255, 0.06); border: 0.5px solid rgba(255, 255, 255, 0.13); }
+.cap-thread-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cap-thread-kind { padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.14); font-size: 11px; font-weight: 620; }
+.cap-thread-title { font-size: 13.5px; font-weight: 640; color: #ffffff; }
+.cap-thread-status { margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 620; background: rgba(255, 255, 255, 0.12); }
+.cap-thread-status[data-status="未解决"] { background: rgba(251, 191, 36, 0.20); color: #fcd34d; }
+.cap-thread-status[data-status="发展中"] { background: rgba(96, 165, 250, 0.20); color: #93c5fd; }
+.cap-thread-status[data-status="已回收"] { background: rgba(74, 222, 128, 0.20); color: #86efac; }
+.cap-thread-nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cap-thread-jump, .cap-thread-more { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 11px !important; border-radius: 999px !important; font-size: 12px !important; font-weight: 580; }
+.cap-thread-more { margin-top: 8px; }
+
+@media (prefers-reduced-motion: reduce), (update: slow) {
+  .cap-settings-home, .cap-settings-view, .cap-spotlight-overlay, .cap-spotlight-card, #shiyi-dock .cap-shiyi-review-banner {
+    animation: none !important;
+    transition: none !important;
+  }
+}

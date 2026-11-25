@@ -271,7 +271,7 @@ export function mountCloud(content,shared,music){
   }
   const create=libraryButton(bar,'新建私密歌单',()=>run(createPrivate),'plus');
   create.className='cap-library-icon';
-  libraryMenu(bar,'网易云歌单管理','more',{items:[
+  libraryMenu(bar,'网易云歌单管理','sliders-horizontal',{items:[
     action('刷新账号歌单',()=>refresh(),{icon:'refresh'}),
     action('管理导入',async()=>{
       const revision=viewRevision;

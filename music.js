@@ -390,7 +390,10 @@ function cancelTrackLoad(track){
 }
 async function attemptPlay(timeout=12000,signal){
   try {
-    await withMusicTimeout(() => audio.play(), timeout, signal);
+    if(signal?.aborted)throw new DOMException("请求已取消","AbortError");
+    const pending=Promise.resolve(audio.play());
+    void pending.catch(()=>{});
+    await withMusicTimeout(() => pending, timeout, signal);
   } catch (error) {
     if (error.name === 'AbortError' && error.message === '请求超时' && !signal?.aborted) {
       throw Error('音频加载超时');
@@ -427,7 +430,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  if(!audio.paused&&!audio.ended){await fadeTo(0,320,epoch);if(!alive())return;}
  resumePosition=resumeAt;playing=t;audioError='';actualQuality='';playbackLog=[];coverState='未检查';clearAudio();render();
  const deadline=Date.now()+95000;
- async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!await chooseAudio(alive,forceNative))return false;syncNativeLoop();applyGain(D.hidden?1:0);audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){trace('音源已准备，请再次点击播放');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
+ async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!await chooseAudio(alive,forceNative))return false;syncNativeLoop();applyGain(D.hidden?1:0);audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){if(activeAudio===graphAudio){trace('Web Audio 播放权限受限，尝试原生通道');return candidate(url,quality,true)}trace('音源已准备，请点击播放器主播放键重试');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
  async function loadCover(id){
    if(validUrl(t.coverUrl)){coverState='已有地址';return;}
    try {
@@ -470,11 +473,11 @@ async function toggleAudio(){
   resolving=true;
   try{
     if(activeAudio===graphAudio)void unlockAudio();
-    applyGain(0);
+    applyGain(1);
     await attemptPlay(12000,task.signal);
     if(!task.active()||disposed)return;
     void fadeTo(1,450,epoch);
-    started=true;audioError='';trace('播放成功：'+actualQuality);
+    started=true;audioError='';rememberPlay(playing);storePlayback();updateMedia();trace('播放成功：'+actualQuality);
   }catch(error){
     if(!task.active()||disposed)return;
     audioError=error.name==='NotAllowedError'?'系统阻止播放，请再次点击':error.message;
@@ -1105,21 +1108,27 @@ function render(){
       if(task.active())status('导入失败：'+error.message);
     }
   };
-  libraryMenu(tools,'歌单管理','more',{items:()=>{
+  libraryMenu(tools,'歌单管理','sliders-horizontal',{items:()=>{
     const items=[
-      {label:'批量补封面',icon:'image',action:()=>batchMetadata()},
-      {label:'扫描当前聊天',icon:'refresh',action:()=>{void scan(true);status('正在检查当前聊天，内容稳定9秒后收录')}},
+      {heading:'曲库维护'},
+      {label:'扫描当前聊天收录',icon:'refresh',action:()=>{void scan(true);status('正在检查当前聊天，内容稳定9秒后收录')}},
+      {label:'批量补齐专辑封面',icon:'image',action:()=>batchMetadata()},
+      {heading:'导入与导出'},
       {label:'导出当前歌单 CSV',icon:'download',disabled:!pl,action:()=>exportPlaylist(pl)},
       {label:'导出音乐库备份',icon:'download',action:()=>downloadLibrary(JSON.stringify(db,null,2),'application/json','声屿_音乐库备份.json')},
-      {label:'播放诊断',icon:'note',action:()=>uiPrompt('以下诊断信息不含密钥与音源直链，可一键复制：',diagnostic(),{doc:D,title:'声屿播放诊断',multiline:true,readOnly:true,confirmText:'复制诊断',cancelText:'关闭',copyOnConfirm:true})},
       {label:'导入音乐库备份',icon:'upload',action:()=>importFile.click()},
+      {heading:'诊断'},
+      {label:'播放诊断',icon:'note',action:()=>uiPrompt('以下诊断信息不含密钥与音源直链，可一键复制：',diagnostic(),{doc:D,title:'声屿播放诊断',multiline:true,readOnly:true,confirmText:'复制诊断',cancelText:'关闭',copyOnConfirm:true})},
     ];
-    if(pl?.kind==='custom')items.push({
-      label:'删除当前自建歌单',icon:'trash',danger:true,action:async()=>{
-        if(!await uiConfirm('确定删除自建歌单「'+pl.name+'」？歌单内曲目记录将被移除。',{doc:D,title:'删除自建歌单',danger:true,confirmText:'删除歌单'}))return;
-        delete db.playlists[pl.id];selected=current;save();render();uiToast('已删除歌单「'+pl.name+'」',{doc:D});
-      },
-    });
+    if(pl?.kind==='custom')items.push(
+      {heading:'危险操作'},
+      {
+        label:'删除当前自建歌单',icon:'trash',danger:true,action:async()=>{
+          if(!await uiConfirm('确定删除自建歌单「'+pl.name+'」？歌单内曲目记录将被移除。',{doc:D,title:'删除自建歌单',danger:true,confirmText:'删除歌单'}))return;
+          delete db.playlists[pl.id];selected=current;save();render();uiToast('已删除歌单「'+pl.name+'」',{doc:D});
+        },
+      }
+    );
     return items;
   }});
   library.append(tools,importFile);

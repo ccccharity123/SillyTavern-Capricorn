@@ -107,21 +107,46 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
 
      if (!stale && !manualIds.has(row.id) && row.relationshipTimeline?.length) {
       const timeline = el('details', card);
-      el('summary', timeline, `关系演变 · ${row.relationshipTimeline.length}条`);
+      timeline.className = 'cap-dossier-subbox cap-rel-box';
+      el('summary', timeline, `关系演变 · ${row.relationshipTimeline.length} 条`);
       timeline.addEventListener('toggle', () => {
        if (!timeline.open || timeline.dataset.loaded || identity() !== id || !active()) return;
        timeline.dataset.loaded = 'true';
        const items = el('div', timeline);
+       items.className = 'cap-rel-timeline';
        let offset = row.relationshipTimeline.length;
        const more = el('button', timeline, '查看更早记录');
        more.type = 'button';
+       more.className = 'cap-dossier-submore';
        const page = () => {
         if (identity() !== id || !active()) return;
         const start = Math.max(0, offset - 20);
         for (let i = offset - 1; i >= start; i--) {
          const event = row.relationshipTimeline[i];
          if (!hasOwn(read().ledger().rows, event.source)) continue;
-         el('p', items, `${event.floor}楼 · ${event.current ? '当时状态' : event.frame}${event.when ? ' · '+event.when : ''}：${Object.entries(event.changes).map(([k,v])=>`${k}：${v}`).join('；')}`);
+         const node = el('div', items);
+         node.className = 'cap-rel-node';
+         if (!event.current) node.dataset.flashback = 'true';
+         const head = el('div', node);
+         head.className = 'cap-rel-head';
+         const fl = el('span', head, `#${event.floor}`);
+         fl.className = 'cap-rel-floor';
+         const frameTag = el('span', head, event.current ? '当时状态' : (event.frame || '回忆'));
+         frameTag.className = 'cap-rel-frame';
+         if (event.when) {
+          const wh = el('span', head, event.when);
+          wh.className = 'cap-rel-when';
+         }
+         const changes = el('div', node);
+         changes.className = 'cap-rel-changes';
+         for (const [k, v] of Object.entries(event.changes)) {
+          const kv = el('div', changes);
+          kv.className = 'cap-rel-kv';
+          const keyEl = el('span', kv, k);
+          keyEl.className = 'cap-rel-key';
+          const valEl = el('span', kv, String(v));
+          valEl.className = 'cap-rel-val';
+         }
         }
         offset = start; more.hidden = !offset;
        };
@@ -131,19 +156,28 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      const related = !stale && links.get(row.id);
      if (related?.length) {
       const details = el('details', card);
-      el('summary', details, `关联档案 · ${related.length}项`);
+      details.className = 'cap-dossier-subbox cap-linked-box';
+      el('summary', details, `关联档案 · ${related.length} 项`);
       details.addEventListener('toggle', () => {
        if (!details.open || details.dataset.loaded || identity() !== id || !active()) return;
        details.dataset.loaded = 'true';
        const items = el('div', details);
+       items.className = 'cap-linked-list';
        let offset = 0;
        const more = el('button', details, '加载更多关联');
        more.type = 'button';
+       more.className = 'cap-dossier-submore';
        function appendPage() {
         if (identity() !== id || !active()) return;
         for (const linked of related.slice(offset, offset + 20)) {
          const item = el('div', items);
-         el('strong', item, `${linked.kind} · ${linked.title}`);
+         item.className = 'cap-linked-card';
+         const topRow = el('div', item);
+         topRow.className = 'cap-linked-head';
+         const badge = el('span', topRow, linked.kind);
+         badge.className = 'cap-dossier-kind';
+         const nameEl = el('strong', topRow, linked.title);
+         nameEl.className = 'cap-linked-title';
          appendMemoryProvenance(D, item, () => identity() === id && active() && read().provenance(linked.kind === '伏笔' ? 'foreshadow' : 'dossier', linked.id, {origin:'derived'}), jumpSource);
         }
         offset += 20;
@@ -188,6 +222,7 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
     if (setCount) setCount(matched);
     if (matched > limit) {
      const more = el('button', list, `加载更多（${Math.min(limit, matched)}/${matched}）`);
+     more.className = 'cap-dossier-more';
      more.type = 'button';
      more.onclick = () => { limit += 40; render(false); };
     }

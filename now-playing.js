@@ -894,7 +894,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   // Global keyboard shortcuts while player is open (Space, ArrowLeft/Right ±5s, Esc)
   function onDocKeyDown(event) {
     if (panel.hidden || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
-    if (D.querySelector('.cap-dialog-overlay, .cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
+    if (D.querySelector('.cap-dialog-overlay, .cap-spotlight-overlay, .cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
     const tag = event.target?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) return;
     if (event.key === 'Escape') {
