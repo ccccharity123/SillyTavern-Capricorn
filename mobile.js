@@ -24,7 +24,7 @@ export function dockPoint(kind, target, bounds, width, height, gap = 10) {
   return clampIsland(bounds, centerX, top, width, height);
 }
 
-export function mountMobile({ root, island, nav, onResume }) {
+export function mountMobile({ root, island, nav, onResume, onLongPress }) {
   const W = window, D = document;
   const storage = (() => { try { return W.localStorage; } catch { return null; } })();
   let settings = readFloatSettings(storage);
@@ -106,30 +106,53 @@ export function mountMobile({ root, island, nav, onResume }) {
     saved = {x,y};
     try { storage?.setItem(POSITION_KEY, JSON.stringify(saved)); } catch {}
   }
+  let pressTimer = 0;
+  function clearPress() {
+    if (pressTimer) { W.clearTimeout(pressTimer); pressTimer = 0; }
+  }
   function down(e) {
-    if (settings.dock !== 'free' || !nav.hidden || (e.button != null && e.button !== 0)) return;
+    if (!nav.hidden || (e.button != null && e.button !== 0)) return;
     const r = island.getBoundingClientRect();
-    start = {id:e.pointerId,x:e.clientX,y:e.clientY,left:r.left,top:r.top};
-    moved=false;
-    try {island.setPointerCapture(e.pointerId);} catch {}
+    start = { id: e.pointerId, x: e.clientX, y: e.clientY, left: r.left, top: r.top, canDrag: settings.dock === 'free' };
+    moved = false;
+    clearPress();
+    if (typeof onLongPress === 'function') {
+      pressTimer = W.setTimeout(() => {
+        pressTimer = 0;
+        if (!start || moved || disposed) return;
+        suppress = true;
+        start = null;
+        delete island.dataset.dragging;
+        onLongPress();
+      }, 520);
+    }
+    if (start.canDrag) {
+      try { island.setPointerCapture(e.pointerId); } catch {}
+    }
   }
   function move(e) {
     if (!start || e.pointerId !== start.id) return;
-    const dx=e.clientX-start.x, dy=e.clientY-start.y;
-    if (!moved && Math.hypot(dx,dy)<8) return;
-    if (!moved) { moved=true; island.dataset.dragging='true'; }
-    put(start.left+dx,start.top+dy);
+    const dx = e.clientX - start.x, dy = e.clientY - start.y;
+    if (!moved && Math.hypot(dx, dy) < 8) return;
+    clearPress();
+    if (!start.canDrag) {
+      start = null;
+      return;
+    }
+    if (!moved) { moved = true; island.dataset.dragging = 'true'; }
+    put(start.left + dx, start.top + dy);
     e.preventDefault();
   }
   function end(e) {
+    clearPress();
     if (!start || e.pointerId !== start.id) return;
     delete island.dataset.dragging;
     if (moved) {
-      suppress=true;
-      const r=island.getBoundingClientRect();
-      save(r.left,r.top);
+      suppress = true;
+      const r = island.getBoundingClientRect();
+      save(r.left, r.top);
     }
-    start=null;
+    start = null;
   }
   function setSettings(next) {
     const incoming = {...settings, ...next};
@@ -186,6 +209,7 @@ export function mountMobile({ root, island, nav, onResume }) {
     consumeDrag(){const value=suppress;suppress=false;return value;},
     destroy(){
       disposed=true;
+      clearPress();
       delete island.dataset.dragging;
       if(raf)W.cancelAnimationFrame(raf);
       W.clearInterval(poll);

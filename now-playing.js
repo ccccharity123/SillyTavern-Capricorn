@@ -102,15 +102,22 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     '<div class="cap-fp-safe" aria-hidden="true"></div>' +
     '<div class="cap-ambient" aria-hidden="true"></div>' +
     '<div class="cap-fp-shell">' +
+      '<div class="cap-fp-grabber" data-close title="收起播放器" aria-hidden="true"></div>' +
       '<header class="cap-fp-header">' +
         '<span data-heading class="cap-fp-heading">声屿</span>' +
-        iconControl('data-close class="cap-fp-pill"', '收起播放器', icon('down', 20)) +
-        iconControl('data-size-switch', '选择播放器尺寸', icon('size', 20), 'aria-haspopup="menu" aria-expanded="false"') +
-        iconControl('data-settings', '设置', icon('settings', 20)) +
+        iconControl('data-close class="cap-fp-pill"', '收起播放器', icon('down', 19)) +
+        iconControl('data-size-switch', '选择播放器尺寸', icon('size', 19), 'aria-haspopup="menu" aria-expanded="false"') +
+        iconControl('data-settings', '设置', icon('settings', 19)) +
       '</header>' +
       '<div class="cap-fp-main">' +
-        '<div class="cap-art"><img alt="专辑封面" hidden><span>' + icon('music', 30) + '</span></div>' +
-        '<div class="cap-meta"><div class="cap-meta-text"><h2></h2><p data-artist></p></div></div>' +
+        '<div class="cap-art-wrap">' +
+          '<img class="cap-art-glow" alt="" aria-hidden="true" hidden>' +
+          '<div class="cap-art"><img alt="专辑封面" hidden><span>' + icon('music', 30) + '</span></div>' +
+        '</div>' +
+        '<div class="cap-meta">' +
+          '<div class="cap-meta-text"><h2></h2><p data-artist></p></div>' +
+          '<button type="button" class="cap-quality" data-quality aria-label="切换音质" title="切换音质" aria-haspopup="menu" aria-expanded="false"></button>' +
+        '</div>' +
         '<div class="cap-transport">' +
           iconControl('data-prev', '上一首', ICONS.prev) +
           iconControl('data-toggle class="cap-play-btn"', '播放', ICONS.play) +
@@ -126,7 +133,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       '<div data-detail class="cap-fp-detail" hidden></div>' +
       '<small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>' +
       '<nav class="cap-fp-tabs" aria-label="播放工具">' +
-        '<button type="button" class="cap-quality" data-quality aria-label="切换音质" title="切换音质" aria-haspopup="menu" aria-expanded="false"></button>' +
         iconControl('data-mode', '播放模式', icon('repeat', 20)) +
         iconControl('data-lyrics', '歌词', ICONS.lyrics, 'aria-pressed="false"') +
         iconControl('data-queue', '播放队列', ICONS.queue, 'aria-pressed="false"') +
@@ -136,7 +142,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       '</nav>' +
       '<div class="cap-volume-store" hidden>' +
         '<div class="cap-volume-content">' +
-          '<label class="cap-volume-label"><span>音量</span><output data-volume-value></output>' +
+          '<label class="cap-volume-label"><span class="cap-vol-title">' + icon('volumeHigh', 15) + '<span>音量</span></span><output data-volume-value></output>' +
             '<input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量"></label>' +
           '<small data-volume-note class="cap-volume-note"></small>' +
         '</div>' +
@@ -272,16 +278,41 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     try { W.localStorage.setItem('capricorn_player_size', size); } catch (_) {}
     animateFrom(before, art);
   }
-  function closePanel() {
+  let closingAnim = null;
+  function cancelCloseAnim() {
+    if (closingAnim) {
+      try { closingAnim.cancel(); } catch (_) {}
+      closingAnim = null;
+    }
+    panel.classList.remove('is-closing');
+  }
+  function closePanel(instant = false) {
     closeMenus();
     if (panel.hidden) return;
-    panel.hidden = true;
-    if (composerObserver) composerObserver.disconnect();
-    observedComposer = null;
-    if (shared.onPlayerClose) shared.onPlayerClose();
+    if (closingAnim) return;
+    const finish = () => {
+      closingAnim = null;
+      panel.classList.remove('is-closing');
+      panel.hidden = true;
+      panel.style.transform = '';
+      if (composerObserver) composerObserver.disconnect();
+      observedComposer = null;
+      if (shared.onPlayerClose) shared.onPlayerClose();
+    };
+    if (instant || reduce() || !panel.animate) {
+      finish();
+      return;
+    }
+    panel.classList.add('is-closing');
+    closingAnim = panel.animate([
+      { transform: panel.style.transform || 'none', opacity: 1 },
+      { transform: 'translateY(18px) scale(0.965)', opacity: 0 }
+    ], { duration: 185, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' });
+    closingAnim.onfinish = finish;
+    closingAnim.oncancel = () => { closingAnim = null; panel.classList.remove('is-closing'); };
   }
   function openAux(name) {
-    closePanel();
+    closePanel(true);
     if (shared.openPlayerAux) shared.openPlayerAux(name);
   }
   function showTab(name) {
@@ -325,6 +356,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   moreButton.onclick = () => openChoices(moreButton, '播放工具', [
     { label: '歌词', icon: 'lyrics', action: () => openCompactDetail('lyrics', '同步歌词') },
     { label: '播放队列', icon: 'queue', action: () => openCompactDetail('queue', '播放队列') },
+    { label: '音质 · ' + (qualityText.textContent || '音质'), icon: 'sliders-horizontal', disabled: qualityButton.disabled, action: () => openChoices(moreButton, '播放音质', Object.keys(qualityLabels).map(level => ({ label: qualityLabels[level], checked: state().preferredQuality === level, action: () => { if (quality) quality(level); } }))) },
     { label: '播放模式：' + (q('[data-mode]').title || '顺序播放'), icon: 'repeat', action: switchMode },
     { label: '曲库', icon: 'library', action: () => openAux('library') },
     { label: '设置', icon: 'settings', action: () => openAux('settings') }
@@ -379,6 +411,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   volumeSlider.onpointerup = volumeSlider.onpointercancel = volumeSlider.onblur = () => { volumeDragging = false; };
 
   const img = q('.cap-art img');
+  const glowImg = q('.cap-art-glow');
   const ambient = q('.cap-ambient');
   const seek = q('[data-seek]');
   const lyricTasks = createLatestTask();
@@ -453,11 +486,13 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   }
   img.onload=()=>{
     img.classList.add('is-loaded');
+    if (glowImg && img.src) { glowImg.src = img.src; glowImg.hidden = false; }
   };
   img.onerror=()=>{
     img.classList.remove('is-loaded');
     img.hidden=true;
     img.alt='封面加载失败';
+    if (glowImg) { glowImg.hidden = true; glowImg.removeAttribute('src'); }
   };
   function syncBackdrop() {
     if (dead || panel.hidden) return;
@@ -747,6 +782,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       img.classList.remove('is-loaded');
       img.hidden=true;
       img.removeAttribute('src');
+      if (glowImg) { glowImg.hidden = true; glowImg.removeAttribute('src'); }
       img.alt='专辑封面';
       coverUrl = '';
       try{
@@ -766,42 +802,139 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     refresh();
   }
 
-  for (const el of panel.querySelectorAll('[data-close]')) {
-    el.onclick = closePanel;
+  for (const el of panel.querySelectorAll('button[data-close]')) {
+    el.onclick = () => closePanel();
   }
   q('[data-toggle]').onclick = toggle;
-  q('.cap-art').onclick = () => { if (size !== 'large') setSize('large'); };
-  panel.addEventListener('keydown', event => {
-    if (event.defaultPrevented) return;
+  // Clean single-tap progression on artwork (no click/dblclick race):
+  // compact -> half -> large -> toggle lyrics/cover
+  let suppressSheetClick = false;
+  q('.cap-art').onclick = () => {
+    if (suppressSheetClick) { suppressSheetClick = false; return; }
+    if (size === 'compact') setSize('half');
+    else if (size === 'half') setSize('large');
+    else showTab(tab === 'lyrics' ? '' : 'lyrics');
+  };
+
+  // Real Apple Sheet vertical pull gesture across ALL sizes (compact, half, large)
+  const sheetOrder = ['compact', 'half', 'large'];
+  let sheetDrag = null;
+  const grabber = q('.cap-fp-grabber');
+  function onSheetDown(event) {
+    if (event.button != null && event.button !== 0) return;
+    if (event.target.closest('button, input, select, textarea, a, .cap-fp-detail, .cap-fp-inline')) return;
+    sheetDrag = {
+      id: event.pointerId,
+      x0: event.clientX,
+      y0: event.clientY,
+      t0: Date.now(),
+      dy: 0,
+      active: false,
+    };
+    suppressSheetClick = false;
+  }
+  function onSheetMove(event) {
+    if (!sheetDrag || event.pointerId !== sheetDrag.id) return;
+    const dx = event.clientX - sheetDrag.x0;
+    const dy = event.clientY - sheetDrag.y0;
+    if (!sheetDrag.active) {
+      if (Math.hypot(dx, dy) < 8) return;
+      if (Math.abs(dy) <= Math.abs(dx) * 1.15) {
+        sheetDrag = null;
+        return;
+      }
+      sheetDrag.active = true;
+      panel.classList.add('is-sheet-dragging');
+      try { panel.setPointerCapture(event.pointerId); } catch (_) {}
+    }
+    sheetDrag.dy = dy;
+    const damped = dy < 0 && size === 'large' ? dy * 0.25 : dy * 0.88;
+    panel.style.transform = `translateY(${Math.round(damped)}px)`;
+    event.preventDefault();
+  }
+  function onSheetEnd(event) {
+    if (!sheetDrag || event.pointerId !== sheetDrag.id) return;
+    const d = sheetDrag;
+    sheetDrag = null;
+    panel.classList.remove('is-sheet-dragging');
+    try { if (panel.hasPointerCapture?.(event.pointerId)) panel.releasePointerCapture(event.pointerId); } catch (_) {}
+    if (!d.active) return;
+    suppressSheetClick = true;
+    const dt = Math.max(1, Date.now() - d.t0);
+    const velocity = d.dy / dt;
+    const idx = sheetOrder.indexOf(size);
+    const downThreshold = size === 'compact' ? 42 : 56;
+    const upThreshold = size === 'compact' ? -36 : -48;
+    if (d.dy > downThreshold || velocity > 0.45) {
+      if (idx > 0) {
+        panel.style.transform = '';
+        setSize(sheetOrder[idx - 1]);
+      } else {
+        closePanel();
+      }
+    } else if (d.dy < upThreshold || velocity < -0.45) {
+      panel.style.transform = '';
+      if (idx < sheetOrder.length - 1) setSize(sheetOrder[idx + 1]);
+    } else {
+      panel.style.transform = '';
+    }
+  }
+  panel.addEventListener('pointerdown', onSheetDown);
+  panel.addEventListener('pointermove', onSheetMove);
+  panel.addEventListener('pointerup', onSheetEnd);
+  panel.addEventListener('pointercancel', onSheetEnd);
+  if (grabber) {
+    grabber.onclick = event => {
+      if (suppressSheetClick) { suppressSheetClick = false; event.preventDefault(); return; }
+      closePanel();
+    };
+  }
+
+  // Global keyboard shortcuts while player is open (Space, ArrowLeft/Right ±5s, Esc)
+  function onDocKeyDown(event) {
+    if (panel.hidden || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (D.querySelector('.cap-dialog-overlay, .cap-ui-portal, .shiyi-overlay, .cap-song-picker-overlay, .cap-recall')) return;
+    const tag = event.target?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target?.isContentEditable) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       closePanel();
-    } else if (event.key === ' ' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(event.target?.tagName)) {
+    } else if (event.key === ' ' && tag !== 'BUTTON') {
       event.preventDefault();
       toggle?.();
+    } else if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && Number.isFinite(audio.duration)) {
+      event.preventDefault();
+      const delta = event.key === 'ArrowRight' ? 5 : -5;
+      audio.currentTime = Math.max(0, Math.min(audio.duration, (audio.currentTime || 0) + delta));
+      updateTime();
     }
-  });
+  }
+  D.addEventListener('keydown', onDocKeyDown);
   q('[data-prev]').onclick = () => next(-1);
   q('[data-next]').onclick = () => next(1);
   q('[data-lyrics]').onclick = () => { showTab(tab === 'lyrics' ? '' : 'lyrics'); };
   q('[data-queue]').onclick = () => { showTab(tab==='queue'?(size==='large'?'lyrics':''):'queue'); };
+  const endSeek = () => { dragging = false; delete panel.dataset.seeking; };
   seek.oninput = () => {
     dragging = true;
+    panel.dataset.seeking = 'true';
     const dur = Number(seek.max) || 0;
     seek.style.setProperty('--cap-progress', (dur > 0 ? (Number(seek.value) / dur) * 100 : 0) + '%');
     q('[data-elapsed]').textContent = clock(Number(seek.value));
   };
   seek.onchange = () => {
     if (Number.isFinite(audio.duration)) audio.currentTime = Number(seek.value);
-    dragging = false;
+    endSeek();
   };
-  seek.onpointercancel = () => { dragging = false; };
+  seek.onpointerup = endSeek;
+  seek.onpointercancel = endSeek;
 
   const events = ['timeupdate', 'durationchange', 'play', 'pause', 'ended', 'loadedmetadata', 'volumechange'];
   const onTime=()=>updateTime(); for (const ev of events) audio.addEventListener(ev, ev==='timeupdate'?onTime:refresh);
   emitIsland();
   return {
     open() {
+      cancelCloseAnim();
       if (!panel.hidden) return;
       const island = D.querySelector('#capricorn-hub .cap-island');
       panel.hidden = false;
@@ -831,6 +964,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       W.visualViewport?.removeEventListener('scroll',scheduleViewport);
       mediaListener(motion, 'remove');
       mediaListener(transparency, 'remove');
+      cancelCloseAnim();
+      D.removeEventListener('keydown', onDocKeyDown);
       D.removeEventListener('visibilitychange',visibility);
       for(const event of events)audio.removeEventListener(event,event==='timeupdate'?onTime:refresh);
       img.onload=img.onerror=null;

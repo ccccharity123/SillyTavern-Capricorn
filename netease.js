@@ -1,6 +1,7 @@
 import { mountGD } from './gd.js';
 import { createLatestTask, withMusicTimeout } from './music-tasks.js';
 import { refreshSelect } from './ui-select.js';
+import { uiConfirm, uiToast } from './ui-dialog.js';
 
 export function mountNetease(settings, shared) {
   const box = document.createElement('section');
@@ -113,8 +114,8 @@ export function mountNetease(settings, shared) {
     return path === '/health' || path.startsWith('/music/');
   };
 
-  mode.onchange = () => {
-    if (mode.value !== 'local' && !confirm(disclosure.textContent + ' 是否授权？')) {
+  mode.onchange = async () => {
+    if (mode.value !== 'local' && !await uiConfirm(disclosure.textContent + '\n\n是否授权切换？', { title: '联网与隐私授权', confirmText: '同意并切换' })) {
       mode.value = localStorage.getItem('capricorn_privacy_mode') || 'local';
       refreshSelect(mode);
       syncModeVisibility();
@@ -152,7 +153,7 @@ export function mountNetease(settings, shared) {
       localStorage.removeItem('capricorn_music_token:' + endpoint());
       key.value = '';
       adminPanel.hidden = true;
-      status.textContent = '本地凭证已清除';
+      status.textContent = '本地凭证已清除'; uiToast('已清除本地凭证', { kind: 'info' });
     } catch (e) {
       status.textContent = e.message;
     }
@@ -170,7 +171,7 @@ export function mountNetease(settings, shared) {
     try {
       localStorage.setItem('capricorn_music_endpoint', endpoint());
       localStorage.setItem('capricorn_music_token:' + endpoint(), key.value.trim());
-      status.textContent = '连接已保存';
+      status.textContent = '连接已保存'; uiToast('网关连接已保存', { kind: 'success' });
       void check(0);
     } catch (e) {
       status.textContent = e.message;
@@ -252,7 +253,7 @@ export function mountNetease(settings, shared) {
       b.type = 'button';
       b.textContent = '撤销';
       b.onclick = async () => {
-        if (!confirm('撤销此好友访问权限？')) return;
+        if (!await uiConfirm('撤销后该好友将无法继续连接共享服务。', { title: '撤销访问权限', danger: true, confirmText: '撤销' })) return;
         try { await manage('/admin/revoke?id=' + encodeURIComponent(g.id), 'POST'); await list(); }
         catch (e) { status.textContent = e.message; }
       };
@@ -284,8 +285,10 @@ export function mountNetease(settings, shared) {
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
     });
-    const d = await r.json();
-    if (!r.ok) throw Error('HTTP ' + r.status + ' ' + (d.error || ''));
+    let d;
+    try { d = await r.json(); } catch { throw Error(path + '：HTTP ' + r.status + '，服务未返回有效 JSON'); }
+    if (!r.ok) throw Error(path + '：HTTP ' + r.status);
+    if (!d || typeof d !== 'object') throw Error(path + '：响应格式错误');
     return d;
   }
   function run(fn) {
@@ -306,10 +309,13 @@ export function mountNetease(settings, shared) {
   }
   authCard.querySelector('[data-login]').onclick = () => run(async (base, secret, signal, n) => {
     note.textContent = '正在生成二维码…';
-    const d = await request('/auth/start', 'POST', base, secret, signal);
+    const d = await withMusicTimeout(s => request('/auth/start', 'POST', base, secret, s), 45000, signal);
     if (n !== epoch) return;
-    if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(d.image)) throw Error('二维码格式错误');
-    img.src = d.image;
+    const raw = d.image ?? d.qrimg ?? d.data?.image ?? d.data?.qrimg;
+    const image = typeof raw === 'string' ? raw.trim().replace(/\s/g, '') : '';
+    if (!/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/]+={0,2}$/i.test(image)) throw Error('/auth/start：未返回有效二维码图片');
+    img.onerror = () => { if (n === epoch) note.textContent = '二维码图片加载失败，请检查宿主图片权限'; };
+    img.src = image;
     img.hidden = false;
     note.textContent = '请使用网易云音乐扫描二维码（同一部手机需借助另一屏幕）';
     while (n === epoch && !signal.aborted) {
@@ -317,9 +323,9 @@ export function mountNetease(settings, shared) {
       if (n !== epoch || signal.aborted) return;
       const p = await request('/auth/poll', 'POST', base, secret, signal);
       if (n !== epoch) return;
-      if (p.code === 803) { img.hidden = true; await account(base, secret, signal, n); return; }
-      if (p.code === 800) { img.hidden = true; note.textContent = '二维码已过期，请重新生成'; return; }
-      note.textContent = p.code === 802 ? '已扫码，请在网易云确认' : '等待扫码';
+      if (Number(p.code) === 803) { img.hidden = true; await account(base, secret, signal, n); return; }
+      if (Number(p.code) === 800) { img.hidden = true; note.textContent = '二维码已过期，请重新生成'; return; }
+      note.textContent = Number(p.code) === 802 ? '已扫码，请在网易云确认' : '等待扫码';
     }
   });
   authCard.querySelector('[data-account]').onclick = () => run(account);

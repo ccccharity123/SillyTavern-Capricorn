@@ -1,3 +1,4 @@
+import {indexDossierLinks} from './dossier-links.js';
 import { hasOwn } from './compat.js';
 import {fuzzy} from './traces.js';
 import { appendMemoryProvenance } from './memory-provenance.js';
@@ -45,7 +46,12 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
    const summaries = view.summaries();
    const rows = [...manualRows, ...ledger.entities.filter(row => !manualIds.has(row.id))];
 
-   function render() {
+   const isActive = row => (row.sources || []).length > 0 && (row.sources || []).every(key => hasOwn(ledger.rows, key) || hasOwn(summaries, key));
+   const links = indexDossierLinks(ledger.entities.filter(row => !manualIds.has(row.id)), isActive);
+   let limit = 40;
+   function render(reset = true) {
+    if (reset) limit = 40;
+    let matched = 0;
     if (identity() !== id) return;
     list.replaceChildren();
     const query = search.value.toLowerCase();
@@ -54,6 +60,8 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      if (!fuzzy(`${row.title} ${row.people} ${row.body} ${row.status}`, query)) continue;
      const stale = (row.sources || []).some(key => !hasOwn(ledger.rows, key) && !hasOwn(summaries, key));
      if (filter.value !== '全部' && filter.value !== row.kind && !(filter.value === '来源失效' && stale)) continue;
+     matched++;
+     if (matched > limit) continue;
      const pinned = pins.includes(row.id);
      const card = el('div', list);
      card.className = 'shiyi-history-item cap-dossier-card';
@@ -97,6 +105,88 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      appendMemoryProvenance(D, card, () => identity() === id && view.provenance(
       row.kind === '伏笔' ? 'foreshadow' : 'dossier', row.id, { origin }), jumpSource);
 
+     if (!stale && !manualIds.has(row.id) && row.relationshipTimeline?.length) {
+      const timeline = el('details', card);
+      timeline.className = 'cap-dossier-subbox cap-rel-box';
+      el('summary', timeline, `关系演变 · ${row.relationshipTimeline.length} 条`);
+      timeline.addEventListener('toggle', () => {
+       if (!timeline.open || timeline.dataset.loaded || identity() !== id || !active()) return;
+       timeline.dataset.loaded = 'true';
+       const items = el('div', timeline);
+       items.className = 'cap-rel-timeline';
+       let offset = row.relationshipTimeline.length;
+       const more = el('button', timeline, '查看更早记录');
+       more.type = 'button';
+       more.className = 'cap-dossier-submore';
+       const page = () => {
+        if (identity() !== id || !active()) return;
+        const start = Math.max(0, offset - 20);
+        for (let i = offset - 1; i >= start; i--) {
+         const event = row.relationshipTimeline[i];
+         if (!hasOwn(read().ledger().rows, event.source)) continue;
+         const node = el('div', items);
+         node.className = 'cap-rel-node';
+         if (!event.current) node.dataset.flashback = 'true';
+         const head = el('div', node);
+         head.className = 'cap-rel-head';
+         const fl = el('span', head, `#${event.floor}`);
+         fl.className = 'cap-rel-floor';
+         const frameTag = el('span', head, event.current ? '当时状态' : (event.frame || '回忆'));
+         frameTag.className = 'cap-rel-frame';
+         if (event.when) {
+          const wh = el('span', head, event.when);
+          wh.className = 'cap-rel-when';
+         }
+         const changes = el('div', node);
+         changes.className = 'cap-rel-changes';
+         for (const [k, v] of Object.entries(event.changes)) {
+          const kv = el('div', changes);
+          kv.className = 'cap-rel-kv';
+          const keyEl = el('span', kv, k);
+          keyEl.className = 'cap-rel-key';
+          const valEl = el('span', kv, String(v));
+          valEl.className = 'cap-rel-val';
+         }
+        }
+        offset = start; more.hidden = !offset;
+       };
+       more.onclick = page; page();
+      });
+     }
+     const related = !stale && links.get(row.id);
+     if (related?.length) {
+      const details = el('details', card);
+      details.className = 'cap-dossier-subbox cap-linked-box';
+      el('summary', details, `关联档案 · ${related.length} 项`);
+      details.addEventListener('toggle', () => {
+       if (!details.open || details.dataset.loaded || identity() !== id || !active()) return;
+       details.dataset.loaded = 'true';
+       const items = el('div', details);
+       items.className = 'cap-linked-list';
+       let offset = 0;
+       const more = el('button', details, '加载更多关联');
+       more.type = 'button';
+       more.className = 'cap-dossier-submore';
+       function appendPage() {
+        if (identity() !== id || !active()) return;
+        for (const linked of related.slice(offset, offset + 20)) {
+         const item = el('div', items);
+         item.className = 'cap-linked-card';
+         const topRow = el('div', item);
+         topRow.className = 'cap-linked-head';
+         const badge = el('span', topRow, linked.kind);
+         badge.className = 'cap-dossier-kind';
+         const nameEl = el('strong', topRow, linked.title);
+         nameEl.className = 'cap-linked-title';
+         appendMemoryProvenance(D, item, () => identity() === id && active() && read().provenance(linked.kind === '伏笔' ? 'foreshadow' : 'dossier', linked.id, {origin:'derived'}), jumpSource);
+        }
+        offset += 20;
+        more.hidden = offset >= related.length;
+       }
+       more.onclick = appendPage;
+       appendPage();
+      });
+     }
      const actions = el('div', card);
      actions.className = 'cap-dossier-actions';
      const pin = el('button', actions);
@@ -129,7 +219,13 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
       };
      }
     }
-    if (setCount) setCount(list.children.length);
+    if (setCount) setCount(matched);
+    if (matched > limit) {
+     const more = el('button', list, `加载更多（${Math.min(limit, matched)}/${matched}）`);
+     more.className = 'cap-dossier-more';
+     more.type = 'button';
+     more.onclick = () => { limit += 40; render(false); };
+    }
     if (!list.children.length) el('p', list, '暂无匹配的留痕档案');
    }
 
