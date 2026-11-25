@@ -374,7 +374,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
     if (value > 0) lastNonZeroVol = value;
     const supports = audioState.volumeSupported !== false;
-    const percent = supports ? Math.round(value * 100) + '%' : value === 0 ? '静音' : '系统';
+    const percent = Math.round(value * 100) + '%';
     if (!volumeDragging && Number(volumeSlider.value) !== Number(value)) volumeSlider.value = value;
     const progress = Math.round(value * 100) + '%';
     if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== progress) volumeSlider.style.setProperty('--cap-vol-progress', progress);
@@ -383,16 +383,16 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       volumeSlider.setAttribute('aria-valuetext', percent);
       volumeButton.title = '音量 ' + percent;
     }
-    const hint = supports ? '' : '当前通道仅支持静音／恢复；实际音量请用设备音量键。可重试应用内音量（会关闭后台播放优先并重新加载当前音源）。';
+    const hint = supports ? '' : '当前为目标音量，系统通道不支持连续调节。松手后尝试恢复应用内音量；若失败请使用设备音量键。';
     if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
     const sliderTitle = supports ? '音量' : '目标音量（当前通道实际音量由系统控制）';
     if (volumeSlider.title !== sliderTitle) volumeSlider.title = sliderTitle;
     // Keep a functional 0/100 mute toggle in the fallback instead of displaying
     // a disabled control or a misleading continuous-volume slider.
-    volumeSlider.disabled = !supports;
+    volumeSlider.disabled = false;
     q('[data-volume-retry]').hidden = !audioState.canRetryVolume;
     if (volumeSlider.step !== '0.01') volumeSlider.step = '0.01';
-    volumeSlider.setAttribute('aria-disabled', String(!supports));
+    volumeSlider.removeAttribute('aria-disabled');
     const muted = String(value === 0);
     if (volumeButton.dataset.muted !== muted) {
       volumeButton.dataset.muted = muted;
@@ -433,7 +433,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   volumeSlider.onpointerdown = () => { volumeDragging = true; volumeContent.dataset.dragging = 'true'; };
   volumeSlider.oninput = applyVolume;
   const endVolDrag = () => { volumeDragging = false; delete volumeContent.dataset.dragging; };
-  volumeSlider.onchange = () => { applyVolume(); endVolDrag(); };
+  volumeSlider.onchange = () => { applyVolume(); endVolDrag(); if (state().canRetryVolume && Number(volumeSlider.value)>0) retryVolume?.(); };
   volumeSlider.onpointerup = volumeSlider.onpointercancel = volumeSlider.onblur = endVolDrag;
 
   const img = q('.cap-art img');
@@ -729,8 +729,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const time=audio.currentTime||0,duration=Number.isFinite(audio.duration)?audio.duration:0;
     seek.max=duration;
     if(!dragging)seek.value=time;
-    seek.style.setProperty('--cap-progress',(duration>0?Math.min(100,Math.max(0,time/duration*100)):0)+'%');
-    q('[data-elapsed]').textContent=clock(time);
+    if(!dragging){seek.style.setProperty('--cap-progress',(duration>0?Math.min(100,Math.max(0,time/duration*100)):0)+'%');
+    q('[data-elapsed]').textContent=clock(time);}
     q('[data-duration]').textContent=clock(audio.duration);
     const index = currentLyricIndex(time);
     const current = lines[index];
@@ -956,7 +956,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     if (Number.isFinite(audio.duration)) audio.currentTime = Number(seek.value);
     endSeek();
   };
-  seek.onpointerup = endSeek;
+  seek.onpointerdown = () => { dragging=true; panel.dataset.seeking="true"; };
+  seek.onpointerup = () => { if(dragging && Number.isFinite(audio.duration)) audio.currentTime=Number(seek.value); endSeek(); };
   seek.onpointercancel = endSeek;
 
   const events = ['timeupdate', 'durationchange', 'play', 'pause', 'ended', 'loadedmetadata', 'volumechange'];
