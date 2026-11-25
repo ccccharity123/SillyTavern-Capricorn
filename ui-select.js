@@ -1,5 +1,4 @@
 import { icon } from './icons.js';
-import { attachSegmentSlider } from './ui-motion.js';
 import { popover } from './ui-popover.js';
 
 const roots = new WeakMap();
@@ -237,7 +236,6 @@ function makeAdapter(select, fallback) {
   let trigger = null;
   let segmentSignature = '';
   let segmentButtons = [];
-  let segmentSlider = null;
   let picker = null;
   let destroyed = false;
   const labels = Array.from(select.labels || []);
@@ -379,7 +377,6 @@ function makeAdapter(select, fallback) {
     if (nextType !== type) {
       clearValidation();
       if (trigger) popover.closeWithin(wrapper);
-      if (segmentSlider) { segmentSlider.destroy(); segmentSlider = null; }
       wrapper.textContent = '';
       type = nextType;
       wrapper.dataset.mode = type;
@@ -438,14 +435,6 @@ function makeAdapter(select, fallback) {
         button.tabIndex = !button.disabled && index === tab ? 0 : -1;
         button.setAttribute('aria-checked', String(options[index].selected));
       });
-      if (!segmentSlider) {
-        segmentSlider = attachSegmentSlider(wrapper, {
-          itemSelector: 'button.cap-select-segment',
-          isActive: el => el.getAttribute('aria-checked') === 'true',
-        });
-      } else {
-        segmentSlider.sync();
-      }
     } else {
       trigger.disabled = unavailable || !options.length;
       applyLabel(trigger);
@@ -470,7 +459,6 @@ function makeAdapter(select, fallback) {
   function destroy() {
     if (destroyed) return;
     destroyed = true;
-    if (segmentSlider) { segmentSlider.destroy(); segmentSlider = null; }
     popover.closeWithin(wrapper);
     select.removeEventListener('change', sync);
     select.removeEventListener('invalid', nativeInvalid);

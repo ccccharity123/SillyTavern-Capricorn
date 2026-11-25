@@ -1,7 +1,6 @@
 import { icon } from './icons.js';
 import { closeLibraryMenus, libraryButton, libraryMenu } from './ui-library.js';
 import { refreshSelect } from './ui-select.js';
-import { uiConfirm, uiPrompt, uiToast } from './ui-dialog.js';
 
 export function mountCloud(content,shared,music){
   const document=content.ownerDocument,window=document.defaultView;
@@ -31,7 +30,7 @@ export function mountCloud(content,shared,music){
   ostNote.hidden=true;
 
   let busy=false,disposed=false,refreshOnShow=false,viewRevision=0;
-  let selected=null,offset=0,rows=[],loaded=false;
+  let selected=null,offset=0,rows=[];
   const button=(parent,label,fn)=>libraryButton(parent,label,()=>run(fn));
   const action=(label,fn,options)=>Object.assign({label,action:()=>run(fn)},options);
   const api=(p,m='GET',q={})=>shared.cloud.request('/playlist/'+p+'?'+new URLSearchParams(q),m);
@@ -45,7 +44,6 @@ export function mountCloud(content,shared,music){
       note.textContent='已同步';
     }catch(error){
       note.textContent='同步失败：'+error.message+'。请刷新确认云端实际状态。';
-      uiToast('云端同步失败：'+error.message,{doc:document,kind:'error'});
     }finally{
       busy=false;
       if(refreshOnShow&&!root.hidden&&!disposed){
@@ -162,8 +160,7 @@ export function mountCloud(content,shared,music){
   async function refresh(){
     const revision=viewRevision,c=shared.cloud.capture();
     const {uid,all}=await catalog(c);
-    if(disposed||revision!==viewRevision)return;
-    loaded=true;
+    if(disposed)return;
     currentKey=JSON.stringify([c.base,uid]);
     allLists=all;
     if(revision!==viewRevision)return;
@@ -178,12 +175,6 @@ export function mountCloud(content,shared,music){
       selected=p;
       offset=0;
       updateSelected();
-      for(let s=0;s<4;s++){
-        const sk=element('div','cap-skeleton-row');
-        sk.setAttribute('aria-hidden','true');
-        sk.innerHTML='<span class="cap-sk-art"></span><span class="cap-sk-lines"><i></i><i></i></span>';
-        tracks.append(sk);
-      }
     }
     const d=await api('tracks','GET',{id:p.id,offset});
     if(revision!==viewRevision||disposed)return;
@@ -198,21 +189,21 @@ export function mountCloud(content,shared,music){
       tools.append(element('strong','',p.name));
       libraryMenu(tools,'云端歌单操作','more',{items:[
         action('改名',async()=>{
-          const name=await uiPrompt('输入新的云端歌单名称：',p.name,{doc:document,title:'重命名歌单',placeholder:'歌单名称'});
+          const name=window.prompt('新歌单名称',p.name);
           if(name?.trim()){await api('rename','POST',{id:p.id,name});await refresh()}
         }),
         action('搜索添加歌曲',async()=>{
-          const q=await uiPrompt('输入歌曲名称或歌手关键词：','',{doc:document,title:'搜索云端歌曲',placeholder:'歌名或歌手'});
+          const q=window.prompt('歌曲名称或歌手');
           if(!q?.trim())return;
           const result=await shared.cloud.request('/music/search?q='+encodeURIComponent(q));
-          const n=await uiPrompt(result.songs.map((t,i)=>(i+1)+'. '+t.title+' — '+t.artists.join('/')).join('\n'),'1',{doc:document,title:'选择要添加的歌曲序号'});
+          const n=window.prompt(result.songs.map((t,i)=>(i+1)+'. '+t.title+' — '+t.artists.join('/')).join('\n'),'1');
           const t=result.songs[Number(n)-1];
-          if(t&&await uiConfirm('将「'+t.title+'」添加到云端歌单？',{doc:document,title:'添加歌曲',confirmText:'添加'})){ uiToast('正在添加到云端歌单…',{doc:document});
+          if(t&&window.confirm('添加 '+t.title+'？')){
             await api('change','POST',{id:p.id,op:'add',tracks:t.id});await open(p);
           }
         },{icon:'search'}),
         action('删除云端歌单',async()=>{
-          if(await uiConfirm('将从网易云永久删除「'+p.name+'」，此操作无法撤销。',{doc:document,title:'删除云端歌单',danger:true,confirmText:'永久删除'})){ 
+          if(window.confirm('从网易云永久删除「'+p.name+'」？')){
             await api('delete','POST',{id:p.id,confirm:p.id});await refresh();
           }
         },{icon:'trash',danger:true}),
@@ -245,7 +236,7 @@ export function mountCloud(content,shared,music){
       const menu=libraryMenu(row,'歌曲操作','more',{items:[
         action('播放',()=>music.playCloud(rows,index,p.name),{icon:'play'}),
         ...(editable?[action('移除',async()=>{
-          if(await uiConfirm('从云端歌单移除「'+t.title+'」？',{doc:document,title:'移除歌曲',danger:true,confirmText:'移除'})){ 
+          if(window.confirm('从网易云歌单移除 '+t.title+'？')){
             await api('change','POST',{id:p.id,op:'del',tracks:t.id});
             await open(p);
           }
@@ -260,7 +251,7 @@ export function mountCloud(content,shared,music){
   }
 
   async function createPrivate(){
-    const name=await uiPrompt('输入新建私密歌单名称：','',{doc:document,title:'新建私密歌单',placeholder:'歌单名称'});
+    const name=window.prompt('私密歌单名称');
     if(name?.trim()){
       await refresh();
       const d=await api('create','POST',{name});
@@ -271,7 +262,7 @@ export function mountCloud(content,shared,music){
   }
   const create=libraryButton(bar,'新建私密歌单',()=>run(createPrivate),'plus');
   create.className='cap-library-icon';
-  libraryMenu(bar,'网易云歌单管理','sliders-horizontal',{items:[
+  libraryMenu(bar,'网易云歌单管理','more',{items:[
     action('刷新账号歌单',()=>refresh(),{icon:'refresh'}),
     action('管理导入',async()=>{
       const revision=viewRevision;
@@ -318,15 +309,15 @@ export function mountCloud(content,shared,music){
     const r=role(),c=shared.cloud.capture(),{uid,all}=await catalog(c);
     let id;
     if(create){
-      const name=await uiPrompt('输入角色私密原声带名称：','声屿 · 剧情原声带',{doc:document,title:'创建角色私密原声带'});
-      if(!name?.trim()||!await uiConfirm('创建私密歌单并自动上传当前角色已匹配的歌曲？',{doc:document,title:'确认同步',confirmText:'创建并同步'}))return;
+      const name=window.prompt('私密歌单名称','声屿 · 剧情原声带');
+      if(!name?.trim()||!window.confirm('创建私密歌单并自动上传当前角色已匹配的歌曲？'))return;
       id=(await c.request('/playlist/create?'+new URLSearchParams({name}),'POST')).id;
     }else{
       const options=all.filter(p=>p.private&&p.owned&&!p.special);
-      const n=await uiPrompt('输入要绑定的私密歌单编号：\n'+options.map((p,i)=>(i+1)+'. '+p.name).join('\n'),'',{doc:document,title:'绑定已有私密歌单',placeholder:'输入序号'});
+      const n=window.prompt('选择私密歌单编号：\n'+options.map((p,i)=>(i+1)+'. '+p.name).join('\n'));
       if(n===null)return;
       id=options[Number(n)-1]?.id;
-      if(!id||!await uiConfirm('绑定此歌单并自动上传当前角色已匹配的歌曲？',{doc:document,title:'确认绑定',confirmText:'绑定并同步'}))return;
+      if(!id||!window.confirm('绑定此歌单并自动上传当前角色已匹配的歌曲？'))return;
     }
     if(!/^\d{1,20}$/.test(id||''))throw Error('未取得歌单ID');
     bindings[bindingKey(c,uid,r)]={id,done:[]};
@@ -374,22 +365,18 @@ export function mountCloud(content,shared,music){
     show(){
       if(!root.hidden||disposed)return;
       root.hidden=false;
-      if(loaded){render();return;}
       if(busy)refreshOnShow=true;
       else void run(refresh);
     },
     hide(){
       if(root.hidden)return;
       root.hidden=true;
-      closeLibraryMenus(root);
-    },
-    invalidate(){
       viewRevision++;
-      loaded=false;currentKey='';allLists=[];manage=false;draft=null;
-      reset();lists.replaceChildren();choices.replaceChildren();
-      if(!root.hidden&&shared.accountReady?.()){
-        if(busy)refreshOnShow=true;else void run(refresh);
-      }
+      refreshOnShow=false;
+      manage=false;draft=null;
+      controls.hidden=true;choices.hidden=true;tracks.hidden=false;
+      reset();
+      lists.replaceChildren();choices.replaceChildren();
     },
     destroy(){
       disposed=true;

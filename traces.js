@@ -46,7 +46,7 @@ function* traceContributions(key, { floor, value }) {
 }
 
 function newTrace() {
-  return { entry: null, order: null, sources: new Set(), history: [], relationshipTimeline: [], restricted: false };
+  return { entry: null, order: null, sources: new Set(), history: [], restricted: false };
 }
 
 function applyTrace(state, contribution) {
@@ -63,10 +63,6 @@ function applyTrace(state, contribution) {
   state.sources.add(key);
   const label = current && !when ? '' : `｜${frame}${when ? ` · ${when}` : ''}`;
   state.history.push(`${floor}楼${label}：${fields.map(([name, content]) => `${name}：${describe(content)}`).join('；')}`);
-  if (kind === '关系') {
-    const changes = Object.fromEntries(fields.filter(([name, value]) => ['类型','状态','变化','情感','情感变化'].includes(name) && typeof value === 'string' && value.trim()));
-    if (Object.keys(changes).length) state.relationshipTimeline.push({floor, source:key, frame, current, when, changes});
-  }
   if (!current) return;
   if (!state.entry) {
     state.entry = { id, kind, title, people: '', auto: true, fields: {}, stateFloor: floor };
@@ -84,9 +80,7 @@ function applyTrace(state, contribution) {
   if (Array.isArray(row.人物) && people.length === row.人物.length) entry.people = people.join('、');
 }
 
-function stateTimelineCopy(items) { return items.map(item => ({...item, changes:{...item.changes}})); }
-
-function renderTrace({ entry, order, sources, history, relationshipTimeline }) {
+function renderTrace({ entry, order, sources, history }) {
   if (!entry) return null;
   return {
     order,
@@ -95,7 +89,6 @@ function renderTrace({ entry, order, sources, history, relationshipTimeline }) {
       fields: Object.fromEntries(Object.entries(entry.fields).map(([key, value]) => [key, Array.isArray(value) ? value.slice() : value])),
       sources: [...sources],
       history: history.slice(),
-      ...(entry.kind === '关系' ? {relationshipTimeline: stateTimelineCopy(relationshipTimeline)} : {}),
       status: entry.fields.状态 || '',
       body: Object.entries(entry.fields).map(([key, value]) => `${key}：${describe(value)}`).join('\n') +
         '\n\n变化记录\n' + history.join('\n'),
@@ -134,7 +127,7 @@ export function createTraceAccumulator() {
     state => ({
       ...state,
       entry: state.entry && { ...state.entry, fields: { ...state.entry.fields } },
-      sources: new Set(state.sources), history: state.history.slice(), relationshipTimeline: state.relationshipTimeline.slice(),
+      sources: new Set(state.sources), history: state.history.slice(),
     }),
     applyTrace, renderTrace);
 }

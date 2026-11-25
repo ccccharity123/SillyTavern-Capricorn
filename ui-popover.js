@@ -34,20 +34,8 @@ function close(reason = 'close') {
   active = null;
   entry.cleanups.forEach(remove => remove());
   if (entry.frame) entry.W.cancelAnimationFrame(entry.frame);
-  const hadExternalContent = Boolean(entry.marker);
   restoreContent(entry);
-  const portal = entry.portal;
-  const reduce = Boolean(entry.W?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches);
-  const immediate = hadExternalContent || reduce || ['replaced', 'destroy', 'detached', 'error'].includes(reason);
-  if (portal.parentNode) {
-    if (immediate) {
-      portal.parentNode.removeChild(portal);
-    } else {
-      portal.style.pointerEvents = 'none';
-      entry.panel.classList.add('is-closing');
-      entry.W.setTimeout(() => { if (portal.parentNode) portal.parentNode.removeChild(portal); }, 150);
-    }
-  }
+  if (entry.portal.parentNode) entry.portal.parentNode.removeChild(entry.portal);
   setBack(entry.anchor, 'aria-expanded', entry.oldExpanded);
   setBack(entry.anchor, 'aria-controls', entry.oldControls);
   setBack(entry.anchor, 'aria-haspopup', entry.oldHasPopup);
