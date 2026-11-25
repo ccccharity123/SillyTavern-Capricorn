@@ -116,7 +116,7 @@ if(isAppleMobile)nativeVolume=false;
 // AudioContext.resume() must be given a bounded chance to complete first.
 let resumePending=null, resumeStarted=0, graphFailure='';
 function refreshAudioCapability(){if(!disposed)fullPlayer?.refresh()}
-function unlockAudio(event){
+function unlockAudio(){
  if(nativeVolume||disposed||(isAppleMobile&&backgroundPriority()&&activeAudio!==graphAudio))return Promise.resolve(false);
  try{
   if(!audioContext){
@@ -133,9 +133,9 @@ function unlockAudio(event){
   }
   if(audioContext.state==='running')return Promise.resolve(true);
   if(!['suspended','interrupted'].includes(audioContext.state))return Promise.resolve(false);
-  if(!resumePending||Date.now()-resumeStarted>1500||(event?.isTrusted&&event.type==='click'&&audioContext.state!=='running')){
+  if(!resumePending||Date.now()-resumeStarted>1500){
    resumeStarted=Date.now();
-   const pending=Promise.resolve(audioContext.resume()).then(()=>audioContext?.state==='running',error=>{graphFailure=error?.message||'音频上下文恢复失败';return false});
+   const pending=Promise.resolve(audioContext.resume()).then(()=>audioContext?.state==='running',()=>false);
    resumePending=pending;
    void pending.then(()=>{if(resumePending===pending)resumePending=null;refreshAudioCapability()});
   }
@@ -1380,19 +1380,13 @@ sync();
 render();
 fullPlayer=mountNowPlaying({
   D,W,audio,shared,
-  state:()=>({playing,queue,queueRevision,queueIndex,actualQuality,preferredQuality:db.settings.preferredQuality||'jymaster',canChangeQuality:!!playing?.neteaseId&&(!validUrl(playing?.audioUrl)||!!actualQuality&&actualQuality!=='手动音源')&&!!shared.online?.ready(),playMode,resolving,started,statusText,userVolume:targetVolume(),volumeSupported:volumeCapability(),volumeBackend:volumeBackend(),canRetryVolume:!nativeVolume&&!backgroundPriority()&&!!playing&&queueIndex>=0&&started&&!resolving&&!audio.paused&&!volumeCapability(),diagnostic:()=>diagnostic()}),
+  state:()=>({playing,queue,queueRevision,queueIndex,actualQuality,preferredQuality:db.settings.preferredQuality||'jymaster',canChangeQuality:!!playing?.neteaseId&&(!validUrl(playing?.audioUrl)||!!actualQuality&&actualQuality!=='手动音源')&&!!shared.online?.ready(),playMode,resolving,started,statusText,userVolume:targetVolume(),volumeSupported:volumeCapability(),volumeBackend:volumeBackend(),diagnostic:()=>diagnostic()}),
   quality(level){
     if(!qualityOrder.includes(level)||resolving||!playing?.neteaseId||(validUrl(playing.audioUrl)&&actualQuality==='手动音源')||!shared.online?.ready())return;
     db.settings.preferredQuality=level;
     resetPrefetch();
     save();
     void playQueued(queueIndex,audio.currentTime||resumePosition||0,true);
-  },
-  retryVolume(){
-    if(disposed||nativeVolume||backgroundPriority()||!playing||queueIndex<0||resolving||audio.paused||volumeCapability())return;
-    void unlockAudio();
-    if(activeAudio===graphAudio)return;
-    void playQueued(queueIndex,audio.currentTime||0,actualQuality!=='手动音源');
   },
   volume(value){const requested=Math.max(0,Math.min(1,Number(value)||0));db.settings.volume=requested;applyGain(fadeGain);clearTimeout(volumeSaveTimer);volumeSaveTimer=setTimeout(()=>{volumeSaveTimer=null;save()},180)},
   mode(){playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;resetPrefetch();syncNativeLoop();save()},

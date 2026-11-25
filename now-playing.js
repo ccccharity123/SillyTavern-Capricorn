@@ -29,7 +29,7 @@ const ICONS = {
 };
 const sizeLabels = { compact: '悬浮卡片', half: '半屏', large: '大半屏' };
 
-export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, retryVolume, mode, quality }) {
+export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
   const panel = D.createElement('section');
   panel.className = 'cap-full-player cap-player-layout';
   const android = /Android/i.test(W.navigator.userAgent);
@@ -149,7 +149,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
             '<output class="cap-vol-pct" data-volume-value></output>' +
           '</div>' +
           '<small data-volume-note class="cap-volume-note"></small>' +
-          '<button type="button" data-volume-retry hidden>重试应用内音量</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -373,27 +372,25 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   function updateVolume() {
     const audioState = state();
     const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
-    if (value > 0) lastNonZeroVol = value;
-    const supports = audioState.volumeSupported !== false;
-    const percent = supports ? Math.round(value * 100) + '%' : value === 0 ? '静音' : '系统';
+    if (value > 0.01) lastNonZeroVol = value;
+    const percent = Math.round(value * 100) + '%';
     if (!volumeDragging && Number(volumeSlider.value) !== Number(value)) volumeSlider.value = value;
-    const progress = Math.round(value * 100) + '%';
-    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== progress) volumeSlider.style.setProperty('--cap-vol-progress', progress);
+    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== percent) volumeSlider.style.setProperty('--cap-vol-progress', percent);
     if (volumeValue.textContent !== percent) {
       volumeValue.textContent = percent;
       volumeSlider.setAttribute('aria-valuetext', percent);
       volumeButton.title = '音量 ' + percent;
     }
-    const hint = supports ? '' : '当前通道仅支持静音／恢复；实际音量请用设备音量键。iOS 可关闭后台播放优先后切歌。';
+    const supports = audioState.volumeSupported !== false;
+    const hint = supports ? '' : '当前通道仅支持静音／恢复；滑块保留目标音量，实际音量请用设备音量键。iOS 可关闭后台播放优先后切歌。';
     if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
     const sliderTitle = supports ? '音量' : '目标音量（当前通道实际音量由系统控制）';
     if (volumeSlider.title !== sliderTitle) volumeSlider.title = sliderTitle;
     // Keep a functional 0/100 mute toggle in the fallback instead of displaying
     // a disabled control or a misleading continuous-volume slider.
-    volumeSlider.disabled = !supports;
-    q('[data-volume-retry]').hidden = !audioState.canRetryVolume;
+    if (volumeSlider.disabled) volumeSlider.disabled = false;
     if (volumeSlider.step !== '0.01') volumeSlider.step = '0.01';
-    volumeSlider.setAttribute('aria-disabled', String(!supports));
+    if (volumeSlider.getAttribute('aria-disabled') !== 'false') volumeSlider.setAttribute('aria-disabled', 'false');
     const muted = String(value === 0);
     if (volumeButton.dataset.muted !== muted) {
       volumeButton.dataset.muted = muted;
@@ -416,21 +413,20 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     openSurface({
       anchor: volumeButton, role: 'dialog', label: '音量', content: volumeContent,
       className: 'cap-volume-popover',
-      initialFocus: volumeSlider, minWidth: 248, onClose: endVolDrag
+      initialFocus: volumeSlider, minWidth: 248, onClose: () => { volumeDragging = false; }
     }, () => showInline(volumeButton, '音量', volumeContent, () => {
-      endVolDrag();
+      volumeDragging = false;
       volumeStore.append(volumeContent);
     }));
   };
   if (volMuteBtn) {
     volMuteBtn.onclick = () => {
-      const cur = state().userVolume ?? Number(volumeSlider.value);
-      const nextVol = cur === 0 ? (lastNonZeroVol || 0.8) : 0;
+      const cur = Number(volumeSlider.value);
+      const nextVol = cur <= 0.01 ? Math.max(0.2, lastNonZeroVol || 0.8) : 0;
       volumeSlider.value = String(nextVol);
       applyVolume();
     };
   }
-  q('[data-volume-retry]').onclick = () => retryVolume?.();
   volumeSlider.onpointerdown = () => { volumeDragging = true; volumeContent.dataset.dragging = 'true'; };
   volumeSlider.oninput = applyVolume;
   const endVolDrag = () => { volumeDragging = false; delete volumeContent.dataset.dragging; };
