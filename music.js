@@ -146,13 +146,10 @@ function unlockAudio(){
  }
 }
 D.addEventListener('pointerdown',unlockAudio,true);D.addEventListener('touchend',unlockAudio,true);D.addEventListener('click',unlockAudio,true);
-async function chooseAudio(alive,forceNative=false){
+function chooseAudio(alive,forceNative=false){
  if(!alive())return false;
- if(!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())){
-  let timer;
-  try{await Promise.race([unlockAudio(),new Promise(resolve=>{timer=setTimeout(()=>resolve(false),1200)})]);}finally{clearTimeout(timer)}
- }
- if(!alive())return false;
+ // Do not await AudioContext.resume before invoking media.play in a click handler.
+ if(!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority()))void unlockAudio();
  activeAudio=!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())&&gainNode&&audioContext?.state==='running'?graphAudio:nativeAudio;
  return true;
 }
@@ -427,10 +424,10 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  const t=queue[queueIndex];
  const prepared=prefetch.take(prefetchKey(t));prefetchAttempt='';
  resolving=true;
- if(!audio.paused&&!audio.ended){await fadeTo(0,320,epoch);if(!alive())return;}
+ if(!audio.paused&&!audio.ended){audio.pause();if(!alive())return;}
  resumePosition=resumeAt;playing=t;audioError='';actualQuality='';playbackLog=[];coverState='未检查';clearAudio();render();
  const deadline=Date.now()+95000;
- async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!await chooseAudio(alive,forceNative))return false;syncNativeLoop();applyGain(D.hidden?1:0);audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){if(activeAudio===graphAudio){trace('Web Audio 播放权限受限，尝试原生通道');return candidate(url,quality,true)}trace('音源已准备，请点击播放器主播放键重试');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
+ async function candidate(url,quality,forceNative=false){if(!alive())return false;clearAudio();if(!chooseAudio(alive,forceNative))return false;syncNativeLoop();applyGain(activeAudio===nativeAudio?1:(D.hidden?1:0));audio.src=url;actualQuality=quality;trace('正在加载：'+quality);try{await attemptPlay(Math.max(1,Math.min(12000,deadline-Date.now())),signal);if(!alive())return false;if(resumeAt>0&&Number.isFinite(audio.duration))audio.currentTime=Math.min(resumeAt,audio.duration);resumePosition=0;started=true;void fadeTo(1,650,epoch);return true}catch(e){if(!alive())return false;if(e.name==='NotAllowedError'){if(activeAudio===graphAudio){trace('Web Audio 播放权限受限，尝试原生通道');return candidate(url,quality,true)}trace('音源已准备，请点击播放器主播放键重试');throw e}trace(quality+'：'+(audio.error?'媒体错误 '+audio.error.code:e.name==='AbortError'?'加载中断':e.message==='音频加载超时'?e.message:'播放失败 '+e.name));const retry=activeAudio===graphAudio;clearAudio();if(retry&&alive())return candidate(url,quality,true);return false}}
  async function loadCover(id){
    if(validUrl(t.coverUrl)){coverState='已有地址';return;}
    try {
@@ -447,6 +444,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
    }
  }
  try{let ok=false;const manual=preferOnline?'':validUrl(t.audioUrl);if(manual)ok=await candidate(manual,'手动音源');if(!alive())return;
+ if(!ok&&manual&&!t.neteaseId)throw Error('手动音源播放失败，请查看播放诊断');
  if(!ok&&shared.online?.ready()){
  if(!t.neteaseId&&!manual)await matchOnline(t,false,signal);if(!alive())return;if(!t.neteaseId)throw Error('尚未匹配网易云歌曲');
  const id=t.neteaseId;
