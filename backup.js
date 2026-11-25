@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 import { getChatIdentity, getHostContext } from './host-context.js';
 
 const FORMAT = 'capricorn-backup';
@@ -6,7 +7,7 @@ const APPEARANCE_KEY = 'capricorn_appearance_v1';
 const THEME_KEY = 'capricorn_theme';
 const sourceKey = /^([0-9]+):([a-f0-9]{8})$/i;
 const forbidden = new Set(['__proto__', 'constructor', 'prototype']);
-const has = (object, key) => Object.hasOwn(object, key);
+const has = (object, key) => hasOwn(object, key);
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const text = value => typeof value === 'string';
 const nonemptyText = value => text(value) && value.length > 0;

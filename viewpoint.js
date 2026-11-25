@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 import { cost, tokenize } from './hybrid.js';
 import { knowledgeForCharacter } from './weave.js';
 
@@ -22,7 +23,7 @@ export function recallViewpoint(ledger, actor, query, budget) {
   const actorKey = actor.normalize('NFKC').toLowerCase();
   const candidates = [];
   for (const item of knowledgeForCharacter(ledger, actor)) {
-    if (Object.hasOwn(item.fields, '已公开事实')) continue;
+    if (hasOwn(item.fields, '已公开事实')) continue;
     const facts = Object.entries(item.fields).filter(([key]) => key !== '角色')
       .map(([key, value]) => `${key}：${value}`).join('。');
     const topic = item.title.normalize('NFKC').toLowerCase();

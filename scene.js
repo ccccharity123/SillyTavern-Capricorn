@@ -1,3 +1,4 @@
+import { lastItem } from './compat.js';
 // Use a bounded slice of visible story text. Scene hints never become archive facts.
 const clean = value => String(value ?? '')
   .replace(/<(summary|table|bgm|摩羯纪要|摩羯留痕)(?:\s[^>]*)?>[\s\S]*?<\/\1\s*>/gi, '')
@@ -14,7 +15,7 @@ export function sceneQuery(chat, docs) {
     const text = clean(message.mes ?? message.message);
     if (text) recent.unshift({ text, user: !!message.is_user });
   }
-  const latest = recent.at(-1);
+  const latest = lastItem(recent);
   const user = latest?.user ? latest.text : '';
   const short = !!user && user.length <= 64 && Array.from(user).length <= 32;
   const context = tail((latest?.user ? recent.slice(0, -1) : recent).map(item => tail(item.text, 480)).join('\n'), short ? 480 : 240);

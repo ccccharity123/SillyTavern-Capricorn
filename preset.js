@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 import { variants } from './tiers.js';
 export const entries=[
  {identifier:'cap-output-summary-v1',name:'剧情摘要',tag:'summary',content:'每轮正文结束后输出一组 <summary> 与 </summary> 标签。内部以“时间：”及“地点：”记录已知剧情时间与地点，另起一行简洁记录本轮发生的关键事实、行动、关系变化及未完成事项。未知时间或地点可省略；保留世界观原有纪年，不虚构事实。只总结本轮，不复述全部历史。'},
@@ -113,7 +114,7 @@ function interfaceShape(obj, depth=0, seen=new WeakSet(), budget={left:180}){
   for(const [k,d] of Object.entries(Object.getOwnPropertyDescriptors(cursor)).slice(0,100)){
    if(!safeKey(k)||k==='constructor')continue;
    if(typeof d.value==='function'){if(!methods.includes(k))methods.push(k);continue;}
-   if(level||Object.hasOwn(fields,k))continue;
+   if(level||hasOwn(fields,k))continue;
    const v=d.value;fields[k]=d.get?{type:'accessor'}:depth<2&&/preset|prompt|order|settings|data|config|manager|openai/i.test(k)?interfaceShape(v,depth+1,seen,budget):{type:Array.isArray(v)?'array':typeof v};
   }
  }

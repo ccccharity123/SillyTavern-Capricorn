@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 import {fuzzy} from './traces.js';
 import { appendMemoryProvenance } from './memory-provenance.js';
 
@@ -16,17 +17,25 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
   if(!title.value.trim()){notice('档案名称不能为空');return;}
   await serial(async()=>{check(id);const current=manual();const row={id:old.id||globalThis.crypto?.randomUUID?.()||`${Date.now()}-${Math.random()}`,kind:kind.value,title:title.value.trim(),people:people.value.trim(),status:status.value,body:body.value.trim(),sources:[...selected],updatedAt:new Date().toISOString()};archivePatch({dossier:[...current.filter(r=>r.id!==row.id),row]});});
  }
- async function open() {
+ async function open(present = modal, options = {}) {
+  const {bindSearch, setCount, filters, active = () => true} = options;
   const id = identity();
   if (!id) return;
-  while (identity() === id) {
+  while (identity() === id && active()) {
    const box = el('div');
-   const search = el('input', box);
+   const toolbar = el('div', box);
+   toolbar.className = 'shiyi-view-controls';
+   const search = el('input', bindSearch ? null : toolbar);
    search.placeholder = '搜索人物、关系、伏笔、事件';
-   const filter = el('select', box);
+   search.setAttribute('aria-label', search.placeholder);
+   const filter = el('select', toolbar);
+   filter.setAttribute('aria-label', '档案筛选');
    for (const kind of ['全部', ...kinds, '来源失效']) el('option', filter, kind).value = kind;
    const list = el('div', box);
-   let action = null;
+   list.className = 'shiyi-dossier-rows';
+   let action = null, finishView;
+   const savedFilter = filters && filters.dossier;
+   if (savedFilter && Array.from(filter.options).some(option => option.value === savedFilter)) filter.value = savedFilter;
    const view = read();
    check(id);
    const manualRows = view.archive.dossier || [];
@@ -42,7 +51,7 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
     const pins = archive().weavePins || [];
     for (const row of rows) {
      if (!fuzzy(`${row.title} ${row.people} ${row.body} ${row.status}`, query)) continue;
-     const stale = (row.sources || []).some(key => !Object.hasOwn(ledger.rows, key) && !Object.hasOwn(summaries, key));
+     const stale = (row.sources || []).some(key => !hasOwn(ledger.rows, key) && !hasOwn(summaries, key));
      if (filter.value !== '全部' && filter.value !== row.kind && !(filter.value === '来源失效' && stale)) continue;
      const card = el('div', list);
      card.className = 'shiyi-history-item';
@@ -65,20 +74,29 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
       pin.textContent = (archive().weavePins || []).includes(row.id) ? '取消核心' : '核心记忆';
      };
      for (const [label, type] of [['编辑', 'edit'], ['删除', 'delete']]) {
-      el('button', card, label).onclick = () => {
+      const button = el('button', card, label);
+      if (type === 'delete') button.className = 'shiyi-item-delete';
+      button.onclick = () => {
        action = { type, row };
-       box.closest('.shiyi-dialog').querySelector('.shiyi-actions button').click();
+       if (finishView) finishView('close');
       };
      }
     }
+    if (setCount) setCount(list.children.length);
+    if (!list.children.length) el('p', list, '暂无匹配的留痕档案');
    }
 
-   search.oninput = filter.onchange = render;
-   render();
-   const result = await modal('拾忆 · 留痕档案', box, [
+   search.oninput = render;
+   filter.onchange = () => {
+    if (filters) filters.dossier = filter.value;
+    render();
+   };
+   if (bindSearch) bindSearch(text => { search.value = text; render(); });
+   else render();
+   const result = await present('拾忆 · 留痕档案', box, [
     { label: '关闭', value: 'close' }, { label: '新建档案', value: 'new', kind: 'primary' }, { label: '从记忆整理', value: 'seed' },
-   ]);
-   if (identity() !== id) return;
+   ], finish => { finishView = finish; });
+   if (identity() !== id || !active()) return;
    if (action?.type === 'edit') await edit(id, action.row);
    else if (action?.type === 'delete') {
     const content = el('div', null, `删除档案「${action.row.title}」？不会删除原记忆。`);
@@ -95,6 +113,8 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
    else if (result === 'seed') {
     const content = el('div');
     const select = el('select', content);
+    select.setAttribute('aria-label', '来源记忆');
+    select.setAttribute('data-cap-select', 'search');
     for (const [key, row] of live()) el('option', select, `${row.sourceMessage}楼 · ${row.title}`).value = key;
     if (!select.options.length) {
      notice('暂无有效记忆');

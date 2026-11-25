@@ -1,3 +1,6 @@
+import { hasOwn } from './compat.js';
+import { icon } from './icons.js';
+import { mountSelects } from './ui-select.js';
 import {boundedRecall,RecallTimeout} from './recall-deadline.js';
 import {createVectorHealth} from './vector-health.js';
 import {createVectorLane} from './vector-lane.js';
@@ -96,7 +99,6 @@ export async function startMemory(shared) {
   hostWindow[KEY] = state;
   const $ = (s,root=hostDocument)=>root?.querySelector(s);
   const api = helperApi(window,hostWindow);
-  const safe = s=>String(s??'').replace(/[<>"&]/g,c=>({'<':'&lt;','>':'&gt;','"':'&quot;','&':'&amp;'}[c]));
   const vectorLane=createVectorLane();const vectorStore=createVectorStore();const vectorHealth=createVectorHealth(embedBatch);const vector=createVector(vectorStore,vectorLane,()=>Date.now(),vectorHealth.request);const migration=createMigration(vectorStore,vectorHealth.request,()=>Date.now(),vectorLane);let migrationRevision=-1,migrationTexts=[],migrationTextSet=new Set(),migrationScope="";const lexicalStore=createLexicalStore();const retrieval=createRetrieval();
   const settingsDefault={start:'<summary>',end:'</summary>',keep:5,storyYear:'',weaveMode:'smart',weaveBudget:3000,weaveKinds:kinds,summaryMode:'unified',engine:'hybrid',adaptive:false,autoHide:false,layers:true,vectorEnabled:false,vectorMigration:false,vectorUrl:'',vectorModel:'',modeAdvice:true};
   const vars=()=>api('getVariables',{type:'chat'})||{};
@@ -322,14 +324,49 @@ export async function startMemory(shared) {
     if(range){const endClock=clock(range[1]);if(endClock)return `${start} — ${endClock}`;}
     return start;
   }
-  function modal(title,body,buttons){
-    return new Promise(resolve=>{
-      const overlay=hostDocument.createElement('div');overlay.className='shiyi-overlay';
-      overlay.innerHTML=`<div class="shiyi-dialog" role="dialog" aria-modal="true"><h3>${safe(title)}</h3><div class="shiyi-body"></div><div class="shiyi-actions"></div></div>`;
-      $('.shiyi-body',overlay).append(body);
-      const finish=(v)=>{overlay.remove();state.open=false;state.closeModal=null;resolve(v);};state.closeModal=()=>finish('cancel');
-      buttons.forEach(({label,value,kind})=>{const b=hostDocument.createElement('button');b.textContent=label;if(kind)b.className=kind;b.onclick=()=>finish(value);$('.shiyi-actions',overlay).append(b);});
-      hostDocument.body.append(overlay);state.open=true;
+  function modal(title, body, buttons, registerFinish) {
+    return new Promise(resolve => {
+      const overlay = hostDocument.createElement('div');
+      overlay.className = 'shiyi-overlay';
+      const dialog = hostDocument.createElement('div');
+      dialog.className = 'shiyi-dialog';
+      if (body.classList.contains('shiyi-editor')) dialog.classList.add('shiyi-dialog-wide');
+      dialog.setAttribute('role', 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      dialog.setAttribute('aria-label', title);
+      const heading = hostDocument.createElement('h3');
+      heading.textContent = title;
+      const content = hostDocument.createElement('div');
+      content.className = 'shiyi-body';
+      content.append(body);
+      const actions = hostDocument.createElement('div');
+      actions.className = 'shiyi-actions';
+      dialog.append(heading, content, actions);
+      overlay.append(dialog);
+      let adapter, finished = false;
+      const finish = value => {
+        if (finished) return;
+        finished = true;
+        if (adapter) adapter.destroy();
+        overlay.remove();
+        state.open = false;
+        state.closeModal = null;
+        resolve(value);
+      };
+      state.closeModal = () => finish('cancel');
+      if (registerFinish) registerFinish(finish);
+      buttons.forEach(({label, value, kind}) => {
+        const button = hostDocument.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        if (kind) button.className = kind;
+        button.onclick = () => finish(value);
+        actions.append(button);
+      });
+      hostDocument.body.append(overlay);
+      state.open = true;
+      try { adapter = mountSelects(overlay); }
+      catch (cause) { console.warn('[拾忆] 保留原生选择器', cause); }
     });
   }
   const characterKey=()=>chatIdentity().owner.replace(/^character:/,'');
@@ -353,7 +390,7 @@ export async function startMemory(shared) {
     const rows={...data.records};
     let imported=false;
     function importRow(key,row){
-      if(typeof key!=='string'||!key||['__proto__','constructor','prototype'].includes(key)||!row||typeof row.content!=='string'||Object.hasOwn(rows,key)||data.deletedKeys?.[key])return;
+      if(typeof key!=='string'||!key||['__proto__','constructor','prototype'].includes(key)||!row||typeof row.content!=='string'||hasOwn(rows,key)||data.deletedKeys?.[key])return;
       rows[key]=row;
       imported=true;
     }
@@ -914,7 +951,7 @@ export async function startMemory(shared) {
     const button=(label,fn)=>{const b=hostDocument.createElement('button');b.textContent=label;b.onclick=async()=>{try{check(id);await fn();}catch(e){error(e);hostWindow.alert(e.message);}};return b;};
     async function remove(keys){if(!keys.length||!hostWindow.confirm(`删除 ${keys.length} 条摘要？可在回收站恢复。`))return;await serial(async()=>{check(id);const rows={...records()};recycle(keys,rows);markDeleted(keys);for(const k of keys)state.seen.add(k);changed();});selected.clear();render();}
     async function restore(k,r){const m=getMessages().find(m=>m.message_id===r.sourceMessage);if(!m||`${m.message_id}:${hash(String(m.message??''))}`!==k)throw Error('原正文已变化，不能恢复旧正史');await addMemory({chat:id,id:r.sourceMessage,key:k},r.title,r.content,true);check(id);const trash={...archive().trash};delete trash[k];archivePatch({trash});render();}
-    function render(){if(identity()!==id)return;list.replaceChildren();const a=archive(),meta=a.meta||{},trash=filter.value==='trash';const active=activeRecords();const inactive=()=>Object.fromEntries(Object.entries(records()).filter(([k])=>!Object.hasOwn(active,k)&&!blocked(k)));const rows=ordered(trash?a.trash||{}:numbered(filter.value==='inactive'?inactive():active));const q=search.value.trim().toLowerCase();const matches=rows.filter(([k,r])=>(filter.value!=='star'||meta[k]?.star)&&fuzzy(`${r.title} ${r.content} ${meta[k]?.chapter||''}`,q));stats.textContent=`有效 ${Object.keys(active).length} · 回收站 ${Object.keys(a.trash||{}).length} · 匹配 ${matches.length}`;batch.hidden=trash;page=Math.min(page,Math.max(0,Math.ceil(matches.length/limit)-1));previous.disabled=page===0;more.disabled=(page+1)*limit>=matches.length;stats.textContent+=` · 第 ${page+1}/${Math.max(1,Math.ceil(matches.length/limit))} 页 · 已选 ${selected.size}`;
+    function render(){if(identity()!==id)return;list.replaceChildren();const a=archive(),meta=a.meta||{},trash=filter.value==='trash';const active=activeRecords();const inactive=()=>Object.fromEntries(Object.entries(records()).filter(([k])=>!hasOwn(active,k)&&!blocked(k)));const rows=ordered(trash?a.trash||{}:numbered(filter.value==='inactive'?inactive():active));const q=search.value.trim().toLowerCase();const matches=rows.filter(([k,r])=>(filter.value!=='star'||meta[k]?.star)&&fuzzy(`${r.title} ${r.content} ${meta[k]?.chapter||''}`,q));stats.textContent=`有效 ${Object.keys(active).length} · 回收站 ${Object.keys(a.trash||{}).length} · 匹配 ${matches.length}`;batch.hidden=trash;page=Math.min(page,Math.max(0,Math.ceil(matches.length/limit)-1));previous.disabled=page===0;more.disabled=(page+1)*limit>=matches.length;stats.textContent+=` · 第 ${page+1}/${Math.max(1,Math.ceil(matches.length/limit))} 页 · 已选 ${selected.size}`;
       for(const [k,r] of matches.slice(page*limit,(page+1)*limit)){const row=hostDocument.createElement('div');row.className='shiyi-history-item';const title=hostDocument.createElement('strong');title.textContent=`${meta[k]?.star?'★ ':''}${r.title} · 第${r.sourceMessage}楼`;const text=hostDocument.createElement('p');text.textContent=r.content;const details=hostDocument.createElement('details');const summary=hostDocument.createElement('summary');summary.textContent='查看完整摘要';details.append(summary,text);row.append(title,details);
         if(trash){row.append(button('恢复',()=>restore(k,r)));}else{const cb=hostDocument.createElement('input');cb.type='checkbox';cb.checked=selected.has(k);cb.style.width='auto';cb.onchange=()=>cb.checked?selected.add(k):selected.delete(k);row.prepend(cb);row.append(button(meta[k]?.star?'取消星标':'星标',()=>{archivePatch({meta:{...archive().meta,[k]:{...meta[k],star:!meta[k]?.star}}});changed();render();}),button('章节',()=>{const chapter=hostWindow.prompt('章节名称（留空取消归类）',meta[k]?.chapter||'');if(chapter!==null){archivePatch({meta:{...archive().meta,[k]:{...meta[k],chapter:chapter.trim()}}});changed();render();}}),button('溯源',()=>{if(jump(r.sourceMessage))state.closeModal?.();else hostWindow.alert('请先加载该历史楼层');}),button('编辑',()=>{state.closeModal?.();return editMemory(id,k);}),button('历史',async()=>{state.closeModal?.();const box=hostDocument.createElement('div');for(const v of archive().history?.[k]||[]){const p=hostDocument.createElement('p');p.textContent=v.savedAt+' · '+v.title+'\n'+v.content;box.append(p,button('回退此版本',async()=>{await serial(async()=>{check(id);const rows={...records()};if(!rows[k]||blocked(k))throw Error('记忆已失效');snapshot(k,rows[k],'回退前');rows[k]={...rows[k],title:v.title,content:v.content,storyTime:parseStoryTime(v.content)};writeRows(id,rows);});state.closeModal?.();}));}if(!box.children.length)box.textContent='暂无历史版本';await modal('修改历史',box,[{label:'返回',value:'close'}]);if(identity()===id&&!state.open)await manage();}),button('删除',()=>remove([k])));if(meta[k]?.chapter){const p=hostDocument.createElement('p');p.textContent='章节：'+meta[k].chapter;row.append(p);}}
         list.append(row);}}
@@ -1023,7 +1060,7 @@ export async function startMemory(shared) {
         if(identity()===id&&!state.disposed){
           if(touched){
             const restored={...vars().shiyi_v01};
-            if(Object.hasOwn(before,'settings'))restored.settings=before.settings;
+            if(hasOwn(before,'settings'))restored.settings=before.settings;
             else delete restored.settings;
             saveVars(restored);
             if(previousKey===null)sessionStorage.removeItem('capricorn-vector-key');
@@ -1042,17 +1079,29 @@ export async function startMemory(shared) {
     });
 
   }
-  async function showTables(){
-    if(state.open)return;const id=identity();if(!id)return;
+  function tableView(options = {}){
+    const {bindSearch, setCount, filters} = options;
+    const id=identity();if(!id)return;
     const view=readMemory();
     check(id);
     const rows=Object.entries(view.ledger().rows).sort((a,b)=>b[1].floor-a[1].floor);
     const D=hostDocument,box=D.createElement('div'),q=D.createElement('input'),cat=D.createElement('select'),list=D.createElement('div'),nav=D.createElement('div');
-    q.placeholder='搜索人物、事件或字段';const categories=[...new Set(rows.flatMap(([,r])=>Object.keys(r.value)))];
+    q.placeholder='搜索人物、事件或字段';
+    q.setAttribute('aria-label','搜索人物、事件或字段');
+    cat.setAttribute('aria-label','表格分类');
+    cat.setAttribute('data-cap-select','search');
+    const toolbar = D.createElement('div');
+    toolbar.className = 'shiyi-view-controls';
+    if (!bindSearch) toolbar.append(q);
+    toolbar.append(cat);
+    list.className = 'shiyi-table-rows';
+    nav.className = 'shiyi-view-pagination';
+    const categories=[...new Set(rows.flatMap(([,r])=>Object.keys(r.value)))];
     for(const k of ['',...categories]){const o=D.createElement('option');o.value=k;o.textContent=k||'全部分类';cat.append(o);}
-    const prev=D.createElement('button'),next=D.createElement('button'),status=D.createElement('span');prev.textContent='上一页';next.textContent='下一页';nav.append(prev,status,next);box.append(q,cat,list,nav);let page=0;
+    if (filters && categories.includes(filters.table)) cat.value = filters.table;
+    const prev=D.createElement('button'),next=D.createElement('button'),status=D.createElement('span');prev.textContent='上一页';next.textContent='下一页';nav.append(prev,status,next);box.append(toolbar,list,nav);let page=0;
     const field=(parent,k,v)=>{const line=D.createElement('div');line.style.overflowWrap='anywhere';const label=D.createElement('strong');label.textContent=k+'：';line.append(label);if(v&&typeof v==='object'){const nested=D.createElement('div');nested.style.paddingInlineStart='12px';for(const [key,val] of Object.entries(v))field(nested,Array.isArray(v)?String(Number(key)+1):key,val);line.append(nested);}else line.append(D.createTextNode(String(v??'—')));parent.append(line);};
-    function render(){check(id);list.replaceChildren();const term=q.value.trim().toLowerCase(),filtered=rows.filter(([,r])=>(!cat.value||Object.hasOwn(r.value,cat.value))&&(!term||JSON.stringify(cat.value?r.value[cat.value]:r.value).toLowerCase().includes(term)));const pages=Math.max(1,Math.ceil(filtered.length/20));page=Math.min(page,pages-1);status.textContent=` ${page+1}/${pages} · ${filtered.length} 楼 `;prev.disabled=page===0;next.disabled=page+1>=pages;
+    function render(){if(state.disposed||identity()!==id)return;list.replaceChildren();const term=q.value.trim().toLowerCase(),filtered=rows.filter(([,r])=>(!cat.value||hasOwn(r.value,cat.value))&&(!term||JSON.stringify(cat.value?r.value[cat.value]:r.value).toLowerCase().includes(term)));const pages=Math.max(1,Math.ceil(filtered.length/20));page=Math.min(page,pages-1);status.textContent=` ${page+1}/${pages} · ${filtered.length} 楼 `;prev.disabled=page===0;next.disabled=page+1>=pages;
       for(const [key,row] of filtered.slice(page*20,page*20+20)){
         const item=D.createElement('details'),title=D.createElement('summary'),body=D.createElement('div');
         title.textContent=`第 ${row.floor} 楼 · ${Object.keys(row.value).join(' / ')}`;
@@ -1062,48 +1111,60 @@ export async function startMemory(shared) {
           for(const [fieldName,value] of Object.entries(row.value))if(!cat.value||fieldName===cat.value)field(body,fieldName,value);
           appendMemoryProvenance(D,body,()=>identity()===id&&view.provenance('table',key),source=>{
             if(!jumpToSource(source))return false;
-            state.closeModal?.();
+            if (!bindSearch) state.closeModal?.();
             return true;
           });
         });
         list.append(item);
       }
+      if(setCount)setCount(filtered.length);
       if(!filtered.length)list.textContent='暂无匹配的已归档表格';
     }
-    let timer;q.oninput=()=>{clearTimeout(timer);timer=setTimeout(()=>{if(state.open&&identity()===id&&box.isConnected){page=0;render();}},180);};cat.onchange=()=>{page=0;render();};prev.onclick=()=>{page--;render();};next.onclick=()=>{page++;render();};render();await modal('表格档案 · 只读',box,[{label:'关闭',value:'close'}]);clearTimeout(timer);
+    let timer;
+    const search = text => { q.value = text; page = 0; if (identity() === id) render(); };
+    q.oninput = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => { if (box.isConnected) search(q.value); }, 180);
+    };
+    cat.onchange = () => {
+      if (filters) filters.table = cat.value;
+      search(q.value);
+    };
+    prev.onclick = () => {page--;render();};
+    next.onclick = () => {page++;render();};
+    if (bindSearch) bindSearch(search);
+    else render();
+    return { element: box, destroy: () => clearTimeout(timer) };
+  }
+
+  async function showTables() {
+    if (state.open) return;
+    const view = tableView();
+    if (!view) return;
+    try { await modal('表格档案 · 只读', view.element, [{label:'关闭', value:'close'}]); }
+    finally { view.destroy(); }
+  }
+  function openDossier(present, options) {
+    if (state.open) return;
+    return createDossier({
+      D:hostDocument, modal, identity, check, archive, archivePatch, serial,
+      jumpSource:jumpToSource, notice, read:readMemory,
+    }).open(present, options);
   }
   function ui(){
-    state.root?.remove(); state.style?.remove();
-    state.style=hostDocument.createElement('style');state.style.textContent=`
-      /* 拾忆 Liquid Glass: 仅作用于拾忆组件，不修改酒馆主题 */
-      #shiyi-dock,.shiyi-overlay{--sy-text:#18212d;--sy-muted:#526071;--sy-stroke:rgba(255,255,255,.65);--sy-glass:rgba(244,248,255,.56);--sy-blue:#1677f2;--sy-shadow:0 16px 48px rgba(17,36,65,.19),inset 0 1px 0 rgba(255,255,255,.76);font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','SF Pro Text','PingFang SC',system-ui,sans-serif}
-      #shiyi-dock{position:fixed;bottom:max(78px,env(safe-area-inset-bottom));right:12px;z-index:2147480000;box-sizing:border-box;width:min(340px,calc(100vw - 24px));padding:12px;border-radius:22px;color:var(--sy-text);background:var(--sy-glass);border:1px solid var(--sy-stroke);box-shadow:var(--sy-shadow);-webkit-backdrop-filter:blur(26px) saturate(185%);backdrop-filter:blur(26px) saturate(185%);font-size:13px;isolation:isolate}
-      #shiyi-dock.shiyi-collapsed{width:54px;height:54px;padding:0;border-radius:50%;overflow:visible;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation}
-      #shiyi-dock.shiyi-collapsed .shiyi-dock-content{display:none}
-      #shiyi-dock .shiyi-orb{display:none}
-      #shiyi-dock.shiyi-collapsed .shiyi-orb{display:flex;align-items:center;justify-content:center;width:100%;height:100%;border:0;border-radius:50%;padding:0;margin:0;background:transparent;font-size:23px;line-height:1;box-shadow:none;cursor:pointer}
-      #shiyi-dock .shiyi-collapse{float:right;padding:2px 9px;margin:-2px 0 3px 8px;border-radius:10px;font-size:17px;line-height:20px}
-      #shiyi-dock.shiyi-collapsed::after{content:'';position:absolute;inset:3px;border-radius:50%;border:1px solid rgba(255,255,255,.55);pointer-events:none}
-      #shiyi-dock.shiyi-collapsed:focus-within{outline:2px solid rgba(22,119,242,.5);outline-offset:2px}
-      #shiyi-dock::before,.shiyi-dialog::before{content:'';position:absolute;inset:1px;border-radius:inherit;pointer-events:none;background:linear-gradient(155deg,rgba(255,255,255,.34),transparent 42%,rgba(255,255,255,.08));z-index:-1}
-      #shiyi-dock .shiyi-brand{font-weight:680;font-size:14px;letter-spacing:.02em;margin:1px 4px 9px}#shiyi-status{font-size:11px;color:var(--sy-muted);margin:8px 5px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      #shiyi-dock button,.shiyi-dialog button{appearance:none;-webkit-appearance:none;background:rgba(255,255,255,.42);color:inherit;border:1px solid rgba(255,255,255,.66);border-radius:12px;padding:9px 11px;margin:3px 2px;cursor:pointer;font:inherit;font-weight:550;box-shadow:inset 0 1px rgba(255,255,255,.56),0 2px 8px rgba(36,55,86,.07);transition:background .18s ease,transform .18s ease,box-shadow .18s ease}
-      #shiyi-dock button:hover,.shiyi-dialog button:hover{background:rgba(255,255,255,.72);box-shadow:inset 0 1px rgba(255,255,255,.75),0 3px 12px rgba(36,55,86,.1)}
-      #shiyi-dock button:active,.shiyi-dialog button:active{transform:scale(.98)}
-      #shiyi-dock button:focus-visible,.shiyi-dialog button:focus-visible,.shiyi-dialog input:focus-visible,.shiyi-dialog textarea:focus-visible{outline:2px solid var(--sy-blue);outline-offset:2px}
-      .shiyi-overlay{position:fixed;inset:0;z-index:2147482000;display:flex;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));box-sizing:border-box;background:rgba(15,25,42,.34);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
-      .shiyi-dialog{position:relative;isolation:isolate;width:min(540px,100%);max-height:min(86dvh,760px);overflow:auto;overscroll-behavior:contain;box-sizing:border-box;padding:22px;border-radius:28px;color:var(--sy-text);background:rgba(247,250,255,.77);border:1px solid rgba(255,255,255,.8);box-shadow:0 25px 85px rgba(12,28,54,.28),inset 0 1px rgba(255,255,255,.94);-webkit-backdrop-filter:blur(38px) saturate(190%);backdrop-filter:blur(38px) saturate(190%);font-size:14px}
-      .shiyi-dialog h3{font-size:18px;letter-spacing:-.025em;font-weight:700;margin:0 0 16px}.shiyi-dialog label{display:block;margin:13px 0;font-size:13px;font-weight:560}
-      .shiyi-dialog textarea,.shiyi-dialog input{display:block;box-sizing:border-box;width:100%;margin-top:7px;padding:12px 13px;border:1px solid rgba(124,148,177,.25);border-radius:14px;background:rgba(255,255,255,.54);color:var(--sy-text);box-shadow:inset 0 1px 3px rgba(19,43,75,.05);font:inherit;line-height:1.55;outline:none}
-      .shiyi-dialog textarea:focus,.shiyi-dialog input:focus{border-color:rgba(22,119,242,.48);background:rgba(255,255,255,.8)}
-      .shiyi-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:5px;margin-top:18px}.shiyi-dialog button.primary{color:white;background:linear-gradient(180deg,#3895ff,#1677f2);border-color:rgba(16,95,213,.55);box-shadow:inset 0 1px rgba(255,255,255,.28),0 4px 12px rgba(22,119,242,.22)}.shiyi-dialog button.primary:hover{background:linear-gradient(180deg,#55a4ff,#2585f7)}
-      .shiyi-history-item{padding:12px 0;border-bottom:1px solid rgba(96,118,147,.22)}.shiyi-history-head{display:flex!important;align-items:center;gap:8px;font-weight:700!important}.shiyi-history-head input{width:auto!important;margin:0!important}.shiyi-muted{color:var(--sy-muted);font-size:12px;line-height:1.6}.shiyi-row{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(96,118,147,.16);padding:9px 0}.shiyi-row span{flex:1;overflow-wrap:anywhere}
-      @media(max-width:480px){#shiyi-dock{right:10px;bottom:max(72px,env(safe-area-inset-bottom));width:min(320px,calc(100vw - 20px));border-radius:20px}.shiyi-dialog{padding:18px;border-radius:24px;max-height:83dvh}.shiyi-actions button{flex:1 1 auto}}
-      @media(prefers-reduced-motion:reduce){#shiyi-dock button,.shiyi-dialog button{transition:none}}
-      @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){#shiyi-dock{background:rgba(245,248,253,.96)}.shiyi-dialog{background:rgba(248,250,254,.98)}}
-    `;hostDocument.head.append(state.style);
-    state.root=hostDocument.createElement('div');state.root.id='shiyi-dock';state.root.classList.add('shiyi-collapsed');state.root.innerHTML='<button type="button" class="shiyi-orb" id="shiyi-expand" aria-label="展开拾忆面板" title="展开拾忆">✦</button><div class="shiyi-dock-content"><button type="button" class="shiyi-collapse" id="shiyi-collapse" aria-label="收起拾忆面板" title="收起">−</button><div class="shiyi-brand">拾忆 · v0.7.1</div><div><button id="shiyi-scan">全量检测</button><button id="shiyi-import">补录 / 恢复</button><button id="shiyi-archive">正文归档</button><button id="shiyi-timeline">时间轴</button><button id="shiyi-review">待审核</button><button id="shiyi-manage">管理</button><button id="shiyi-settings">设置</button></div><div id="shiyi-status">等待聊天加载</div></div>';
+    state.root?.remove();
+    state.style?.remove();
+    // Main extension stylesheet is loaded by the host in the extension document.
+    if (hostDocument !== document) {
+      state.style = hostDocument.createElement('link');
+      state.style.rel = 'stylesheet';
+      state.style.href = new URL('./style.css', import.meta.url).href;
+      hostDocument.head.append(state.style);
+    }
+    state.root=hostDocument.createElement('div');state.root.id='shiyi-dock';state.root.classList.add('shiyi-collapsed');state.root.innerHTML='<button type="button" class="shiyi-orb" id="shiyi-expand" aria-label="展开拾忆面板" title="展开拾忆" aria-expanded="false"></button><div class="shiyi-dock-content"><button type="button" class="shiyi-collapse" id="shiyi-collapse" aria-label="收起拾忆面板" title="收起">−</button><div class="shiyi-brand">拾忆 · v0.7.1</div><div><button id="shiyi-scan">全量检测</button><button id="shiyi-import">补录 / 恢复</button><button id="shiyi-archive">正文归档</button><button id="shiyi-timeline">时间轴</button><button id="shiyi-review">待审核</button><button id="shiyi-manage">管理</button><button id="shiyi-settings">设置</button></div><div id="shiyi-status">等待聊天加载</div></div>';
     hostDocument.body.append(state.root);
+    $('#shiyi-expand', state.root).innerHTML = icon('bookmark', 20);
+    $('#shiyi-collapse', state.root).innerHTML = icon('right', 18);
     const setCollapsed=(collapsed)=>{state.root.classList.toggle('shiyi-collapsed',collapsed);$('#shiyi-expand',state.root).setAttribute('aria-expanded',String(!collapsed));};
     $('#shiyi-expand',state.root).onclick=()=>setCollapsed(false);
     $('#shiyi-collapse',state.root).onclick=()=>setCollapsed(true);
@@ -1114,8 +1175,11 @@ export async function startMemory(shared) {
     $('#shiyi-review',state.root).onclick=async()=>{if(state.open)return;const pending=state.queue.shift()||[...state.deferred.values()].find(Boolean);if(pending){state.deferred.delete(pending.id);await review(pending);}else notice('暂无待审核记忆');};
     $('#shiyi-manage',state.root).onclick=()=>manage();
     $('#shiyi-settings',state.root).onclick=()=>settings();
-    const tableButton=hostDocument.createElement('button');tableButton.textContent='表格档案';$('#shiyi-settings',state.root).before(tableButton);tableButton.onclick=()=>showTables().catch(error);
-    const dossierButton=hostDocument.createElement('button');dossierButton.textContent='留痕档案';$('#shiyi-settings',state.root).before(dossierButton);dossierButton.onclick=()=>{if(!state.open)createDossier({D:hostDocument,modal,identity,check,archive,archivePatch,serial,jumpSource:jumpToSource,notice,read:readMemory}).open().catch(error);};
+    const tableButton=hostDocument.createElement('button');tableButton.id='shiyi-table';tableButton.textContent='表格档案';$('#shiyi-settings',state.root).before(tableButton);tableButton.onclick=()=>showTables().catch(error);
+    const dossierButton=hostDocument.createElement('button');dossierButton.id='shiyi-dossier';dossierButton.textContent='留痕档案';$('#shiyi-settings',state.root).before(dossierButton);dossierButton.onclick=()=>openDossier()?.catch(error);
+    state.setCollapsed = setCollapsed;
+    state.tableView = tableView;
+    state.openDossier = openDossier;
   }
   state.destroy=()=>{
     if(state.disposed)return;
@@ -1133,15 +1197,23 @@ export async function startMemory(shared) {
     state.closeModal?.();
     state.root?.remove();
     state.style?.remove();
+    if (state.stopOpenCommand) {
+      try { state.stopOpenCommand(); } catch (cause) { console.warn('[拾忆] 移除脚本按钮监听失败', cause); }
+    }
   };
   try { ui(); } catch(e) { console.error('[拾忆] UI 初始化失败',e); try { hostWindow.alert('拾忆 v0.7 启动失败：'+e.message); } catch(_) {} }
   // 备用入口：酒馆助手脚本按钮，即使悬浮层被主题遮挡也能打开诊断。
   try {
     if (typeof eventOn==='function' && typeof getButtonEvent==='function') {
-      eventOn(getButtonEvent('拾忆·打开面板'), () => {
-        try { if(!state.root?.isConnected) ui(); else {state.root.style.display='block';state.root.classList.remove('shiyi-collapsed');} notice('通过脚本按钮打开面板'); }
+      const event = getButtonEvent('拾忆·打开面板');
+      const openCommand = () => {
+        if (state.disposed) return;
+        try { if(!state.root?.isConnected) ui(); state.setCollapsed(false); notice('通过脚本按钮打开面板'); }
         catch(e) { hostWindow.alert('拾忆面板异常：'+e.message); }
-      });
+      };
+      const subscription = eventOn(event, openCommand);
+      if (subscription && typeof subscription.stop === 'function') state.stopOpenCommand = () => subscription.stop();
+      else if (typeof eventRemoveListener === 'function') state.stopOpenCommand = () => eventRemoveListener(event, openCommand);
     }
   } catch(e) { console.warn('[拾忆] 脚本按钮绑定失败',e); }
   state.validate=verifyGlobal;

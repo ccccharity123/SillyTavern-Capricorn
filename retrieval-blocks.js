@@ -1,3 +1,4 @@
+import { lastItem } from './compat.js';
 import { lexicalTokens } from './hybrid.js';
 
 export const RETRIEVAL_BLOCK_DOCS = 128;
@@ -97,7 +98,7 @@ export function topCandidates(limit) {
   return {
     matches,
     add(id, score) {
-      if (!(score > 0) || (matches.length === capacity && score <= matches.at(-1).score)) return;
+      if (!(score > 0) || (matches.length === capacity && score <= lastItem(matches).score)) return;
       let left = 0, right = matches.length;
       while (left < right) {
         const middle = (left + right) >>> 1;

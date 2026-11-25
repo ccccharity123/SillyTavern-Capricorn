@@ -1,3 +1,4 @@
+import { hasOwn, lastItem } from './compat.js';
 import { entityProjection, entityScene, excerpt, summaryProjection } from './hybrid.js';
 
 const chapterSize = 12;
@@ -7,7 +8,7 @@ export const shardThreshold = 4000;
 
 function chapterDocument(keys, rows, name) {
   const items = keys.map(key => rows[key]);
-  const title = name || `阶段 ${items[0].sourceMessage}–${items.at(-1).sourceMessage}`;
+  const title = name || `阶段 ${items[0].sourceMessage}–${lastItem(items).sourceMessage}`;
   const key = JSON.stringify(keys);
   return {
     id: 'c:' + key, key, kind: 'chapter', sources: keys,
@@ -53,12 +54,12 @@ export function createDocumentCorpus(rows, entities, options = {}) {
 
   function resolve(id) {
     const key = id.slice(2);
-    if (id.startsWith('s:') && Object.hasOwn(rows, key)) return summary(key);
+    if (id.startsWith('s:') && hasOwn(rows, key)) return summary(key);
     if (id.startsWith('e:') && entityRows.has(key)) return entity(entityRows.get(key));
     if (!id.startsWith('c:') || !options.layers) return;
     try {
       const keys = JSON.parse(key);
-      if (Array.isArray(keys) && keys.length >= 2 && keys.length <= chapterSize && keys.every(key => Object.hasOwn(rows, key))) {
+      if (Array.isArray(keys) && keys.length >= 2 && keys.length <= chapterSize && keys.every(key => hasOwn(rows, key))) {
         return chapterDocument(keys, rows, options.meta?.[keys[0]]?.chapter);
       }
     } catch { /* Ignore invalid derived index IDs. */ }
@@ -86,7 +87,7 @@ export function createDocumentCorpus(rows, entities, options = {}) {
     };
     for (const key of recent) add(summary(key));
     for (const id of [...ranks.keys(), ...Object.keys(echo || {})]) add(resolve(id));
-    for (const key in options.meta) if (options.meta[key]?.star && Object.hasOwn(rows, key)) add(summary(key));
+    for (const key in options.meta) if (options.meta[key]?.star && hasOwn(rows, key)) add(summary(key));
     const mentioned = scene.query.normalize('NFKC').toLowerCase();
     for (const row of entityRows.values()) {
       if (chosen.size >= candidateCount || used >= candidateChars) break;

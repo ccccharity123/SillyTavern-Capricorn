@@ -1,14 +1,17 @@
 import {viewport,playerRect} from './viewport.js';
 import { icon } from './icons.js';
+import { popover } from './ui-popover.js';
 import { createLatestTask } from './music-tasks.js';
 export function parseLrc(text) {
   const out = [];
-  const offset = Number(String(text).match(/\[offset:([+-]?\d+)\]/i)?.[1] || 0) / 1000;
+  const offsetMatch = String(text).match(/\[offset:([+-]?\d+)\]/i);
+  const offset = Number(offsetMatch ? offsetMatch[1] : 0) / 1000;
+  const tag = /\[(\d+):(\d{2})(?:[.:](\d{1,3}))?\]/g;
   for (const line of String(text || '').split(/\r?\n/)) {
-    const tags = [...line.matchAll(/\[(\d+):(\d{2})(?:[.:](\d{1,3}))?\]/g)];
     const words = line.replace(/\[[^\]]*\]/g, '').trim();
     if (!words) continue;
-    for (const t of tags) {
+    let t;
+    while ((t = tag.exec(line))) {
       out.push({
         time: Math.max(0, +t[1] * 60 + +t[2] + Number('0.' + (t[3] || '0')) + offset),
         text: words
@@ -18,115 +21,346 @@ export function parseLrc(text) {
   return out.sort((a, b) => a.time - b.time);
 }
 
-const ICONS = Object.fromEntries(["prev","next","play","pause","stop","lyrics","queue"].map(k=>[k,icon(k,k==="play"||k==="pause"?32:24)]));
+const ICONS = {
+  prev: icon('prev', 22), next: icon('next', 22),
+  play: icon('play', 28, { weight: 'fill' }), pause: icon('pause', 28, { weight: 'fill' }),
+  stop: icon('stop', 24, { weight: 'fill' }),
+  lyrics: icon('lyrics', 20), queue: icon('queue', 20)
+};
+const sizeLabels = { compact: '悬浮卡片', half: '半屏', large: '大半屏' };
 
 export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
   const panel = D.createElement('section');
-  panel.className = 'cap-full-player';
+  panel.className = 'cap-full-player cap-player-layout';
   const android = /Android/i.test(W.navigator.userAgent);
-  if(android) panel.dataset.androidViewport='true';
-  const mobile=android||W.matchMedia?.('(pointer: coarse)')?.matches;
-  if(mobile)panel.dataset.androidViewport='true';
-  const motion=W.matchMedia?.('(prefers-reduced-motion: reduce)');
-  const light=()=>!!(motion?.matches||(W.navigator.deviceMemory>0&&W.navigator.deviceMemory<=4));
-  let viewportFrame=0;
-  function fitViewport(){if(panel.hidden)return;panel.dataset.light=String(light());if(!mobile)return;const r=playerRect(viewport(W),panel.dataset.size);for(const [k,v] of Object.entries(r))panel.style.setProperty('--cap-rect-'+k,v+'px');}
-  function scheduleViewport(){W.cancelAnimationFrame(viewportFrame);viewportFrame=W.requestAnimationFrame(fitViewport);}
-  W.addEventListener('resize',scheduleViewport);W.visualViewport?.addEventListener('resize',scheduleViewport);W.visualViewport?.addEventListener('scroll',scheduleViewport);motion?.addEventListener?.('change',scheduleViewport);
-  function visibility(){if(!D.hidden){scheduleViewport();refresh();}}
-  D.addEventListener('visibilitychange',visibility);
+  const media = W.matchMedia ? W.matchMedia.bind(W) : () => null;
+  const coarse = media('(pointer: coarse)');
+  const mobile = android || Boolean(coarse && coarse.matches);
+  const motion = media('(prefers-reduced-motion: reduce)');
+  const transparency = media('(prefers-reduced-transparency: reduce)');
+  const reduce = () => Boolean((motion && motion.matches) || (transparency && transparency.matches) ||
+    (W.navigator.deviceMemory > 0 && W.navigator.deviceMemory <= 4));
+  let viewportFrame = 0;
+  let observedComposer = null;
+  const composerObserver = W.ResizeObserver ? new W.ResizeObserver(scheduleViewport) : null;
+  function fitViewport() {
+    if (panel.hidden) return;
+    panel.dataset.light = String(reduce());
+    const box = viewport(W);
+    const computed = W.getComputedStyle(q('.cap-fp-safe'));
+    const insets = {
+      top: parseFloat(computed.paddingTop) || 0,
+      bottom: parseFloat(computed.paddingBottom) || 0,
+      left: parseFloat(computed.paddingLeft) || 0,
+      right: parseFloat(computed.paddingRight) || 0
+    };
+    const composer = D.getElementById('send_form') || D.getElementById('send_textarea');
+    if (composer !== observedComposer && composerObserver) {
+      composerObserver.disconnect();
+      if (composer) composerObserver.observe(composer);
+      observedComposer = composer;
+    }
+    if (composer) {
+      const bounds = composer.getBoundingClientRect();
+      if (bounds.width && bounds.height && bounds.top >= box.y &&
+          bounds.top < box.y + box.h && bounds.right > box.x && bounds.left < box.x + box.w) {
+        insets.composer = box.y + box.h - bounds.top;
+      }
+    }
+    const rect = playerRect(box, panel.dataset.size, insets, panel.dataset.bilingual === 'true');
+    panel.dataset.short = String(rect.h < 375);
+    panel.style.setProperty('--cap-rect-x', rect.x + 'px');
+    panel.style.setProperty('--cap-rect-y', rect.y + 'px');
+    panel.style.setProperty('--cap-rect-w', rect.w + 'px');
+    panel.style.setProperty('--cap-rect-h', rect.h + 'px');
+  }
+  function scheduleViewport() {
+    if (viewportFrame || panel.hidden) return;
+    viewportFrame = W.requestAnimationFrame(() => { viewportFrame = 0; fitViewport(); });
+  }
+  function mediaListener(query, method) {
+    if (!query) return;
+    if (query[method + 'EventListener']) query[method + 'EventListener']('change', scheduleViewport);
+    else if (query[method + 'Listener']) query[method + 'Listener'](scheduleViewport);
+  }
+  W.addEventListener('resize', scheduleViewport);
+  if (W.visualViewport) {
+    W.visualViewport.addEventListener('resize', scheduleViewport);
+    W.visualViewport.addEventListener('scroll', scheduleViewport);
+  }
+  mediaListener(motion, 'add');
+  mediaListener(transparency, 'add');
+  function visibility() { if (!D.hidden) { scheduleViewport(); refresh(); } }
+  D.addEventListener('visibilitychange', visibility);
   panel.hidden = true;
-  panel.setAttribute('aria-label', '声屿全屏播放器');
-  panel.innerHTML = `
-    <div class="cap-ambient" aria-hidden="true"><img alt="" hidden></div>
-    <div class="cap-fp-shell">
-      <div class="cap-grabber" data-close title="收起播放器" aria-hidden="true"></div>
-      <header>
-        <button data-close class="cap-fp-pill" aria-label="收起播放器">${icon("down")}</button>
-        <span data-heading class="cap-fp-heading">声屿</span>
-        <div class="cap-fp-tools"><button data-size-switch aria-label="切换尺寸">${icon("size")}</button><button data-settings aria-label="设置">${icon("settings")}</button></div>
-      </header>
-      <div class="cap-hero">
-        <div class="cap-art" title="点击切换播放视图">
-          <img alt="专辑封面" hidden>
-          <span>${icon("music",32)}</span>
-        </div>
-        <div class="cap-meta">
-          <div class="cap-meta-text">
-            <h2></h2>
-            <p data-artist></p>
-          </div>
-          <button type="button" class="cap-badge cap-quality" data-quality aria-label="切换音质" aria-expanded="false"></button>
-        </div>
-      </div>
-      <p data-status role="status" class="cap-fp-status"></p><p data-current-lyric class="cap-current-lyric"></p>
-      <div class="cap-scrubber">
-        <input data-seek type="range" min="0" max="0" step="0.1" aria-label="播放进度">
-        <div class="cap-clock-row">
-          <span data-elapsed>0:00</span>
-          <span data-duration>0:00</span>
-        </div>
-      </div>
-      <div class="cap-transport">
-        <button data-prev aria-label="上一首">${ICONS.prev}</button>
-        <button data-toggle class="cap-play-btn" aria-label="播放或暂停">${ICONS.play}</button>
-        <button data-next aria-label="下一首">${ICONS.next}</button>
-      </div>
-      <div class="cap-volume"><span aria-hidden="true">${icon("volumeLow",16)}</span><input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量"><span aria-hidden="true">${icon("volumeHigh",19)}</span></div><small data-volume-note class="cap-volume-note"></small><small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>
-      <div data-detail class="cap-fp-detail" hidden></div>
-      <nav class="cap-fp-tabs">
-        <button data-mode aria-label="播放模式">${icon("repeat")}</button><button data-lyrics aria-label="歌词" aria-selected="false">${ICONS.lyrics}</button>
-        <button data-queue aria-label="播放队列" aria-selected="false">${ICONS.queue}</button>
-      <button data-library aria-label="曲库">${icon("library")}</button></nav>
-    </div>
-  `;
+  panel.setAttribute('aria-label', '声屿播放器');
+  function iconControl(attr, label, graphic, extra = '') {
+    return '<button type="button" ' + attr + ' aria-label="' + label + '" title="' + label + '" ' +
+      extra + '>' + graphic + '</button>';
+  }
+  panel.innerHTML =
+    '<div class="cap-fp-safe" aria-hidden="true"></div>' +
+    '<div class="cap-ambient" aria-hidden="true"></div>' +
+    '<div class="cap-fp-shell">' +
+      '<header class="cap-fp-header">' +
+        '<span data-heading class="cap-fp-heading">声屿</span>' +
+        iconControl('data-close class="cap-fp-pill"', '收起播放器', icon('down', 20)) +
+        iconControl('data-size-switch', '选择播放器尺寸', icon('size', 20), 'aria-haspopup="menu" aria-expanded="false"') +
+        iconControl('data-settings', '设置', icon('settings', 20)) +
+      '</header>' +
+      '<div class="cap-fp-main">' +
+        '<div class="cap-art"><img alt="专辑封面" hidden><span>' + icon('music', 30) + '</span></div>' +
+        '<div class="cap-meta"><div class="cap-meta-text"><h2></h2><p data-artist></p></div></div>' +
+        '<div class="cap-transport">' +
+          iconControl('data-prev', '上一首', ICONS.prev) +
+          iconControl('data-toggle class="cap-play-btn"', '播放', ICONS.play) +
+          iconControl('data-next', '下一首', ICONS.next) +
+        '</div>' +
+      '</div>' +
+      '<p data-status role="status" class="cap-fp-status"></p>' +
+      '<div class="cap-scrubber">' +
+        '<input data-seek type="range" min="0" max="0" step="0.1" aria-label="播放进度">' +
+        '<div class="cap-clock-row"><span data-elapsed>0:00</span><span data-duration>0:00</span></div>' +
+      '</div>' +
+      '<p data-current-lyric class="cap-current-lyric"><span data-line></span><span data-translation hidden></span></p>' +
+      '<div data-detail class="cap-fp-detail" hidden></div>' +
+      '<small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>' +
+      '<nav class="cap-fp-tabs" aria-label="播放工具">' +
+        '<button type="button" class="cap-quality" data-quality aria-label="切换音质" title="切换音质" aria-haspopup="menu" aria-expanded="false"></button>' +
+        iconControl('data-mode', '播放模式', icon('repeat', 20)) +
+        iconControl('data-lyrics', '歌词', ICONS.lyrics, 'aria-pressed="false"') +
+        iconControl('data-queue', '播放队列', ICONS.queue, 'aria-pressed="false"') +
+        iconControl('data-library', '曲库', icon('library', 20)) +
+        iconControl('data-volume-button', '音量', icon('volumeHigh', 20), 'aria-haspopup="dialog" aria-expanded="false"') +
+        iconControl('data-compact-more', '更多播放工具', icon('more', 20), 'aria-haspopup="menu" aria-expanded="false"') +
+      '</nav>' +
+      '<div class="cap-volume-store" hidden>' +
+        '<div class="cap-volume-content">' +
+          '<label class="cap-volume-label"><span>音量</span><output data-volume-value></output>' +
+            '<input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量"></label>' +
+          '<small data-volume-note class="cap-volume-note"></small>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   D.body.append(panel);
 
-  const q = x => panel.querySelector(x);
+  const q = selector => panel.querySelector(selector);
   const detail = q('[data-detail]');
-  const qualityLabels={standard:'标准',higher:'高清',exhigh:'极高',lossless:'无损',hires:'Hi-Res',jyeffect:'高清环绕',sky:'沉浸环绕',jymaster:'超清母带'};
-  const qualityButton=q('[data-quality]');
-  const qualityMenu=D.createElement('div');qualityMenu.className='cap-quality-menu';qualityMenu.hidden=true;qualityButton.after(qualityMenu);
-  function closeQuality(){qualityMenu.hidden=true;qualityButton.setAttribute('aria-expanded','false')}
-  qualityButton.onclick=()=>{if(!qualityMenu.hidden){closeQuality();return}qualityMenu.replaceChildren();for(const [level,label] of Object.entries(qualityLabels)){const b=D.createElement('button');b.type='button';b.textContent=label+(state().preferredQuality===level?'  ✓':'');b.onclick=()=>{closeQuality();quality?.(level)};qualityMenu.append(b)}qualityMenu.hidden=false;qualityButton.setAttribute('aria-expanded','true')};
-  panel.addEventListener('click',e=>{if(!qualityMenu.contains(e.target)&&!qualityButton.contains(e.target))closeQuality()});
-  panel.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      if (!qualityMenu.hidden) closeQuality();
-      else closePanel();
-    } else if (e.key === ' ' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target?.tagName)) {
-      e.preventDefault();
-      toggle?.();
-    }
-  });
-  const sizes = ['compact','half','large'];
-  let size = 'half'; try { const saved = W.localStorage.getItem('capricorn_player_size'); if(sizes.includes(saved)) size=saved; } catch {}
-  panel.dataset.size=size;
-  const reduce=light;
-
-  function animateFrom(rect, target=panel){if(!rect||reduce()||!target.animate||mobile)return;const r=target.getBoundingClientRect();if(!r.width||!r.height)return;target.animate([{transformOrigin:'top left',transform:`translate(${rect.left-r.left}px,${rect.top-r.top}px) scale(${rect.width/r.width},${rect.height/r.height})`,opacity:.65},{transformOrigin:'top left',transform:'none',opacity:1}],{duration:340,easing:'cubic-bezier(.22,1,.36,1)'});}
-  function setSize(){const before=q('.cap-art').getBoundingClientRect();size=sizes[(sizes.indexOf(size)+1)%sizes.length];panel.dataset.size=size;fitViewport();showTab(size==='large'?'lyrics':'');try{W.localStorage.setItem('capricorn_player_size',size)}catch{};animateFrom(before,q('.cap-art'));q('[data-size-switch]').title='当前：'+({compact:'悬浮卡片',half:'半屏',large:'大半屏'}[size]);}
-  function closePanel(){closeQuality();if(panel.hidden)return;panel.hidden=true;shared.onPlayerClose?.();}
-  function openAux(t){closePanel();shared.openPlayerAux?.(t);}
-  function setTab(t){showTab(tab===t?'':t);} function showTab(t){tab=t;detail.hidden=!tab;panel.dataset.detail=tab;updateTabState();if(tab==='lyrics'){void loadLyrics(true);drawLyrics();}if(tab==='queue'){queueSignature='';queuePage=Math.max(0,Math.floor(state().queueIndex/queuePageSize));drawQueue();}}
-  q('[data-size-switch]').onclick=setSize;
-  q('.cap-art').onclick=()=>{
-    if(size!=='large'){
-      const before=q('.cap-art').getBoundingClientRect();
-      size='large';panel.dataset.size=size;fitViewport();showTab('lyrics');
-      try{W.localStorage.setItem('capricorn_player_size',size)}catch{}
-      animateFrom(before,q('.cap-art'));
-    }
+  const sizeButton = q('[data-size-switch]');
+  const qualityButton = q('[data-quality]');
+  const volumeButton = q('[data-volume-button]');
+  const moreButton = q('[data-compact-more]');
+  const volumeStore = q('.cap-volume-store');
+  const volumeContent = q('.cap-volume-content');
+  const volumeSlider = q('[data-volume]');
+  const volumeValue = q('[data-volume-value]');
+  const volumeNote = q('[data-volume-note]');
+  const volumeGraphic = icon('volumeHigh', 20);
+  const muteGraphic = icon('volumeLow', 20);
+  const qualityCaret = icon('caret-up-down', 13);
+  const qualityLabels = {
+    standard: '标准', higher: '高清', exhigh: '极高', lossless: '无损',
+    hires: 'Hi-Res', jyeffect: '高清环绕', sky: '沉浸环绕', jymaster: '超清母带'
   };
-  q('[data-settings]').onclick=()=>openAux('settings');
-  q('[data-library]').onclick=()=>openAux('library');
-  q('[data-mode]').onclick=()=>{mode?.();refresh();};
-  const volumeSlider=q('[data-volume]');let volumeDragging=false;
-  volumeSlider.onpointerdown=()=>{volumeDragging=true};
-  const paintVol=v=>volumeSlider.style.setProperty('--cap-vol-progress',Math.round(Math.max(0,Math.min(1,Number(v)||0))*100)+'%');
-  volumeSlider.oninput=e=>{paintVol(e.target.value);volume?.(Number(e.target.value));};
-  volumeSlider.onchange=e=>{paintVol(e.target.value);volume?.(Number(e.target.value));volumeDragging=false};
-  volumeSlider.onpointerup=volumeSlider.onpointercancel=volumeSlider.onblur=()=>{volumeDragging=false};
+  const qualityText = D.createElement('span');
+  qualityButton.append(qualityText);
+  qualityButton.insertAdjacentHTML('beforeend', qualityCaret);
+  let size = 'half';
+  try {
+    const saved = W.localStorage.getItem('capricorn_player_size');
+    if (Object.keys(sizeLabels).includes(saved)) size = saved;
+  } catch (_) {}
+  panel.dataset.size = size;
+  sizeButton.title = '当前：' + sizeLabels[size];
+
+  // A local control stays available if the host cannot display a portal.
+  let inline = null;
+  function closeInline(restoreFocus) {
+    if (!inline) return;
+    const entry = inline;
+    inline = null;
+    D.removeEventListener('pointerdown', inlineOutside, true);
+    D.removeEventListener('keydown', inlineEscape, true);
+    entry.anchor.setAttribute('aria-expanded', 'false');
+    if (entry.restore) entry.restore();
+    entry.box.remove();
+    if (restoreFocus) entry.anchor.focus();
+  }
+  function inlineOutside(event) {
+    if (inline && !inline.box.contains(event.target) && !inline.anchor.contains(event.target)) closeInline(false);
+  }
+  function inlineEscape(event) {
+    if (event.key === 'Escape' && inline) {
+      event.preventDefault();
+      closeInline(true);
+    }
+  }
+  function showInline(anchor, label, content, restore) {
+    const box = D.createElement('div');
+    box.className = 'cap-fp-inline';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-label', label);
+    const close = D.createElement('button');
+    close.type = 'button';
+    close.className = 'cap-fp-inline-close';
+    close.textContent = '关闭';
+    close.onclick = () => closeInline(true);
+    box.append(close, content);
+    panel.append(box);
+    inline = { anchor, box, restore };
+    anchor.setAttribute('aria-expanded', 'true');
+    D.addEventListener('pointerdown', inlineOutside, true);
+    D.addEventListener('keydown', inlineEscape, true);
+    close.focus();
+  }
+  function closeMenus() {
+    popover.closeWithin(panel);
+    closeInline(false);
+  }
+  function openSurface(options, makeFallback) {
+    if (inline && inline.anchor === options.anchor) { closeInline(true); return; }
+    closeInline(false);
+    if (!popover.open(options)) makeFallback();
+  }
+  function openChoices(anchor, label, items) {
+    openSurface({ anchor, label, items }, () => {
+      const menu = D.createElement('div');
+      menu.className = 'cap-fp-inline-items';
+      for (const item of items) {
+        const button = D.createElement('button');
+        button.type = 'button';
+        button.textContent = item.label;
+        if (item.checked != null) button.setAttribute('aria-pressed', String(item.checked));
+        button.disabled = Boolean(item.disabled);
+        button.onclick = () => { closeInline(true); item.action(); };
+        menu.append(button);
+      }
+      showInline(anchor, label, menu);
+    });
+  }
+  function animateFrom(rect, target = panel) {
+    if (!rect || !rect.width || !rect.height || reduce() || !target.animate || mobile) return;
+    const bounds = target.getBoundingClientRect();
+    if (!bounds.width || !bounds.height) return;
+    target.animate([
+      { transformOrigin:'top left',
+        transform:'translate(' + (rect.left - bounds.left) + 'px,' + (rect.top - bounds.top) +
+          'px) scale(' + (rect.width / bounds.width) + ',' + (rect.height / bounds.height) + ')', opacity:.65 },
+      { transformOrigin:'top left', transform:'none', opacity:1 }
+    ], { duration:250, easing:'cubic-bezier(.22,1,.36,1)' });
+  }
+  function setSize(value) {
+    if (size === value) return;
+    closeMenus();
+    const art = q('.cap-art');
+    const before = art.getBoundingClientRect();
+    size = value;
+    panel.dataset.size = size;
+    sizeButton.title = '当前：' + sizeLabels[size];
+    if (size === 'large' && !tab) showTab('lyrics');
+    else updateTabState();
+    fitViewport();
+    try { W.localStorage.setItem('capricorn_player_size', size); } catch (_) {}
+    animateFrom(before, art);
+  }
+  function closePanel() {
+    closeMenus();
+    if (panel.hidden) return;
+    panel.hidden = true;
+    if (composerObserver) composerObserver.disconnect();
+    observedComposer = null;
+    if (shared.onPlayerClose) shared.onPlayerClose();
+  }
+  function openAux(name) {
+    closePanel();
+    if (shared.openPlayerAux) shared.openPlayerAux(name);
+  }
+  function showTab(name) {
+    tab = name;
+    updateTabState();
+    if (tab === 'lyrics') {
+      void loadLyrics(true);
+      drawLyrics();
+    }
+    if (tab === 'queue') {
+      queueSignature = '';
+      queuePage = Math.max(0, Math.floor(state().queueIndex / queuePageSize));
+      drawQueue();
+    }
+  }
+  function openCompactDetail(name, label) {
+    showTab(name);
+    openSurface({
+      anchor: moreButton, label, role: 'dialog', content: detail, className: 'cap-fp-detail-popover',
+      minWidth: 250, onClose: updateTabState
+    }, () => {
+      const restore = detail.parentNode;
+      detail.hidden = false;
+      showInline(moreButton, label, detail, () => { restore.append(detail); updateTabState(); });
+    });
+    if (!detail.hidden) updateTime();
+  }
+  function switchMode() {
+    if (mode) mode();
+    refresh();
+  }
+  sizeButton.onclick = () => openChoices(sizeButton, '播放器尺寸', Object.keys(sizeLabels).map(value => ({
+    label: sizeLabels[value], checked: size === value, action: () => setSize(value)
+  })));
+  qualityButton.onclick = () => openChoices(qualityButton, '播放音质', Object.keys(qualityLabels).map(level => ({
+    label: qualityLabels[level], checked: state().preferredQuality === level, action: () => { if (quality) quality(level); }
+  })));
+  q('[data-settings]').onclick = () => openAux('settings');
+  q('[data-library]').onclick = () => openAux('library');
+  q('[data-mode]').onclick = switchMode;
+  moreButton.onclick = () => openChoices(moreButton, '播放工具', [
+    { label: '歌词', icon: 'lyrics', action: () => openCompactDetail('lyrics', '同步歌词') },
+    { label: '播放队列', icon: 'queue', action: () => openCompactDetail('queue', '播放队列') },
+    { label: '播放模式：' + (q('[data-mode]').title || '顺序播放'), icon: 'repeat', action: switchMode },
+    { label: '曲库', icon: 'library', action: () => openAux('library') },
+    { label: '设置', icon: 'settings', action: () => openAux('settings') }
+  ]);
+  let volumeDragging = false;
+  function updateVolume() {
+    const audioState = state();
+    const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
+    const percent = Math.round(value * 100) + '%';
+    if (!volumeDragging) volumeSlider.value = value;
+    if (volumeValue.textContent !== percent) {
+      volumeValue.textContent = percent;
+      volumeSlider.setAttribute('aria-valuetext', percent);
+      volumeButton.title = '音量 ' + percent;
+    }
+    const supports = audioState.volumeSupported !== false;
+    const hint = supports ? '' : '当前音源仅支持系统音量键';
+    if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
+    volumeSlider.title = supports ? '音量' : '当前音源可能需要系统音量键';
+    const muted = String(value === 0);
+    if (volumeButton.dataset.muted !== muted) {
+      volumeButton.dataset.muted = muted;
+      volumeButton.innerHTML = muted === 'true' ? muteGraphic : volumeGraphic;
+    }
+  }
+  function applyVolume() {
+    const value = Number(volumeSlider.value);
+    const before = state().userVolume;
+    if (volume && value !== (before == null ? audio.volume : before)) volume(value);
+    updateVolume();
+  }
+  volumeButton.onclick = () => {
+    updateVolume();
+    openSurface({
+      anchor: volumeButton, role: 'dialog', label: '音量', content: volumeContent,
+      initialFocus: volumeSlider, minWidth: 216, onClose: () => { volumeDragging = false; }
+    }, () => showInline(volumeButton, '音量', volumeContent, () => {
+      volumeDragging = false;
+      volumeStore.append(volumeContent);
+    }));
+  };
+  volumeSlider.onpointerdown = () => { volumeDragging = true; };
+  volumeSlider.oninput = applyVolume;
+  volumeSlider.onchange = () => { applyVolume(); volumeDragging = false; };
+  volumeSlider.onpointerup = volumeSlider.onpointercancel = volumeSlider.onblur = () => { volumeDragging = false; };
 
   const img = q('.cap-art img');
   const ambient = q('.cap-ambient');
@@ -140,6 +374,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   let queuePage = 0, queueSignature = '';
   let lastIslandSig = '', manualScrollUntil = 0;
   let bgEpoch = 0, bgURL = null, bgActive = null, bgPending = null, bgFrame = 0, colorProbe = null;
+  let coverUrl = '', colorUrl = '', backdropSource = '';
+  const backgroundObserver = W.MutationObserver ? new W.MutationObserver(syncBackdrop) : null;
+  if (backgroundObserver) backgroundObserver.observe(D.body, { attributes: true, attributeFilter: ['data-cap-bg-source'] });
   panel.dataset.coverState = 'missing';
   ambient.replaceChildren();
   detail.addEventListener('touchstart',()=>{manualScrollUntil=Date.now()+5000},{passive:true});
@@ -189,8 +426,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       if(dead||epoch!==bgEpoch)return;
       bgPending=null;
       panel.dataset.coverState='missing';
-      panel.dataset.colorStatus='missing';
-      panel.style.removeProperty('--cap-art-color');
     };
     art.src=url;
   }
@@ -203,19 +438,34 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   img.onerror=()=>{
     img.hidden=true;
     img.alt='封面加载失败';
-    panel.dataset.colorStatus='missing';
-    panel.style.removeProperty('--cap-art-color');
   };
-  img.onload=()=>{
-    img.classList.add('is-loaded');
+  function syncBackdrop() {
+    if (dead || panel.hidden) return;
+    const source = D.body.dataset.capBgSource;
+    const colored = source === 'color';
+    const url = coverUrl;
+    setAmbient(colored || source === 'album' ? url : '');
+    if (!colored || !url) {
+      if (backdropSource !== source || colorUrl) {
+        backdropSource = source;
+        cancelColorProbe();
+        colorUrl = '';
+        panel.dataset.colorStatus = 'missing';
+        panel.style.removeProperty('--cap-art-color');
+      }
+      return;
+    }
+    backdropSource = source;
+    if (url === colorUrl) return;
     cancelColorProbe();
-    const url=img.src;
+    colorUrl = url;
+    panel.style.removeProperty('--cap-art-color');
     const probe=new W.Image();
     colorProbe=probe;
     probe.crossOrigin='anonymous';
     panel.dataset.colorStatus='loading';
     probe.onload=()=>{
-      if(dead||img.src!==url)return;
+      if (dead || colorUrl !== url) return;
       colorProbe=null;
       try{
         const canvas=D.createElement('canvas');
@@ -235,22 +485,26 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       }catch{panel.dataset.colorStatus='fallback'}
     };
     probe.onerror=()=>{
-      if(dead||img.src!==url)return;
+      if (dead || colorUrl !== url) return;
       colorProbe=null;
       panel.dataset.colorStatus='fallback';
     };
     probe.src=url;
-  };
+  }
   const clock = n => Number.isFinite(n) ? `${Math.floor(n / 60)}:${String(Math.floor(n % 60)).padStart(2, '0')}` : '0:00';
   function button(label, fn) {
-    const b = D.createElement('button');
-    const controls = {'↑':['up','上移'],'↓':['arrowdown','下移'],'×':['close','移除']};
-    if (Object.hasOwn(controls,label)) {
-      b.innerHTML=icon(controls[label][0],18);
-      b.setAttribute('aria-label',controls[label][1]);
-    } else b.textContent = label;
-    b.onclick = fn;
-    return b;
+    const node = D.createElement('button');
+    node.type = 'button';
+    node.textContent = label;
+    node.onclick = fn;
+    return node;
+  }
+  function queueControl(name, label, fn) {
+    const node = button('', fn);
+    node.innerHTML = icon(name, 18);
+    node.title = label;
+    node.setAttribute('aria-label', label);
+    return node;
   }
   function currentLyricIndex(time) {
     let lo=0,hi=lines.length;
@@ -272,8 +526,10 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     shared.onIslandUpdate({playing:isPlaying,lyric,translation,title:track?.title||'声屿',artist:track?.artist||'',text,coverUrl:track?.coverUrl||''});
   }
   function updateTabState() {
-    q('[data-lyrics]').setAttribute('aria-selected', String(tab === 'lyrics'));
-    q('[data-queue]').setAttribute('aria-selected', String(tab === 'queue'));
+    q('[data-lyrics]').setAttribute('aria-pressed', String(tab === 'lyrics'));
+    q('[data-queue]').setAttribute('aria-pressed', String(tab === 'queue'));
+    panel.dataset.detail = tab;
+    detail.hidden = !tab || (size === 'compact' && detail.parentNode === q('.cap-fp-shell'));
   }
   function drawQueue(){
     const {queue,queueRevision,queueIndex,resolving}=state();
@@ -290,8 +546,15 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       const track=queue[i];
       const row=D.createElement('div');
       row.className='cap-queue-row'+(i===queueIndex?' is-current':'');
-      const name=button((i===queueIndex?'♫ ':'')+track.title+' — '+track.artist,()=>play(i));
-      const up=button('↑',()=>move(i,i-1)),down=button('↓',()=>move(i,i+1)),del=button('×',()=>remove(i));
+      const name = button(track.title + ' — ' + track.artist, () => play(i));
+      if (i === queueIndex) {
+        name.insertAdjacentHTML('afterbegin', icon('music', 15, { weight: 'fill' }));
+        name.setAttribute('aria-current', 'true');
+      }
+      const up = queueControl('up', '上移', () => move(i, i - 1));
+      const down = queueControl('arrowdown', '下移', () => move(i, i + 1));
+      const del = queueControl('trash', '移除', () => remove(i));
+      del.className = 'cap-fp-danger';
       up.disabled=resolving||i===0;
       down.disabled=resolving||i===queue.length-1;
       del.disabled=resolving||i===queueIndex;
@@ -371,7 +634,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
         return {...line,translation};
       });
       lyricStatus='loaded';
-      drawLyrics();
+      if (tab === 'lyrics') drawLyrics();
+      else updateTime();
       emitIsland();
     }catch{
       if(!dead&&task.active()){lyricStatus='error';drawLyrics();}
@@ -388,20 +652,34 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     q('[data-elapsed]').textContent=clock(time);
     q('[data-duration]').textContent=clock(audio.duration);
     const index = currentLyricIndex(time);
-    const text = lines[index]?.text || '';
-    const currentLine=q('[data-current-lyric]');
-    if(currentLine.textContent!==text)currentLine.textContent=text;
-    const {userVolume,volumeSupported}=state();
-    if(!volumeDragging){const v=userVolume??audio.volume;volumeSlider.value=v;paintVol(v);}
-    q('[data-volume-note]').textContent=volumeSupported===false?'当前音源仅支持系统音量键':'';
-    volumeSlider.title=volumeSupported===false?'当前音源可能需要系统音量键':'音量';
-    if(tab!=='lyrics'||!lines.length||index===active)return;
+    const current = lines[index];
+    const text = current ? current.text : '';
+    const translation = current ? current.translation : '';
+    const currentLine = q('[data-line]');
+    const translatedLine = q('[data-translation]');
+    if (currentLine.textContent !== text) currentLine.textContent = text;
+    if (translatedLine.textContent !== translation) translatedLine.textContent = translation;
+    translatedLine.hidden = !translation;
+    const bilingual = String(Boolean(translation));
+    if (panel.dataset.bilingual !== bilingual) {
+      panel.dataset.bilingual = bilingual;
+      if (size === 'compact') fitViewport();
+    }
+    updateVolume();
+    if(tab!=='lyrics'||detail.hidden||!lines.length||index===active)return;
     detail.children[active]?.classList.remove('active');
     active=index;
     const line=detail.children[index];
     if(line){
       line.classList.add('active');
-      if(Date.now()>=manualScrollUntil)detail.scrollTo({top:detail.scrollTop+line.getBoundingClientRect().top-detail.getBoundingClientRect().top-detail.clientHeight/2+line.offsetHeight/2,behavior:reduce()?'auto':'smooth'});
+      if (Date.now() >= manualScrollUntil) {
+        const top = detail.scrollTop + line.getBoundingClientRect().top - detail.getBoundingClientRect().top -
+          detail.clientHeight / 2 + line.offsetHeight / 2;
+        if (reduce() || !detail.scrollTo) detail.scrollTop = top;
+        else {
+          try { detail.scrollTo({ top, behavior: 'smooth' }); } catch (_) { detail.scrollTop = top; }
+        }
+      }
     }
   }
   function refresh(){
@@ -413,21 +691,31 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       else{lyricTasks.cancel();lines=[];lyricIdentity='';lyricStatus='';}
     }
     emitIsland();
-    if(panel.hidden){setAmbient(track?.coverUrl||'');return;}
+    if(panel.hidden)return;
     q('[data-heading]').textContent=resolving?'正在加载':started&&!audio.paused?'正在播放':'声屿';
     q('[data-status]').textContent=statusText||'';
     q('h2').textContent=track?.title||'尚未播放';
     q('[data-artist]').textContent=track?.artist||'选择一首歌曲';
-    qualityButton.textContent=(qualityLabels[actualQuality]||actualQuality||'音质')+' ⌄';
-    qualityButton.disabled=resolving||!canChangeQuality;
-    if(qualityButton.disabled)closeQuality();
-    q('[data-toggle]').innerHTML=resolving?ICONS.stop:audio.paused?ICONS.play:ICONS.pause;
+    qualityText.textContent = qualityLabels[actualQuality] || actualQuality || '音质';
+    qualityButton.disabled = resolving || !canChangeQuality;
+    if (qualityButton.disabled) {
+      popover.closeWithin(qualityButton);
+      if (inline && inline.anchor === qualityButton) closeInline(false);
+    }
+    const transport = q('[data-toggle]');
+    const transportIcon = resolving ? 'stop' : audio.paused ? 'play' : 'pause';
+    const actionLabel = resolving ? '取消加载' : audio.paused ? '播放' : '暂停';
+    if (transport.dataset.icon !== transportIcon) {
+      transport.dataset.icon = transportIcon;
+      transport.innerHTML = ICONS[transportIcon];
+      transport.title = actionLabel;
+      transport.setAttribute('aria-label', actionLabel);
+    }
     panel.dataset.playing=String(!audio.paused);
-    panel.dataset.resolving=String(!!resolving);
     const modeButton=q('[data-mode]');
     const modeIcon=playMode==='shuffle'?'shuffle':playMode==='one'?'one':'repeat';
     if(modeButton.dataset.icon!==modeIcon){
-      modeButton.innerHTML=icon(modeIcon);
+      modeButton.innerHTML=icon(modeIcon, 20);
       modeButton.dataset.icon=modeIcon;
       modeButton.title=playMode==='shuffle'?'随机播放':playMode==='one'?'单曲循环':'顺序播放';
       modeButton.setAttribute('aria-label',modeButton.title+'，点击切换');
@@ -435,20 +723,16 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const id=JSON.stringify([track?.id,track?.neteaseId,track?.coverUrl]);
     if(id!==identity){
       identity=id;
-      cancelColorProbe();
-      img.classList.remove('is-loaded');
       img.hidden=true;
       img.removeAttribute('src');
       img.alt='专辑封面';
-      let ambientUrl='';
-      panel.dataset.colorStatus='missing';
-      panel.style.removeProperty('--cap-art-color');
+      coverUrl = '';
       try{
         const url=new URL(track?.coverUrl);
-        if(url.protocol==='https:'||url.protocol==='http:'){img.src=url.href;img.hidden=false;ambientUrl=url.href;}
+        if(url.protocol==='https:'||url.protocol==='http:'){img.hidden=false;img.src=url.href;coverUrl=url.href;}
       }catch{}
-      setAmbient(ambientUrl);
     }
+    syncBackdrop();
     if(tab==='queue')drawQueue();
     updateTime();
   }
@@ -466,7 +750,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   q('[data-toggle]').onclick = toggle;
   q('[data-prev]').onclick = () => next(-1);
   q('[data-next]').onclick = () => next(1);
-  q('[data-lyrics]').onclick = () => { setTab('lyrics'); };
+  q('[data-lyrics]').onclick = () => { showTab(tab === 'lyrics' ? '' : 'lyrics'); };
   q('[data-queue]').onclick = () => { showTab(tab==='queue'?(size==='large'?'lyrics':''):'queue'); };
   seek.oninput = () => {
     dragging = true;
@@ -484,10 +768,24 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   const onTime=()=>updateTime(); for (const ev of events) audio.addEventListener(ev, ev==='timeupdate'?onTime:refresh);
   emitIsland();
   return {
-    open() { if(!panel.hidden)return;const r=D.querySelector('#capricorn-hub .cap-island')?.getBoundingClientRect();panel.hidden=false;fitViewport();identity='';queueSignature='';manualScrollUntil=0;showTab(size==='large'?'lyrics':'');refresh();animateFrom(r); }, close:closePanel, isOpen:()=>!panel.hidden,
+    open() {
+      if (!panel.hidden) return;
+      const island = D.querySelector('#capricorn-hub .cap-island');
+      panel.hidden = false;
+      fitViewport();
+      manualScrollUntil = 0;
+      showTab(tab || (size === 'large' ? 'lyrics' : ''));
+      refresh();
+      animateFrom(island && island.getBoundingClientRect());
+    },
+    close: closePanel,
+    isOpen: () => !panel.hidden,
     refresh,resetOnline,
     destroy(){
       dead=true;
+      closeMenus();
+      if (composerObserver) composerObserver.disconnect();
+      if (backgroundObserver) backgroundObserver.disconnect();
       lyricTasks.cancel();
       cancelAmbientLoad();
       cancelColorProbe();
@@ -496,7 +794,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       W.removeEventListener('resize',scheduleViewport);
       W.visualViewport?.removeEventListener('resize',scheduleViewport);
       W.visualViewport?.removeEventListener('scroll',scheduleViewport);
-      motion?.removeEventListener?.('change',scheduleViewport);
+      mediaListener(motion, 'remove');
+      mediaListener(transparency, 'remove');
       D.removeEventListener('visibilitychange',visibility);
       for(const event of events)audio.removeEventListener(event,event==='timeupdate'?onTime:refresh);
       img.onload=img.onerror=null;

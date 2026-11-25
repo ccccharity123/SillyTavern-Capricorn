@@ -1,10 +1,11 @@
+import { hasOwn } from './compat.js';
 import { canonicalRowsFromSources, parseMemorySource } from './canon.js';
 import { createSummaryStatistics } from './memory-route.js';
 import { createTableIndex } from './memory-table-index.js';
 import { buildLedger, createTableCache } from './weave.js';
 
 function own(object, key) {
-  return Object.hasOwn(object, key) ? object[key] : undefined;
+  return hasOwn(object, key) ? object[key] : undefined;
 }
 
 // One message snapshot can serve multiple reads of the chat variables.
@@ -97,7 +98,7 @@ export function createMemoryData(hash) {
       function activeDossiers(selectedSummaries = activeSummaries()) {
         const { rows, entities } = activeLedger();
         const manual = (archive.dossier || []).filter(row => (row.sources || []).every(key =>
-          Object.hasOwn(rows, key) || Object.hasOwn(selectedSummaries, key)));
+          hasOwn(rows, key) || hasOwn(selectedSummaries, key)));
         const manualIds = new Set(manual.map(row => row.id));
         return [...manual, ...entities.filter(row => !manualIds.has(row.id))];
       }
@@ -107,7 +108,7 @@ export function createMemoryData(hash) {
         for (const row of activeLedger().entities) {
           for (const key of row.sources) {
             const source = parseMemorySource(key);
-            if (source && !Object.hasOwn(sources, key)) {
+            if (source && !hasOwn(sources, key)) {
               sources[key] = { sourceMessage: source.floor, sourceHash: source.version, title: '随层档案', content: row.body };
             }
           }
@@ -125,7 +126,7 @@ export function createMemoryData(hash) {
           if (!own(live, id) && !own(stored, id)) return;
           origin = kind === 'summary' ? 'archive' : 'message';
           keys = [id];
-          active = Object.hasOwn(live, id);
+          active = hasOwn(live, id);
         } else if (kind === 'dossier' || kind === 'foreshadow' || kind === 'knowledge') {
           const projection = activeLedger();
           const matches = row => row.id === id;
@@ -133,7 +134,7 @@ export function createMemoryData(hash) {
           const live = kind === 'knowledge' ? projection.knowledge.find(matches) : projection.entities.find(matches);
           const previous = kind === 'knowledge' ? undefined : (data.weave?.entities || []).find(matches);
           const manualActive = manual && (manual.sources || []).every(key =>
-            Object.hasOwn(projection.rows, key) || Object.hasOwn(activeSummaries(), key));
+            hasOwn(projection.rows, key) || hasOwn(activeSummaries(), key));
           const row = options.origin === 'manual' ? manual : manualActive ? manual : live || manual || previous;
           if (!row || kind === 'foreshadow' && row.kind !== '伏笔') return;
           origin = row === manual ? 'manual' : 'derived';
@@ -153,7 +154,7 @@ export function createMemoryData(hash) {
             scope, chatId, key, floor: parsed?.floor ?? null, version: parsed?.version ?? null,
             storyTime: typeof storyTime === 'string' && storyTime ? storyTime : null,
             active: kind === 'summary' || kind === 'table' ? active : Boolean(
-              Object.hasOwn(activeSummaries(), key) || Object.hasOwn(activeLedger().rows, key)),
+              hasOwn(activeSummaries(), key) || hasOwn(activeLedger().rows, key)),
           };
         });
         return { scope, chatId, kind, id, origin, active, sources };

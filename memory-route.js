@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 const encoder = new TextEncoder();
 
 function rowCost(row) {
@@ -30,8 +31,8 @@ export function createSummaryStatistics() {
   return {
     update,
     reconcile(rows) {
-      for (const key of entries.keys()) if (!Object.hasOwn(rows, key)) update(key, null);
-      for (const key in rows) if (Object.hasOwn(rows, key)) update(key, rows[key]);
+      for (const key of entries.keys()) if (!hasOwn(rows, key)) update(key, null);
+      for (const key in rows) if (hasOwn(rows, key)) update(key, rows[key]);
     },
     read: () => ({ count: entries.size, estimate, encoded, revision }),
   };

@@ -1,3 +1,4 @@
+import { lastItem } from './compat.js';
 import { createScheduler, maintenancePriority } from './scheduler.js';
 import { mountPresetControls } from './preset.js';
 import { mountGlobalRegexControl } from './regex-global.js';
@@ -18,23 +19,29 @@ import { mountNetease } from './netease.js';
 import { detachDisabledMemory, startMemory } from './memory.js';
 import { startMusic } from './music.js';
 import { mountMobile } from './mobile.js';
+import { mountSelects, nativeSelectsEnabled, refreshSelect, setNativeSelects } from './ui-select.js';
+import { popover } from './ui-popover.js';
+import { mountSettings } from './ui-settings.js';
+import { viewport } from './viewport.js';
+import { mountMemoryDock } from './ui-memory-dock.js';
 
 const W = window, D = document;
 W.__capricornExtension?.destroy?.();
+if (W.navigator.deviceMemory > 0 && W.navigator.deviceMemory <= 4) D.body.dataset.capVisualLite = '';
 const flags = { memory: true, music: true };
 try {
   const x = JSON.parse(W.localStorage.getItem('capricorn_modules') || '{}');
   for (const k of Object.keys(flags)) if (typeof x[k] === 'boolean') flags[k] = x[k];
 } catch {}
 
-const SHIYI_ICONS = {bookmark:icon("note",20),palette:icon("palette",18),refresh:icon("refresh",18),close:icon("right",18),note:icon("music",18)};
-
 const context = () => getHostContext(W);
 const chatIdentity = () => getChatIdentity(context());
 const scope = () => chatIdentity().scope;
 const shared = { flags, onIslandUpdate: null, scope, chatIdentity };
 let nativeControlsCleanup;
-let cleanupMemorySide, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, dead = false, tab = '';
+const selectAdapters = [];
+let settingsUi;
+let memoryDock, appearanceApi, cloud, cleanupMobile, cleanupNetease, memory, music, timer, dead = false, tab = '';
 let memoryStartup;
 let lastGeneration = '尚未生成';
 
@@ -43,31 +50,38 @@ root.id = 'capricorn-hub';
 root.innerHTML = `
   <button class="cap-island" aria-expanded="false" data-playing="false" aria-label="声屿音乐播放器" title="声屿">
     <span class="cap-island-colors" aria-hidden="true"></span>
+    <span class="cap-island-orb" aria-hidden="true">
+      <span class="cap-island-note-svg">${icon('music', 21)}</span>
+      <span class="cap-island-bars"><i></i><i></i><i></i></span>
+    </span>
     <span class="cap-island-lyric-wrap">
       <span class="cap-island-lyric">声屿</span>
       <span class="cap-island-translation" hidden></span>
     </span>
   </button>
-  <nav hidden>
-    <header>
-      <strong>声屿</strong>
-      <button data-tab="settings" aria-label="声屿设置">${icon("settings")}</button><button data-close aria-label="关闭">${icon("close")}</button>
+  <nav aria-label="声屿" hidden>
+    <header class="cap-hub-header">
+      <div class="cap-hub-primary" role="tablist" aria-label="声屿面板">
+        <button type="button" data-tab="library" role="tab" aria-controls="cap-hub-content"><span aria-hidden="true">${icon('library', 15)}</span><span>曲库</span></button>
+        <button type="button" data-tab="resonance" role="tab" aria-controls="cap-hub-content"><span aria-hidden="true">${icon('resonance', 15)}</span><span>共鸣</span></button>
+        <button type="button" data-tab="settings" role="tab" aria-controls="cap-hub-settings"><span aria-hidden="true">${icon('settings', 15)}</span><span>设置</span></button>
+      </div>
+      <div class="cap-hub-actions">
+        <button type="button" data-open-player aria-label="打开播放器" title="打开播放器">${icon('play', 17)}</button>
+        <button type="button" data-close aria-label="关闭声屿" title="关闭声屿">${icon('close', 17)}</button>
+      </div>
     </header>
-    <div class="cap-tabs" role="tablist">
-      <button data-tab="music" role="tab">播放</button>
-      <button data-tab="library" role="tab">曲库</button><button data-tab="resonance" role="tab">共鸣</button>
-    </div>
-    <small></small>
-    <section class="cap-settings" hidden>
-      <label>外观模式
-        <select>
+    <small role="status"></small>
+    <section class="cap-settings" id="cap-hub-settings" role="tabpanel" aria-label="声屿设置" hidden>
+      <label data-cap-settings-section="appearance">外观模式
+        <select data-cap-select="segment">
           <option value="auto">跟随系统</option>
           <option value="light">日间浅色</option>
           <option value="dark">夜间深色</option>
         </select>
       </label>
     </section>
-    <main class="cap-content"></main>
+    <div id="cap-hub-content" class="cap-content" role="tabpanel" aria-label="声屿内容"></div>
   </nav>
 `;
 D.body.append(root);
@@ -76,8 +90,32 @@ const nav = root.querySelector('nav'), island = root.querySelector('.cap-island'
 const islandLyric = root.querySelector('.cap-island-lyric');
 const islandTranslation = root.querySelector('.cap-island-translation');
 const content = root.querySelector('.cap-content'), settings = root.querySelector('.cap-settings');
+const primaryTabs = nav.querySelector('.cap-hub-primary');
+const playerButton = nav.querySelector('[data-open-player]');
+const closeButton = nav.querySelector('[data-close]');
 
-let islandCover='', islandColorEpoch=0, islandImage, islandFrame;
+function mountSelectRoot(element) {
+  if (!element) return;
+  try { selectAdapters.push(mountSelects(element)); }
+  catch (error) { console.warn('[Capricorn] 下拉框回退原生控件', error); }
+}
+
+function fitHub() {
+  if (nav.hidden) return;
+  const rect = viewport(W);
+  nav.style.setProperty('--cap-hub-vx', rect.x + 'px');
+  nav.style.setProperty('--cap-hub-vy', rect.y + 'px');
+  nav.style.setProperty('--cap-hub-vw', rect.w + 'px');
+  nav.style.setProperty('--cap-hub-vh', rect.h + 'px');
+}
+const visualViewport = W.visualViewport;
+W.addEventListener('resize', fitHub);
+if (visualViewport) {
+  visualViewport.addEventListener('resize', fitHub);
+  visualViewport.addEventListener('scroll', fitHub);
+}
+
+let islandCover='', currentIslandCover='', islandColorEpoch=0, islandImage, islandFrame;
 function stopIslandArtwork() {
   ++islandColorEpoch;
   if (islandImage) {
@@ -107,9 +145,14 @@ function colorIsland(url){
   let u;try{u=new URL(url);if(!['https:','http:'].includes(u.protocol))throw Error();}catch{show('transparent');return;}
   const img=new Image();islandImage=img;img.crossOrigin='anonymous';img.onload=()=>{try{const c=D.createElement('canvas');c.width=c.height=24;const x=c.getContext('2d');x.drawImage(img,0,0,24,24);const d=x.getImageData(0,0,24,24).data;const bins=new Map();for(let i=0;i<d.length;i+=4){if(d[i+3]<128)continue;const rgb=[d[i],d[i+1],d[i+2]];const k=rgb.map(v=>v>>5).join(',');const v=bins.get(k)||[0,0,0,0];v[0]+=rgb[0];v[1]+=rgb[1];v[2]+=rgb[2];v[3]++;bins.set(k,v);}const colors=[...bins.values()].sort((a,b)=>b[3]-a[3]).slice(0,3).map(v=>'rgb('+v.slice(0,3).map(n=>Math.round(n/v[3])).join(',')+')');if(!colors.length)throw Error();show('linear-gradient(135deg,'+[colors[0],colors[1]||colors[0],colors[2]||colors[0]].join(',')+')');}catch{show('transparent');}};img.onerror=()=>show('transparent');img.src=u.href;
 }
+function refreshIslandArtwork() {
+  colorIsland(root.dataset.islandArtwork === 'true' ? currentIslandCover : '');
+}
+root.addEventListener('capricorn-island-artwork', refreshIslandArtwork);
 shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
   if (dead) return;
-  colorIsland(coverUrl||'');
+  currentIslandCover = coverUrl || '';
+  refreshIslandArtwork();
   island.dataset.playing = playing ? 'true' : 'false';
   island.title = playing ? `${title || '正在播放'} · 点击展开声屿` : '声屿（点击打开播放器）';
   const translated = playing ? (translation || '') : '';
@@ -129,15 +172,20 @@ shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
 
 const libraryNav = D.createElement('div');
 libraryNav.hidden = true;
-libraryNav.className = 'cap-tabs';
+libraryNav.className = 'cap-library-switch';
+libraryNav.setAttribute('role', 'tablist');
+libraryNav.setAttribute('aria-label', '曲库来源');
 for (const [key,label] of [['library','本地 / 角色'],['cloud','网易云']]) {
-  const b = D.createElement('button'); b.textContent = label; b.dataset.tab = key; libraryNav.append(b);
+  const b = D.createElement('button');
+  b.type = 'button';
+  b.textContent = label;
+  b.dataset.tab = key;
+  b.setAttribute('role', 'tab');
+  b.setAttribute('aria-controls', 'cap-hub-content');
+  libraryNav.append(b);
 }
 content.before(libraryNav);
-const timeline = D.createElement('section');
-timeline.className = 'cap-timeline';
-
-let timelineEpoch = 0, shownScope = '', memoryViewFrame;
+let memoryViewFrame;
 const resonance=D.createElement('section');resonance.className='cap-resonance';resonance.hidden=true;content.append(resonance);
 let resonanceEpoch=0;
 let recall;
@@ -147,7 +195,7 @@ function refreshMemoryViews() {
   memoryViewFrame = requestAnimationFrame(() => {
     memoryViewFrame = null;
     void recall?.refresh();
-    if (memoryOpen()) void refreshTimeline();
+    if (memoryDock?.isOpen()) void memoryDock.refresh();
     if (tab === 'resonance') void showResonance();
   });
 }
@@ -162,272 +210,27 @@ function tracksByFloor(songs) {
   return byFloor;
 }
 async function showResonance(){
-  const epoch = ++resonanceEpoch, key = scope();
-  resonance.dataset.scope = key;
-  resonance.replaceChildren();
-  const el = (tag, text, parent = resonance, cls = '') => {
-    const n = D.createElement(tag);
-    if (cls) n.className = cls;
-    if (text != null) n.textContent = text;
-    parent?.append(n);
-    return n;
-  };
-  el('p', '正在读取当前聊天的剧情原声…', resonance, 'cap-res-empty');
-  try {
-    const [memories, soundtrack] = await Promise.all([memory?.timelineRows(), music?.timelineSongs()]);
-    const rows = (memories || []).sort((a, b) => a.floor - b.floor);
-    const songs = tracksByFloor(soundtrack || []);
-    if (epoch !== resonanceEpoch || key !== scope() || tab !== 'resonance') return;
-    resonance.replaceChildren();
-
-    const head = el('div', null, resonance, 'cap-res-header');
-    el('h3', '共鸣 · 剧情原声', head);
-    const recallBtn = el('button', null, head, 'cap-res-recall');
-    recallBtn.type = 'button';
-    recallBtn.innerHTML = `${icon('sparkles', 15)}<span>回响</span>`;
-    recallBtn.title = '打开回响 · 沉浸式剧情漫游';
-    recallBtn.onclick = () => recall?.open();
-
-    const actions = el('div', null, resonance, 'cap-res-actions');
-    const play = el('button', null, actions, 'cap-res-play-all');
-    play.type = 'button';
-    play.innerHTML = `${icon('play', 14)}<span>播放原声带</span>`;
-
-    const lock = el('button', null, actions, 'cap-res-lock');
-    lock.type = 'button';
-    const syncLock = () => {
-      const locked = !!shared.recallLocked;
-      lock.setAttribute('aria-pressed', String(locked));
-      lock.innerHTML = `${icon(locked ? 'lock' : 'unlock', 14)}<span>${locked ? '已锁切歌' : '跟随剧情'}</span>`;
-      lock.title = locked ? '点击解除音乐锁定，恢复跟随剧情切歌' : '点击锁定当前音乐，暂停剧情自动切歌';
-    };
-    syncLock();
-    lock.onclick = () => { shared.recallLocked = !shared.recallLocked; syncLock(); };
-
-    const filters = el('div', null, resonance, 'cap-res-filters');
-    const q = el('input', null, filters, 'cap-res-search');
-    q.type = 'search';
-    q.placeholder = '搜索歌曲、歌手或剧情…';
-    const chapter = el('select', null, filters, 'cap-res-chapter');
-    for (const c of ['', ...new Set(rows.map(r => r.chapter).filter(Boolean))]) {
-      const o = el('option', c || '全部章节', chapter);
-      o.value = c;
-    }
-
-    const list = el('div', null, resonance, 'cap-res-list');
-    const valid = () => key === scope() && tab === 'resonance';
-
-    function render() {
-      list.replaceChildren();
-      const grouped = new Map();
-      for (const r of rows) {
-        if (chapter.value && r.chapter !== chapter.value) continue;
-        for (const t of songs.get(String(r.floor)) ?? []) {
-          if (q.value && !fuzzy(`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter} ${r.traceText || ''}`, q.value)) continue;
-          const g = grouped.get(t.id) || { t, rows: [] };
-          if (g.rows.at(-1) !== r) g.rows.push(r);
-          grouped.set(t.id, g);
-        }
-      }
-      const playableIds = [...grouped.values()].filter(g => g.t.playable).map(g => g.t.id);
-      play.disabled = !playableIds.length;
-      play.onclick = () => {
-        if (valid()) {
-          shared.recallLocked = true;
-          syncLock();
-          music.playStoryQueue(playableIds, chapter.value || '剧情原声带');
-        }
-      };
-      if (!grouped.size) {
-        el('p', '暂无匹配的已归档剧情音乐', list, 'cap-res-empty');
-        return;
-      }
-      for (const { t, rows: matches } of grouped.values()) {
-        const d = el('details', null, list, 'cap-res-card');
-        const sum = el('summary', null, d, 'cap-res-summary');
-        const info = el('div', null, sum, 'cap-res-track-info');
-        el('strong', t.title, info);
-        el('small', `${t.artist} · ${matches.length} 幕`, info);
-
-        const playBtn = el('button', null, sum, 'cap-res-play-btn');
-        playBtn.type = 'button';
-        playBtn.innerHTML = icon('play', 14);
-        playBtn.disabled = !t.playable;
-        playBtn.title = t.playable ? '播放此曲' : '暂无可用音源';
-        playBtn.setAttribute('aria-label', '播放 ' + t.title);
-        playBtn.onclick = e => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (valid()) {
-            shared.recallLocked = true;
-            syncLock();
-            music.playStoryQueue([t.id], t.title);
-          }
-        };
-
-        const body = el('div', null, d, 'cap-res-moments');
-        for (const r of matches) {
-          const item = el('div', null, body, 'cap-res-moment');
-          const meta = el('div', null, item, 'cap-res-moment-text');
-          el('strong', `${r.chapter ? r.chapter + ' · ' : ''}${r.title}`, meta);
-          el('small', r.when, meta);
-          const j = el('button', '便签', item, 'cap-res-jump');
-          j.type = 'button';
-          j.onclick = () => {
-            if (!valid()) return;
-            close();
-            memory.root.classList.remove('shiyi-collapsed');
-            void refreshTimeline(r.floor);
-          };
-        }
-      }
-    }
-    q.oninput = render;
-    chapter.onchange = render;
-    render();
-  } catch (e) {
-    if (epoch === resonanceEpoch) resonance.textContent = '读取失败：' + e.message;
-  }
+ const epoch=++resonanceEpoch,key=scope();resonance.dataset.scope=key;resonance.replaceChildren();
+ const el=(tag,text,parent=resonance)=>{const n=D.createElement(tag);n.textContent=text;parent.append(n);return n;};
+ el('p','正在读取当前聊天的剧情原声…');
+ try{
+ const [memories,soundtrack]=await Promise.all([memory?.timelineRows(),music?.timelineSongs()]);
+ const rows=(memories||[]).sort((a,b)=>a.floor-b.floor);
+ const songs=tracksByFloor(soundtrack||[]);
+ if(epoch!==resonanceEpoch||key!==scope()||tab!=='resonance')return;
+ resonance.replaceChildren();el('h3','共鸣 · 剧情原声');el('button','回响 · 沉浸式回忆').onclick=()=>recall?.open();
+ const lock=el('button',shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）');lock.onclick=()=>{shared.recallLocked=!shared.recallLocked;lock.textContent=shared.recallLocked?'解除音乐锁定':'锁定音乐（暂停剧情切歌）';};
+ const q=el('input','');q.placeholder='搜索歌曲、歌手、剧情';q.setAttribute('aria-label','搜索歌曲、歌手、剧情');const chapter=el('select','');chapter.dataset.capSelect='search';chapter.setAttribute('aria-label','章节');for(const c of ['',...new Set(rows.map(r=>r.chapter).filter(Boolean))]){const o=el('option',c||'全部章节',chapter);o.value=c;}
+ const play=el('button','播放筛选原声带');const list=el('div','');
+ const valid=()=>key===scope()&&tab==='resonance';
+ function render(){list.replaceChildren();const grouped=new Map();for(const r of rows){if(chapter.value&&r.chapter!==chapter.value)continue;for(const t of songs.get(String(r.floor))??[]){if(q.value&&!fuzzy(`${t.title} ${t.artist} ${r.title} ${r.content} ${r.chapter} ${r.traceText||''}`,q.value))continue;const g=grouped.get(t.id)||{t,rows:[]};if(lastItem(g.rows)!==r)g.rows.push(r);grouped.set(t.id,g);}}
+ play.disabled=![...grouped.values()].some(g=>g.t.playable);play.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([...grouped.values()].filter(g=>g.t.playable).map(g=>g.t.id),chapter.value||'剧情原声带');}};
+ if(!grouped.size)el('p','暂无匹配的已归档剧情音乐',list);
+ for(const {t,rows:matches} of grouped.values()){const d=el('details','',list);el('summary',`${t.title} · ${t.artist} (${matches.length})`,d);const b=el('button','播放此曲',d);b.disabled=!t.playable;b.onclick=()=>{if(valid()){shared.recallLocked=true;lock.textContent='解除音乐锁定';music.playStoryQueue([t.id],t.title);}};for(const r of matches){el('p',`${r.chapter||''} ${r.title} · ${r.when}`,d);const j=el('button','查看剧情便签',d);j.onclick=()=>{if(!valid())return;close();if(memoryDock)void memoryDock.open(r.floor);else memory.root.classList.remove('shiyi-collapsed');};}}
+ }q.oninput=render;chapter.onchange=render;render();
+ }catch(e){if(epoch===resonanceEpoch)resonance.textContent='读取失败：'+e.message;}
 }
-const memoryOpen = () => memory?.root && !memory.root.classList.contains('shiyi-collapsed');
 
-async function refreshTimeline(targetFloor) {
-  const epoch = ++timelineEpoch, key = scope();
-  shownScope = key;
-  timeline.replaceChildren();
-  const note = D.createElement('p');
-  note.className = 'cap-timeline-empty';
-  note.textContent = '正在读取剧情便签…';
-  timeline.append(note);
-  try {
-    const [rows, soundtrack] = await Promise.all([memory.timelineRows(), music?.timelineSongs()]);
-    const memories = rows.sort((a, b) => a.floor - b.floor);
-    const songs = tracksByFloor(soundtrack || []);
-    if (epoch !== timelineEpoch || key !== scope() || !memoryOpen()) return;
-    note.textContent = memories.length ? `已归档 ${memories.length} 条剧情便签` : '暂无已归档摘要，请检测或导入历史。';
-
-    const toolbar = D.createElement('div');
-    toolbar.className = 'cap-timeline-toolbar';
-    const searchBox = D.createElement('div');
-    searchBox.className = 'cap-search-box';
-    searchBox.innerHTML = `<span class="cap-search-icon">${icon('search', 15)}</span>`;
-    const query = D.createElement('input');
-    query.type = 'search';
-    query.placeholder = '搜索剧情便签、章节或音乐…';
-    const clearBtn = D.createElement('button');
-    clearBtn.type = 'button';
-    clearBtn.className = 'cap-search-clear';
-    clearBtn.innerHTML = icon('close', 13);
-    clearBtn.setAttribute('aria-label', '清空搜索');
-    clearBtn.hidden = true;
-    searchBox.append(query, clearBtn);
-    toolbar.append(searchBox, note);
-    timeline.replaceChildren(toolbar);
-
-    const cards = D.createElement('div');
-    cards.className = 'cap-timeline-cards';
-    timeline.append(cards);
-
-    const pageSize = 40, targetIndex = memories.findIndex(m => m.floor === targetFloor);
-    let offset = targetIndex < 0 ? 0 : Math.floor(targetIndex / pageSize) * pageSize, jumpToTarget = targetIndex >= 0;
-    let filtered = memories;
-
-    const pager = D.createElement('div');
-    pager.className = 'cap-timeline-pager';
-    const previous = D.createElement('button'); previous.type = 'button'; previous.textContent = '上一页';
-    const pageInfo = D.createElement('span'); pageInfo.className = 'cap-page-info';
-    const more = D.createElement('button'); more.type = 'button'; more.textContent = '下一页';
-    pager.append(previous, pageInfo, more);
-    timeline.append(pager);
-
-    function render() {
-      cards.replaceChildren();
-      const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-      const currentPage = Math.floor(offset / pageSize) + 1;
-      pager.hidden = filtered.length <= pageSize;
-      previous.disabled = offset === 0;
-      more.disabled = filtered.length <= offset + pageSize;
-      pageInfo.textContent = `${currentPage} / ${totalPages}`;
-
-      if (!filtered.length && memories.length) {
-        const empty = D.createElement('p');
-        empty.className = 'cap-timeline-empty';
-        empty.textContent = '未找到匹配的剧情便签';
-        cards.append(empty);
-        return;
-      }
-
-      for (const m of filtered.slice(offset, offset + pageSize)) {
-        const card = D.createElement('details');
-        card.className = 'cap-story';
-        if (jumpToTarget && m.floor === targetFloor) {
-          card.open = true;
-          requestAnimationFrame(() => { if (card.isConnected) card.scrollIntoView({ block: 'center' }); });
-        }
-        const head = D.createElement('summary');
-        const field = n => m.content.match(new RegExp('<' + n + '>([\\s\\S]*?)</' + n + '>'))?.[1]?.trim();
-        const tracks = songs.get(String(m.floor)) ?? [];
-        for (const [cls, value] of [
-          ['cap-story-time', field('时间') || m.when],
-          ['cap-story-title', (m.star ? '★ ' : '') + (m.chapter ? m.chapter + ' · ' : '') + (field('标题') || m.title.replace(/^记忆\d+｜/, ''))],
-          ['cap-story-song', tracks.length ? '♫ ' + tracks.map(t => t.title + ' — ' + t.artist).join(' / ') : '暂无音乐记录']
-        ]) {
-          const el = D.createElement('span');
-          el.className = cls;
-          if (cls === 'cap-story-song' && !tracks.length) el.dataset.empty = 'true';
-          el.textContent = value;
-          head.append(el);
-        }
-        const body = D.createElement('p');
-        body.textContent = field('摘要') || m.content;
-
-        const actions = D.createElement('div');
-        actions.className = 'cap-story-actions';
-        for (const t of tracks) {
-          const button = D.createElement('button');
-          button.type = 'button';
-          button.className = 'cap-story-play';
-          button.innerHTML = icon('play', 12);
-          const playLabel = D.createElement('span');
-          playLabel.textContent = t.title;
-          button.append(playLabel);
-          button.disabled = !t.playable;
-          button.onclick = () => { if (key === scope()) music.playTimeline(t.id); };
-          actions.append(button);
-        }
-        const jump = D.createElement('button');
-        jump.type = 'button';
-        jump.className = 'cap-story-jump';
-        jump.textContent = `第 ${m.floor} 楼`;
-        jump.title = '跳转到聊天原楼层';
-        jump.onclick = () => { if (key === scope() && !memory.jump(m.floor)) W.alert('请先加载该历史楼层'); };
-        actions.append(jump);
-
-        card.append(head, body, actions);
-        cards.append(card);
-      }
-      jumpToTarget = false;
-    }
-
-    const applySearch = () => {
-      const text = query.value.trim();
-      clearBtn.hidden = !text;
-      filtered = text
-        ? memories.filter(m => fuzzy(`${m.title} ${m.content} ${m.chapter} ${m.traceText || ''} ${(songs.get(String(m.floor)) ?? []).map(t => t.title + ' ' + t.artist).join(' ')}`, text))
-        : memories;
-      offset = 0;
-      note.textContent = text ? `匹配 ${filtered.length} / ${memories.length} 条便签` : (memories.length ? `已归档 ${memories.length} 条剧情便签` : '暂无已归档摘要，请检测或导入历史。');
-      render();
-    };
-    query.oninput = applySearch;
-    clearBtn.onclick = () => { query.value = ''; applySearch(); query.focus(); };
-    previous.onclick = () => { offset = Math.max(0, offset - pageSize); render(); timeline.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
-    more.onclick = () => { offset += pageSize; render(); timeline.scrollIntoView({ block: 'start', behavior: 'smooth' }); };
-    render();
-  } catch (e) {
-    if (epoch === timelineEpoch) note.textContent = '读取失败：' + e.message;
-  }
-}
 let theme = 'auto';
 try { theme = W.localStorage.getItem('capricorn_theme') || 'auto'; } catch {}
 const themeSelect = settings.querySelector('select');
@@ -439,34 +242,86 @@ themeSelect.onchange = () => {
 };
 
 function select(t) {
-  if(t==='resonance'&&(!memory||!music))t='settings';
-  if(t==='cloud'&&!shared.accountReady?.())t='library';
+  if (t === 'cloud' && !shared.accountReady?.()) t = 'library';
+  if ((t === 'library' || t === 'music' || t === 'cloud') && !music) t = 'settings';
+  if (t === 'resonance' && (!memory || !music)) t = 'settings';
+  if (t === 'music') t = 'library';
+  if (t !== tab) popover.closeWithin(nav);
   tab = t;
   root.dataset.tab = t;
   D.body.dataset.capricornTab = t;
-  settings.hidden = t !== 'settings';resonance.hidden=t!=='resonance';if(t==='resonance')void showResonance();
+  settings.hidden = t !== 'settings';
+  content.hidden = !['library', 'cloud', 'resonance'].includes(t);
+  resonance.hidden = t !== 'resonance';
+  if (t === 'resonance') void showResonance();
   if (t === 'cloud') cloud?.show(); else cloud?.hide();
   libraryNav.hidden = !['library','cloud'].includes(t)||!shared.accountReady?.();
-  nav.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-  if (['music','library'].includes(t) && flags.music) music?.show(); else music?.hide();
-  if (t === 'memory' && flags.memory) memory?.root?.classList.remove('shiyi-collapsed');
+  for (const b of primaryTabs.querySelectorAll('[data-tab]')) {
+    const selected = b.dataset.tab === (t === 'cloud' ? 'library' : t);
+    if (b.getAttribute('aria-selected') !== String(selected)) {
+      b.firstElementChild.innerHTML = icon(b.dataset.tab, 15, { active: selected });
+    }
+    b.setAttribute('aria-selected', String(selected));
+    b.tabIndex = selected ? 0 : -1;
+  }
+  for (const b of libraryNav.querySelectorAll('[data-tab]')) {
+    const selected = b.dataset.tab === t;
+    b.setAttribute('aria-selected', String(selected));
+    b.tabIndex = selected ? 0 : -1;
+  }
+  if (t === 'library') music?.show(); else music?.hide();
+  if (t === 'memory' && flags.memory) memoryDock?.open();
 }
 
 function close() {
+  popover.closeWithin(nav);
   nav.hidden = true;
+  root.dataset.panelOpen = 'false';
   island.setAttribute('aria-expanded', 'false');
   select('');
 }
 
 shared.onPlayerClose=()=>island.setAttribute('aria-expanded','false');
-shared.openPlayerAux=t=>{nav.hidden=false;island.setAttribute('aria-expanded','true');select(t);};
+function openHub(t) {
+  nav.hidden = false;
+  root.dataset.panelOpen = 'true';
+  island.setAttribute('aria-expanded', 'true');
+  fitHub();
+  select(t);
+}
+shared.openPlayerAux = openHub;
+function openPlayer() {
+  if (!music) return;
+  close();
+  music.openPlayer();
+  island.setAttribute('aria-expanded', 'true');
+}
 island.onclick = () => {
   if (cleanupMobile?.consumeDrag()) return;
   if(music?.isPlayerOpen()){music.closePlayer();return;}
-  close();music?.openPlayer();island.setAttribute('aria-expanded','true');
+  openPlayer();
 };
-nav.querySelector('[data-close]').onclick = ()=>{close();music?.openPlayer();island.setAttribute('aria-expanded','true');};
-nav.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => {if(b.dataset.tab==='music'){close();music?.openPlayer();}else select(b.dataset.tab);});
+closeButton.onclick = close;
+playerButton.onclick = openPlayer;
+nav.querySelectorAll('[data-tab]').forEach(button => { button.onclick = () => select(button.dataset.tab); });
+function navigateTabs(event) {
+  const buttons = Array.from(event.currentTarget.querySelectorAll('button:not([hidden])'));
+  const current = buttons.indexOf(event.target);
+  if (current < 0) return;
+  let next;
+  switch (event.key) {
+    case 'ArrowLeft': next = (current + buttons.length - 1) % buttons.length; break;
+    case 'ArrowRight': next = (current + 1) % buttons.length; break;
+    case 'Home': next = 0; break;
+    case 'End': next = buttons.length - 1; break;
+    default: return;
+  }
+  event.preventDefault();
+  buttons[next].click();
+  buttons[next].focus();
+}
+primaryTabs.onkeydown = libraryNav.onkeydown = navigateTabs;
+nav.addEventListener('keydown', event => { if (event.key === 'Escape' && !event.defaultPrevented) close(); });
 
 const maintenance=createScheduler(W,()=>D.hidden);
 shared.maintenance = maintenance;
@@ -480,23 +335,10 @@ function tick() {
     if (music) maintenance.enqueue('声屿', task => music.tick(task), maintenancePriority.audio,
       { lane: 'audio', scoped: true, duringForeground: true });
     if (memory) maintenance.enqueue('拾忆', task => memory.tick(task), maintenancePriority.memory, { scoped: true });
-    if (shownScope !== key && memoryOpen()) void refreshTimeline();
+    memoryDock?.tick();
     if (tab === 'resonance' && resonance.dataset.scope !== key) {
       unlockRecall();
       void showResonance();
-    }
-    if (memory?.root) {
-      const b = memory.root.querySelector('#shiyi-expand');
-      if (b) {
-        const cnt = Number(memory.pending?.() || 0);
-        b.dataset.pending = cnt > 0 ? String(cnt) : '';
-        b.title = cnt > 0 ? `拾忆（${cnt} 条待审核）` : '展开拾忆';
-        const dot = b.querySelector('.cap-shiyi-dot');
-        if (dot) {
-          dot.hidden = cnt <= 0;
-          dot.textContent = cnt > 9 ? '9+' : String(cnt);
-        }
-      }
     }
   } catch (e) {
     root.querySelector('small').textContent = e.message;
@@ -544,15 +386,21 @@ W.__capricornExtension = {
     generation.destroy();
     stopIslandArtwork();
     if (memoryViewFrame != null) cancelAnimationFrame(memoryViewFrame);
-    ++timelineEpoch;
     ++resonanceEpoch;
     recall?.close();
+    popover.destroy();
+    for (const adapter of selectAdapters) adapter.destroy();
+    settingsUi?.destroy();
+    W.removeEventListener('resize', fitHub);
+    if (visualViewport) {
+      visualViewport.removeEventListener('resize', fitHub);
+      visualViewport.removeEventListener('scroll', fitHub);
+    }
     maintenance.close();
     D.removeEventListener('visibilitychange', resume);
-    D.removeEventListener('keydown', onKeyDown);
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
-    cleanupMemorySide?.();
+    memoryDock?.destroy();
     cleanupNetease?.();
     cloud?.destroy();
     clearInterval(timer);
@@ -561,6 +409,7 @@ W.__capricornExtension = {
     nativeControlsCleanup?.();
     root.remove();
     delete D.body.dataset.capricornTab;
+    delete D.body.dataset.capVisualLite;
   }
 };
 
@@ -568,13 +417,6 @@ function resume() {
   if (D.hidden || dead) return;
   maintenance.resume();
   tick();
-}
-
-function onKeyDown(e) {
-  if (e.key !== 'Escape' || dead) return;
-  if (!nav.hidden) { close(); return; }
-  if (music?.isPlayerOpen?.()) { music.closePlayer(); return; }
-  if (memoryOpen()) memory.root.classList.add('shiyi-collapsed');
 }
 
 async function boot() {
@@ -591,173 +433,40 @@ const musicStartup = flags.music ? startMusic(shared).then(module => {
 await Promise.all([memoryStartup, musicStartup]);
 if (dead) return;
 
-// Independent viewport geometry for the memory tab and panel.
-function mountMemorySide(dock, button) {
-  const win = dock.ownerDocument.defaultView;
-  const key = 'capricorn_memory_tab_y';
-  let ratio = 0.42, drag = null, suppress = false;
-  try { const saved = win.localStorage.getItem(key); if (saved !== null && Number.isFinite(Number(saved))) ratio = Math.max(0, Math.min(1, Number(saved))); } catch {}
-  const viewport = () => ({ top: win.visualViewport?.offsetTop || 0, height: win.visualViewport?.height || win.innerHeight });
-  function bounds() { const v = viewport(); return { min: v.top + 12, max: Math.max(v.top + 12, v.top + v.height - 58) }; }
-  function fit() {
-    const v = viewport(), b = bounds();
-    dock.style.setProperty('--cap-memory-tab-top', `${b.min + ratio * (b.max - b.min)}px`);
-    dock.style.setProperty('--cap-memory-panel-top', `${v.top + 12}px`);
-    dock.style.setProperty('--cap-memory-panel-height', `${Math.max(1, v.height - 24)}px`);
-  }
-  function down(e) {
-    if (!e.isPrimary || e.button !== 0 || !dock.classList.contains('shiyi-collapsed')) return;
-    suppress = false;
-    drag = { id: e.pointerId, y: e.clientY, top: dock.getBoundingClientRect().top, moved: false };
-    try { button.setPointerCapture(e.pointerId); } catch {}
-  }
-  function move(e) {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dy = e.clientY - drag.y;
-    if (!drag.moved && Math.abs(dy) < 7) return;
-    drag.moved = true;
-    const b = bounds(); ratio = Math.max(0, Math.min(1, (drag.top + dy - b.min) / Math.max(1, b.max - b.min)));
-    fit();
-  }
-  function end(e) {
-    if (!drag || e.pointerId !== drag.id) return;
-    suppress = drag.moved; drag = null;
-    if (suppress) try { win.localStorage.setItem(key, String(ratio)); } catch {}
-  }
-  function click(e) { if (suppress && e.detail !== 0) { suppress = false; e.preventDefault(); e.stopImmediatePropagation(); } }
-  const listeners = [['pointerdown', down], ['pointermove', move], ['pointerup', end], ['pointercancel', end], ['lostpointercapture', end]];
-  for (const [name, fn] of listeners) button.addEventListener(name, fn);
-  button.addEventListener('click', click, true);
-  win.addEventListener('resize', fit);
-  win.visualViewport?.addEventListener('resize', fit);
-  win.visualViewport?.addEventListener('scroll', fit);
-  fit();
-  return () => {
-    for (const [name, fn] of listeners) button.removeEventListener(name, fn);
-    button.removeEventListener('click', click, true);
-    win.removeEventListener('resize', fit);
-    win.visualViewport?.removeEventListener('resize', fit);
-    win.visualViewport?.removeEventListener('scroll', fit);
-  };
-}
-
 if (memory?.root) {
-  recall=createRecall({D,W,scope,memory,music,shared});
-  const recallButton=D.createElement("button");recallButton.textContent="回响";memory.root.querySelector("#shiyi-settings").before(recallButton);recallButton.onclick=()=>recall.open();
+  recall = createRecall({ D, W, scope, memory, music, shared });
   memory.onChange = refreshMemoryViews;
-  memory.root.classList.add('cap-memory-side');
-
-  // 收起态：纯图标精致耳扣，彻底移除文字
-  const expandBtn = memory.root.querySelector('#shiyi-expand');
-  if (expandBtn) {
-    expandBtn.innerHTML = `${SHIYI_ICONS.bookmark}<span class="cap-shiyi-dot" hidden></span>`;
-    expandBtn.setAttribute('aria-label', '展开拾忆');
-    expandBtn.title = '点击展开拾忆，拖动调整位置';
-    cleanupMemorySide = mountMemorySide(memory.root, expandBtn);
-  }
-
-  // 展开态顶栏：纯图标操作栏
-  const collapseBtn = memory.root.querySelector('#shiyi-collapse');
-  if (collapseBtn) {
-    collapseBtn.innerHTML = SHIYI_ICONS.close;
-    collapseBtn.title = '收起侧边栏';
-  }
-
-  const brand = memory.root.querySelector('.shiyi-brand');
-  const headerBar = D.createElement('div');
-  headerBar.className = 'cap-shiyi-topbar';
-
-  const brandIcon = D.createElement('span');
-  brandIcon.className = 'cap-shiyi-mark';
-  brandIcon.innerHTML = SHIYI_ICONS.bookmark;
-  brandIcon.title = '拾忆便签';
-
-  const iconGroup = D.createElement('div');
-  iconGroup.className = 'cap-shiyi-icon-actions';
-
-  const refreshIconBtn = D.createElement('button');
-  refreshIconBtn.type = 'button';
-  refreshIconBtn.className = 'cap-shiyi-icon-btn';
-  refreshIconBtn.innerHTML = SHIYI_ICONS.refresh;
-  refreshIconBtn.title = '刷新时间轴';
-  refreshIconBtn.setAttribute('aria-label', '刷新时间轴');
-  refreshIconBtn.onclick = () => {
-    refreshIconBtn.classList.remove('is-spinning');
-    void refreshIconBtn.offsetWidth;
-    refreshIconBtn.classList.add('is-spinning');
-    void refreshTimeline();
-  };
-
-  const styleBtn = D.createElement('button');
-  styleBtn.type = 'button';
-  styleBtn.className = 'cap-shiyi-icon-btn cap-note-style-btn';
-  styleBtn.innerHTML = SHIYI_ICONS.palette;
-  styleBtn.title = '外观、字体与自定义 CSS';
-  styleBtn.setAttribute('aria-label', '外观、字体与自定义 CSS');
-  styleBtn.onclick = () => appearanceApi?.toggleInlineDrawer();
-
-  iconGroup.append(refreshIconBtn, styleBtn);
-  if (collapseBtn) {
-    collapseBtn.classList.add('cap-shiyi-icon-btn');
-    iconGroup.append(collapseBtn);
-  }
-  headerBar.append(brandIcon, iconGroup);
-
-  if (brand) {
-    brand.hidden = true;
-    brand.before(headerBar);
-  }
-
-  const tools = memory.root.querySelector('#shiyi-scan').parentElement;
-  const more = D.createElement('details');
-  more.className = 'cap-memory-tools';
-  const label = D.createElement('summary');
-  label.innerHTML = `${icon('more', 18)}<span>管理与设置</span>`;
-  label.setAttribute('aria-label', '拾忆管理与设置');
-  more.append(label);
-  // Main memory destinations stay pinned at top above timeline for instant access.
-  const primaryNav = D.createElement('nav');
-  primaryNav.className = 'cap-memory-primary-nav';
-  primaryNav.setAttribute('aria-label', '拾忆主要功能');
-  for (const [id, textLabel] of [
-    ['shiyi-timeline', '时间轴'],
-    ['shiyi-table', '表格'],
-    ['shiyi-dossier', '档案'],
-  ]) {
-    const button = id === 'shiyi-table'
-      ? [...tools.querySelectorAll('button')].find(el => el.textContent.trim() === '表格档案')
-      : id === 'shiyi-dossier'
-        ? [...tools.querySelectorAll('button')].find(el => el.textContent.trim() === '留痕档案')
-        : tools.querySelector('#shiyi-timeline');
-    if (!button) continue;
-    button.id = id;
-    button.textContent = textLabel;
-    button.type = 'button';
-    button.classList.add('cap-memory-primary-btn');
-    primaryNav.append(button);
-  }
-  tools.before(primaryNav, more, timeline);
-  more.append(tools);
-  more.addEventListener('toggle', () => { if (!more.open) appearanceApi?.closeInlineDrawer(); });
-  expandBtn?.addEventListener('click', () => void refreshTimeline());
-  const refresh = memory.root.querySelector('#shiyi-timeline');
-  if (refresh) {
-    refresh.textContent = '时间轴';
-    refresh.onclick = () => void refreshTimeline();
+  try {
+    memoryDock = mountMemoryDock({
+      memory, music, scope,
+      openAppearance: () => appearanceApi?.toggleInlineDrawer(),
+      closeAppearance: () => appearanceApi?.closeInlineDrawer(),
+      openRecall: () => recall.open(),
+    });
+  } catch (error) {
+    console.warn('[Capricorn] 拾忆界面回退', error);
   }
 }
 
 if (music?.root) { content.append(music.root); }
 D.addEventListener('visibilitychange',resume);
-D.addEventListener('keydown',onKeyDown);
 timer = setInterval(() => { if (!D.hidden) tick(); }, 4000);
 tick();
 
 const controls = D.createElement('div');
 controls.className = 'cap-backup';
-controls.innerHTML = '<h4>模块与数据</h4><button data-backup>导出统一备份</button><button data-restore>从备份恢复</button><button data-cache>重建聊天检索索引</button><input type="file" accept=".json,application/json" hidden><p data-result role="status"></p>';
+controls.dataset.capSettingsSection = 'backup';
+controls.innerHTML = '<h4>数据与索引</h4><button data-backup>导出统一备份</button><button data-restore>从备份恢复</button><button data-cache>重建聊天检索索引</button><input type="file" accept=".json,application/json" hidden><p data-result role="status"></p>';
 settings.append(controls);
-const health=D.createElement('details');health.innerHTML='<summary>运行诊断</summary><pre style="white-space:pre-wrap"></pre><button type="button">刷新诊断</button>';controls.append(health);
+const services = D.createElement('section');
+services.className = 'cap-backup';
+services.dataset.capSettingsSection = 'services';
+services.innerHTML = '<h4>运行与兼容性</h4><label><input type="checkbox" data-native-selects> 使用系统下拉菜单</label>';
+const nativeSelects = services.querySelector('[data-native-selects]');
+nativeSelects.checked = nativeSelectsEnabled(D);
+nativeSelects.onchange = () => setNativeSelects(D, nativeSelects.checked);
+settings.append(services);
+const health=D.createElement('details');health.innerHTML='<summary>运行诊断</summary><pre style="white-space:pre-wrap"></pre><button type="button">刷新诊断</button>';services.append(health);
 const updateHealth=()=>{
   const m=maintenance.status();
   const buffer = maintenance.budget();
@@ -776,11 +485,12 @@ const updateHealth=()=>{
 health.querySelector('button').onclick=updateHealth;
 health.addEventListener('toggle',()=>{if(health.open)updateHealth();});
 
-island.hidden=!flags.music;
-nav.querySelector('[data-tab="resonance"]').hidden=!(flags.music&&flags.memory);
-if(!flags.music){for(const b of nav.querySelectorAll('[data-tab="music"],[data-tab="library"]'))b.hidden=true;nav.querySelector('[data-close]').onclick=close;}
+island.hidden = !music;
+playerButton.hidden = !music;
+primaryTabs.querySelector('[data-tab="library"]').hidden = !music;
+primaryTabs.querySelector('[data-tab="resonance"]').hidden = !(music && memory);
 
-const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');controls.append(followLabel);
+const followLabel=D.createElement('label');const followInput=D.createElement('input');followInput.type='checkbox';followInput.checked=W.localStorage.getItem('capricorn_follow_story')!=='off';followInput.onchange=()=>W.localStorage.setItem('capricorn_follow_story',followInput.checked?'on':'off');followLabel.append(followInput,' 音乐跟随剧情');followLabel.hidden=!music;services.append(followLabel);
 const result = msg => controls.querySelector('[data-result]').textContent = msg;
 let changingModule = false;
 async function setModule(k, value) {
@@ -805,7 +515,7 @@ async function setModule(k, value) {
 }
 function mountNativeControls(){
   const panel=D.createElement('div'); panel.id='capricorn-native-settings'; panel.className='inline-drawer';
-  panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div></div><div class="inline-drawer-content" style="display:none"><p>独立模块开关 · 修改后刷新页面，保留数据。</p><div data-switches></div></div>';
+  panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon down">' + icon('down') + '</div></div><div class="inline-drawer-content" style="display:none"><p>独立模块开关 · 修改后刷新页面，保留数据。</p><div data-switches></div></div>';
   const body=panel.querySelector('.inline-drawer-content');
   const menu=D.createElement('div');menu.id='capricorn-native-menu';
   function switches(host){
@@ -819,7 +529,7 @@ function mountNativeControls(){
   switches(panel.querySelector('[data-switches]'));switches(menu);
   mountPresetControls(body,W,D);
   const cleanupRegex=mountGlobalRegexControl(body,W,D);
-  const open=D.createElement('button');open.className='menu_button';open.textContent='更多设置';open.onclick=()=>{nav.hidden=false;select('settings');};body.append(open);
+  const open=D.createElement('button');open.className='menu_button';open.textContent='更多设置';open.onclick=()=>openHub('settings');body.append(open);
   function attach(){
     if (!panel.isConnected) {
       const ext=D.querySelector('#extensions_settings2')||D.querySelector('#extensions_settings');
@@ -827,7 +537,9 @@ function mountNativeControls(){
     }
     if (!menu.isConnected) D.querySelector('#extensionsMenu')?.append(menu);
   }
-  attach();const observer=new MutationObserver(attach);observer.observe(D.body,{childList:true,subtree:true});
+  attach();
+  mountSelectRoot(panel);
+  const observer=new MutationObserver(attach);observer.observe(D.body,{childList:true,subtree:true});
   return ()=>{observer.disconnect();cleanupRegex();panel.remove();menu.remove();};
 }
 nativeControlsCleanup=mountNativeControls();
@@ -892,7 +604,9 @@ file.onchange = () => withDataOperation(async () => {
       const report = restoreAppearanceBackup(W.localStorage, backup);
       if (report.theme) {
         themeSelect.value = report.theme;
+        refreshSelect(themeSelect);
         root.dataset.theme = report.theme;
+        appearanceApi?.refreshTheme();
       }
       return report.changed ? '已补齐缺项，刷新后应用全部样式' : '无需补齐';
     }],
@@ -925,15 +639,15 @@ shared.onAccountChange=()=>{if(tab==='cloud'&&!shared.accountReady?.())select('l
 if(flags.music) cleanupNetease = mountNetease(settings, shared);
 if (music) cloud = mountCloud(content, shared, music);
 if(flags.music) cleanupMobile = mountMobile({ root, island, nav, onResume: () => void tick() });
-appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
-for (const [node,label] of [[controls,'数据与自动收录'],[settings.querySelector('.cap-backup:not(.cap-backup:first-child)'),'账号与连接']]) {
-  if (!node || node.parentElement !== settings || node.closest('details')) continue;
-  const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = label; d.append(h); node.before(d); d.append(node);
+try {
+  appearanceApi = mountAppearance(settings, root, themeSelect, memory?.root);
+} catch (error) {
+  console.warn('[Capricorn] 出现外观设置错误', error);
 }
-for (const node of [...settings.children]) {
-  if (!node.matches('section.cap-backup')) continue;
-  const d = D.createElement('details'); const h = D.createElement('summary'); h.textContent = '账号与连接'; d.append(h); node.before(d); d.append(node);
-}
+try { settingsUi = mountSettings(settings); }
+catch (error) { console.warn('[Capricorn] 设置分类回退', error); }
+mountSelectRoot(root);
+mountSelectRoot(memory?.root);
 }
 
 void boot().catch(error => {

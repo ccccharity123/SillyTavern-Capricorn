@@ -1,3 +1,4 @@
+import { lastItem } from './compat.js';
 import { tokenize } from './hybrid.js';
 
 const keywords = terms => [...new Set(terms)]
@@ -7,7 +8,7 @@ function leadingMatches(scores, limit) {
   const matches = [];
   for (let index = 0; index < scores.length; index++) {
     const score = scores[index];
-    if (score <= 0 || (matches.length === limit && score <= matches.at(-1).score)) continue;
+    if (score <= 0 || (matches.length === limit && score <= lastItem(matches).score)) continue;
     matches.push({ index, score });
     matches.sort((a, b) => b.score - a.score || a.index - b.index);
     if (matches.length > limit) matches.pop();

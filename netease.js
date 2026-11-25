@@ -1,5 +1,6 @@
 import { mountGD } from './gd.js';
 import { createLatestTask, withMusicTimeout } from './music-tasks.js';
+import { refreshSelect } from './ui-select.js';
 export function mountNetease(settings, shared){
  const box=document.createElement('section');box.className='cap-backup';box.innerHTML='<h4>声屿 · 共享服务</h4><label>HTTPS 服务地址<input type="url" placeholder="https://your-service.onrender.com"></label><label>邀请码 / 管理员密钥<input type="password" autocomplete="off"></label><button data-save>保存连接</button><button data-test>连接检测</button><button data-retry>取消检测</button><p role="status"></p>';settings.append(box);
  const [url,key]=box.querySelectorAll('input'), status=box.querySelector('p');let controller,retryTimer,disposed=false,loggedIn=false;const gd=mountGD();const accountState=v=>{loggedIn=!!v;shared.onAccountChange?.()};shared.accountReady=()=>!disposed&&mode.value==='full'&&loggedIn;try{url.value=localStorage.getItem('capricorn_music_endpoint')||'';key.value=localStorage.getItem('capricorn_music_token:'+url.value)||''}catch{}
@@ -8,7 +9,7 @@ export function mountNetease(settings, shared){
  function resetOnline(){connection=onlineTasks.start();shared.onMusicConnectionChange?.();}
  const privacy=document.createElement('label');privacy.textContent='隐私模式 ';const mode=document.createElement('select');for(const [v,t] of [['local','本地记忆 / 手动音源'],['gd','本地模式 · GD 免登录音源'],['online','在线音乐'],['full','完整服务（账号及云端歌单）']])mode.add(new Option(t,v));mode.value=localStorage.getItem('capricorn_privacy_mode')||'local';privacy.append(mode);box.prepend(privacy);const disclosure=document.createElement('p');disclosure.textContent='联网会向所选服务发送歌曲查询、歌曲ID；完整服务还会发送账号及歌单操作。GD 模式仅向 GD音乐台 (music.gdstudio.xyz) 发送歌曲查询及ID，限个人学习、非商用，请仅播放有权访问的资源。服务管理员可能接触凭证。手动音源和封面仍会连接其提供方。';privacy.after(disclosure);
  const allowed=(path)=>{if(path==='/auth/logout')return true;if(['local','gd'].includes(mode.value))return false;if(mode.value==='full')return true;return path==='/health'||path.startsWith('/music/')};
- mode.onchange=()=>{if(mode.value!=='local'&&!confirm(disclosure.textContent+' 是否授权？')){mode.value=localStorage.getItem('capricorn_privacy_mode')||'local';return}localStorage.setItem('capricorn_privacy_mode',mode.value);resetOnline();cancelCheck();stop();accountState(false);adminPanel.hidden=true;status.textContent='隐私模式已更新';if(mode.value==='full')void check(0);};
+ mode.onchange=()=>{if(mode.value!=='local'&&!confirm(disclosure.textContent+' 是否授权？')){mode.value=localStorage.getItem('capricorn_privacy_mode')||'local';refreshSelect(mode);return}localStorage.setItem('capricorn_privacy_mode',mode.value);resetOnline();cancelCheck();stop();accountState(false);adminPanel.hidden=true;status.textContent='隐私模式已更新';if(mode.value==='full')void check(0);};
  url.onchange=()=>{resetOnline();cancelCheck();stop();accountState(false);adminPanel.hidden=true;try{key.value=localStorage.getItem('capricorn_music_token:'+endpoint())||''}catch{key.value=''}};
  key.onchange=resetOnline;
  const forget=document.createElement('button');forget.textContent='清除本地凭证';box.append(forget);forget.onclick=()=>{resetOnline();cancelCheck();stop();accountState(false);note.textContent="";try{localStorage.removeItem('capricorn_music_token:'+endpoint());key.value='';adminPanel.hidden=true;status.textContent='本地凭证已清除'}catch(e){status.textContent=e.message}};
@@ -30,7 +31,10 @@ export function mountNetease(settings, shared){
  }
  box.querySelector('[data-test]').onclick=()=>void check(0);
  const adminPanel=document.createElement('section');adminPanel.hidden=true;adminPanel.innerHTML='<h4>共享管理</h4><input placeholder="好友备注" data-note><button data-create>创建邀请码</button><button data-list>刷新好友</button><input readonly data-token placeholder="新邀请码（仅显示一次）"><div data-guests></div>';box.append(adminPanel);
- async function manage(path,method='GET'){return request(path,method,endpoint(),key.value.trim(),AbortSignal.timeout(30000))}
+ function timedRequest(path, method, base, secret, timeout) {
+   return withMusicTimeout(signal => request(path, method, base, secret, signal), timeout);
+ }
+ async function manage(path,method='GET'){return timedRequest(path,method,endpoint(),key.value.trim(),30000)}
  async function list(){const d=await manage('/admin/guests');const area=adminPanel.querySelector('[data-guests]');area.replaceChildren();for(const g of d.guests){const row=document.createElement('div');row.textContent=g.note||'未命名好友';const b=document.createElement('button');b.textContent='撤销';b.onclick=async()=>{if(!confirm('撤销此好友访问权限？'))return;try{await manage('/admin/revoke?id='+encodeURIComponent(g.id),'POST');await list()}catch(e){status.textContent=e.message}};row.append(b);area.append(row)}}
  adminPanel.querySelector('[data-list]').onclick=()=>list().catch(e=>status.textContent=e.message);
  adminPanel.querySelector('[data-create]').onclick=async()=>{try{const d=await manage('/admin/create?note='+encodeURIComponent(adminPanel.querySelector('[data-note]').value),'POST');adminPanel.querySelector('[data-token]').value=d.token;await list()}catch(e){status.textContent=e.message}};
@@ -52,7 +56,7 @@ export function mountNetease(settings, shared){
      return withMusicTimeout(load,timeout,connection.signal,signal);
    },
  };
- shared.cloud={capture(){if(!shared.accountReady())throw Error('请先登录账号并授权完整服务');const base=endpoint(),secret=key.value.trim();if(!secret)throw Error('请先保存连接');return {base,request(p,m='GET'){if(disposed||endpoint()!==base||key.value.trim()!==secret)throw Error('连接已切换');return request(p,m,base,secret,AbortSignal.timeout(90000))}}},request(path,method='GET'){if(!shared.accountReady())throw Error('请先登录账号');const base=endpoint(),secret=key.value.trim();if(!secret)throw Error('请先保存连接');return request(path,method,base,secret,AbortSignal.timeout(90000))}};
+ shared.cloud={capture(){if(!shared.accountReady())throw Error('请先登录账号并授权完整服务');const base=endpoint(),secret=key.value.trim();if(!secret)throw Error('请先保存连接');return {base,request(p,m='GET'){if(disposed||endpoint()!==base||key.value.trim()!==secret)throw Error('连接已切换');return timedRequest(p,m,base,secret,90000)}}},request(path,method='GET'){if(!shared.accountReady())throw Error('请先登录账号');const base=endpoint(),secret=key.value.trim();if(!secret)throw Error('请先保存连接');return timedRequest(path,method,base,secret,90000)}};
  if(!['local','gd'].includes(mode.value)&&key.value.trim())void check(0);
  return ()=>{disposed=true;onlineTasks.cancel();cancelCheck();delete shared.online;delete shared.cloud;stop();key.value='';box.remove()};
 }

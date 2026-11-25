@@ -1,3 +1,4 @@
+import { hasOwn, lastItem } from './compat.js';
 export const normalize=s=>String(s??'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}]/gu,'');
 export function fuzzy(text,q){const t=normalize(text);return String(q??'').trim().split(/\s+/).every(w=>{const n=normalize(w);if(!n||t.includes(n))return true;if(n.length<4)return false;let i=0;for(const c of t)if(c===n[i])i++;return i===n.length;});}
 export function table(text){const m=[...String(text).matchAll(/<(table|摩羯留痕)\s*>\s*([\s\S]*?)<\/\1\s*>/g)].pop();if(!m)return null;try{const v=JSON.parse(m[2].trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));return v&&typeof v==='object'&&!Array.isArray(v)?v:null;}catch{return null;}}
@@ -10,13 +11,13 @@ function describe(value, separator = '、') {
 }
 const restrictedFields = ['认知', '秘密', '客观事实', '人物认知', '知情者', '知情人'];
 const unsafeKeys = new Set(['__proto__', 'constructor', 'prototype']);
-const isRestricted = row => (Object.hasOwn(row, '公开') && row.公开 !== true) ||
-  restrictedFields.some(field => Object.hasOwn(row, field));
+const isRestricted = row => (hasOwn(row, '公开') && row.公开 !== true) ||
+  restrictedFields.some(field => hasOwn(row, field));
 const pastFrames = new Set(['过去', '倒叙', '回忆', '历史']);
 
 function temporalFrame(row, tableValue) {
-  if (Object.hasOwn(row, '叙事时态')) return string(row.叙事时态) || '未确认';
-  if (Object.hasOwn(tableValue, '叙事时态')) return string(tableValue.叙事时态) || '未确认';
+  if (hasOwn(row, '叙事时态')) return string(row.叙事时态) || '未确认';
+  if (hasOwn(tableValue, '叙事时态')) return string(tableValue.叙事时态) || '未确认';
   return '当前';
 }
 
@@ -149,8 +150,8 @@ function newKnowledge({ id, floor, index }) {
 
 function applyKnowledge(topic, { key, floor, patch }) {
   topic.floor = floor;
-  if (topic.sources.at(-1) !== key) topic.sources.push(key);
-  if (Object.hasOwn(patch, '客观事实')) {
+  if (lastItem(topic.sources) !== key) topic.sources.push(key);
+  if (hasOwn(patch, '客观事实')) {
     const fact = string(patch.客观事实);
     if (topic.fact !== fact) {
       topic.fact = fact;
@@ -160,15 +161,15 @@ function applyKnowledge(topic, { key, floor, patch }) {
       topic.knowersSource = null;
     }
   }
-  if (Object.hasOwn(patch, '公开')) {
+  if (hasOwn(patch, '公开')) {
     topic.public = patch.公开 === true;
     topic.publicDisclosureSource = topic.public ? key : null;
   }
-  if (Object.hasOwn(patch, '知情者')) {
+  if (hasOwn(patch, '知情者')) {
     topic.knowers = Array.isArray(patch.知情者) ? [...new Set(patch.知情者.map(exactName).filter(Boolean))] : [];
     topic.knowersSource = topic.knowers.length ? key : null;
   }
-  if (Object.hasOwn(patch, '人物认知')) {
+  if (hasOwn(patch, '人物认知')) {
     const beliefs = new Map();
     if (Array.isArray(patch.人物认知)) {
       for (const belief of patch.人物认知) {
@@ -270,7 +271,7 @@ function createContributionIndex(collect, initialize, copy, apply, present) {
       const state = append ? copy(item.state) : initialize(patches[0]);
       for (const contribution of patches) apply(state, contribution);
       applied += patches.length;
-      item.last = patches.at(-1);
+      item.last = lastItem(patches);
       item.state = state;
       item.first = append ? item.first : patches[0];
       item.result = present(state, item.first);
@@ -288,7 +289,7 @@ function createContributionIndex(collect, initialize, copy, apply, present) {
   function build(rows) {
     function* changes() {
       for (const key of Object.keys(rows)) yield [key, rows[key]];
-      for (const key of sources.keys()) if (!Object.hasOwn(rows, key)) yield [key, null];
+      for (const key of sources.keys()) if (!hasOwn(rows, key)) yield [key, null];
     }
     return update(changes());
   }

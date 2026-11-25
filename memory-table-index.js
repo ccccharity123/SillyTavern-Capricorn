@@ -1,3 +1,4 @@
+import { hasOwn } from './compat.js';
 import { parseMemorySource } from './canon.js';
 import { createLedgerProjection, createTableCache, projectLedger } from './weave.js';
 
@@ -31,7 +32,7 @@ export function createTableIndex(hash, sharedCache) {
 
     function retract(floor) {
       const lookup = candidates.get(floor);
-      if (lookup && Object.hasOwn(rows, lookup.key)) changes.set(lookup.key, null);
+      if (lookup && hasOwn(rows, lookup.key)) changes.set(lookup.key, null);
       candidates.delete(floor);
       pending.delete(floor);
       confirmed.delete(floor);
@@ -95,7 +96,7 @@ export function createTableIndex(hash, sharedCache) {
       if (!blocked && !stable) (ready ? confirmed : pending).add(floor);
       if (!blocked && (ready || stable)) {
         if (rows[key] !== row) changes.set(key, row);
-      } else if (Object.hasOwn(rows, key)) {
+      } else if (hasOwn(rows, key)) {
         changes.set(key, null);
       }
     }
@@ -108,8 +109,8 @@ export function createTableIndex(hash, sharedCache) {
     }
 
     const candidate = candidates.get(excludeFloor);
-    const nextExclusion = candidate && Object.hasOwn(rows, candidate.key) ? candidate.key : undefined;
-    if (excludedKey && excludedKey !== nextExclusion && Object.hasOwn(rows, excludedKey)) {
+    const nextExclusion = candidate && hasOwn(rows, candidate.key) ? candidate.key : undefined;
+    if (excludedKey && excludedKey !== nextExclusion && hasOwn(rows, excludedKey)) {
       changes.set(excludedKey, rows[excludedKey]);
     }
     const previousRows = visibleRows;

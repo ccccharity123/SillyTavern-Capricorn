@@ -1,3 +1,4 @@
+import { hasOwn, lastItem } from './compat.js';
 import {chapters} from './layers.js';
 import {selectForeshadow} from './foreshadow.js';
 // Independent lexical retrieval: BM25 + entity matching + bounded conversational carryover.
@@ -55,7 +56,7 @@ export function createSummaryDocCache(maxEntries=12000,maxChars=8000000){
       while(cache.size>maxEntries||chars>maxChars){const k=cache.keys().next().value;chars-=cache.get(k).size;cache.delete(k);}
     }
     return doc;
-  },prune(rows){for(const [key,entry] of cache)if(!Object.hasOwn(rows,key)){cache.delete(key);chars-=entry.size;}}};
+  },prune(rows){for(const [key,entry] of cache)if(!hasOwn(rows,key)){cache.delete(key);chars-=entry.size;}}};
 }
 export function summaryProjection(key,row){return {
     id: 's:' + key, key, kind: 'summary', body: row.content, title: row.title, floor: row.sourceMessage, storyTime: row.storyTime,
@@ -142,7 +143,7 @@ export function excerpt(line,query,limit){
    for(const t of terms){let at=text.indexOf(t), count=0;while(at>=0&&count++<64){hits.push({at:offsets[at],end:offsets[at+t.length-1]+1,t});at=text.indexOf(t,at+1);}}
    const bytes=c=>new TextEncoder().encode(c).length;
    const cap=2*limit-cost(prefix+'… …')*2;
-   const sums=[0];for(const c of a)sums.push(sums.at(-1)+bytes(c));
+   const sums=[0];for(const c of a)sums.push(lastItem(sums)+bytes(c));
    let center=0, bestScore=-1;
    for(const h of hits){const left=Math.max(0,sums[h.at]-Math.floor(cap*.2));const right=left+cap;const score=new Set(hits.filter(x=>sums[x.at]>=left&&sums[x.end]<=right).map(x=>x.t)).size;if(score>bestScore){bestScore=score;center=h.at;}}
    let start=center,end=center,used=0;

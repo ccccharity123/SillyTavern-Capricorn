@@ -2,6 +2,8 @@ import { createBgmIndex } from './bgm-index.js';
 import { commitMusicBackup } from './backup.js';
 import { createLatestTask, withMusicTimeout } from './music-tasks.js';
 import { icon } from './icons.js';
+import { closeLibraryMenus, libraryButton, libraryMenu } from './ui-library.js';
+import { lastItem } from './compat.js';
 /* 声屿 v0.8 | TavernHelper 全局脚本。仅本地歌单；不提供未授权网易云登录/音源。 */
 import { mountNowPlaying } from './now-playing.js';
 export async function startMusic(shared){
@@ -36,6 +38,8 @@ function character(){
 }
 function playlist(id,name,kind='character'){if(!db.playlists[id]){db.playlists[id]={id,name,kind,songs:[],created:Date.now()};save()}return db.playlists[id]}
 let trackPage=0,trackPageScope='',filterText='',current='',selected='',opened=false,playing=null,drag=false,disposed=false,scanBusy=false;
+let playlistNameDraft = '', songTitleDraft = '', songArtistDraft = '';
+let previousTrackScrollReset = false;
 const playbackTasks = createLatestTask();
 const storyTasks = createLatestTask();
 let storyTask = storyTasks.start();
@@ -135,7 +139,47 @@ function songPicker(query, label='确认添加', allowLocal=false){
  closeSongPicker=cancel;D.addEventListener('keydown',key,true);D.body.append(overlay);input.value=query.trim();
  overlay.querySelector('[data-cancel]').onclick=cancel;overlay.onclick=e=>{if(e.target===overlay)cancel()};confirm.onclick=()=>{if(pick)finish(pick)};
  const local=overlay.querySelector('[data-local]');if(local)local.onclick=()=>finish({local:true});
- async function search(){const q=input.value.trim(),token=++epoch,task=searchTasks.start();pick=null;confirm.disabled=true;list.replaceChildren();if(!q){note.textContent='请输入搜索关键词';return}if(!shared.online?.ready()){note.textContent='请先配置并启用网易云服务';return}note.textContent='正在搜索…';try{const d=await shared.online.get('/music/search?q='+encodeURIComponent(q),12000,task.signal);if(done||token!==epoch)return;const rows=(Array.isArray(d.songs)?d.songs:[]).filter(x=>x&&/^\d+$/.test(String(x.id))&&x.title);note.textContent=rows.length?`找到 ${rows.length} 首，请选择歌曲版本`:'没有结果，试试更短的关键词';for(const x of rows){const b=D.createElement('button');b.type='button';b.className='cap-song-picker-row';b.setAttribute('aria-pressed','false');const cover=validUrl(x.cover);b.innerHTML=`${cover?`<img loading="lazy" src="${esc(cover.replace(/^http:/,'https:'))}" alt="">`:'<span class="cap-song-picker-placeholder">♫</span>'}<span><strong>${esc(x.title)}</strong><small>${esc((Array.isArray(x.artists)?x.artists:[]).join(' / '))}${x.album?' · '+esc(x.album):''}</small></span>`;b.querySelector('img')?.addEventListener('error',e=>{const a=D.createElement('span');a.className='cap-song-picker-placeholder';a.textContent='♫';e.target.replaceWith(a)});b.onclick=()=>{pick=x;for(const r of list.children)r.setAttribute('aria-pressed',String(r===b));confirm.disabled=false};list.append(b)}}catch(e){if(!done&&token===epoch)note.textContent='搜索失败：'+e.message}}
+ function coverPlaceholder(){
+   const placeholder=D.createElement('span');
+   placeholder.className='cap-song-picker-placeholder';
+   placeholder.innerHTML=icon('music',18);
+   return placeholder;
+ }
+ async function search(){
+   const q=input.value.trim(),token=++epoch,task=searchTasks.start();
+   pick=null;confirm.disabled=true;list.replaceChildren();
+   if(!q){note.textContent='请输入搜索关键词';return}
+   if(!shared.online?.ready()){note.textContent='请先配置并启用网易云服务';return}
+   note.textContent='正在搜索…';
+   try{
+     const data=await shared.online.get('/music/search?q='+encodeURIComponent(q),12000,task.signal);
+     if(done||token!==epoch)return;
+     const rows=(Array.isArray(data.songs)?data.songs:[]).filter(song=>song&&/^\d+$/.test(String(song.id))&&song.title);
+     note.textContent=rows.length?'找到 '+rows.length+' 首，请选择歌曲版本':'没有结果，试试更短的关键词';
+     for(const song of rows){
+       const button=D.createElement('button');
+       button.type='button';button.className='cap-song-picker-row';button.setAttribute('aria-pressed','false');
+       const cover=validUrl(song.cover);
+       if(cover){
+         const image=D.createElement('img');
+         image.loading='lazy';image.alt='';image.src=cover.replace(/^http:/,'https:');
+         image.addEventListener('error',()=>image.replaceWith(coverPlaceholder()));
+         button.append(image);
+       }else button.append(coverPlaceholder());
+       const text=D.createElement('span'), title=D.createElement('strong'), artist=D.createElement('small');
+       title.textContent=song.title;
+       artist.textContent=(Array.isArray(song.artists)?song.artists:[]).join(' / ')+(song.album?' · '+song.album:'');
+       text.append(title,artist);
+       button.append(text);
+       button.onclick=()=>{
+         pick=song;
+         for(const row of list.children)row.setAttribute('aria-pressed',String(row===button));
+         confirm.disabled=false;
+       };
+       list.append(button);
+     }
+   }catch(error){if(!done&&token===epoch)note.textContent='搜索失败：'+error.message}
+ }
  overlay.querySelector('form').onsubmit=e=>{e.preventDefault();void search()};input.oninput=()=>{epoch++;searchTasks.cancel();pick=null;confirm.disabled=true;list.replaceChildren();note.textContent='点击搜索获取结果'};void search();
  });
 }
@@ -323,7 +367,20 @@ audio.addEventListener('ended',()=>{
 });
 audio.addEventListener('play',()=>{updateMedia();updateMini()});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
 audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>5000){lastMemory=Date.now();storePlayback();updatePosition()}let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock)clock.textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration)});
-function updateMini(){fullPlayer?.refresh();let e=root.querySelector('.si-island-title');if(e)e.textContent=(audio.paused?'♫ ':'▮▮ ')+(playing?.title||'声屿 · Sound Isle');let b=root.querySelector('[data-action="playpause"]');if(b)b.innerHTML=icon(audio.paused?'play':'pause',26)}
+function updateMini(){
+  fullPlayer?.refresh();
+  updateLegacyPlayer();
+}
+function updateLegacyPlayer(){
+  const title=root.querySelector('.si-island-title'),button=root.querySelector('[data-action="playpause"]');
+  if(title)title.textContent=playing?.title||'声屿';
+  if(button){
+    const action=audio.paused?'播放':'暂停';
+    button.innerHTML=icon(audio.paused?'play':'pause',26);
+    button.setAttribute('aria-label',action);
+    button.title=action;
+  }
+}
 const mediaActions=['play','pause','previoustrack','nexttrack','seekto','seekbackward','seekforward','stop'];
 function mediaSeek(value){if(Number.isFinite(value)&&Number.isFinite(audio.duration)){audio.currentTime=Math.max(0,Math.min(audio.duration,value));updatePosition()}}
 if(mediaSession){
@@ -468,7 +525,7 @@ let indexedStory=null,confirmedStory=null;
 
 function storySnapshot(scope, { messages, incremental }) {
   const sample = message => incremental ? message : message?.message ?? message?.mes;
-  return { scope, length: messages.length, first: sample(messages[0]), last: sample(messages.at(-1)) };
+  return { scope, length: messages.length, first: sample(messages[0]), last: sample(lastItem(messages)) };
 }
 
 async function updateBgmIndex(scope,task){
@@ -550,7 +607,7 @@ async function scan(force=false,task){
     const now=Date.now();
     for(const [position,{key,row,due}] of pendingTags){
       if(now<due)continue;
-      knownIds??=new Set(pl.songs.map(song=>song.id));
+      if (!knownIds) knownIds = new Set(pl.songs.map(song=>song.id));
       for(const song of row.found)if(addSong(pl,song,{chat,floor:row.id,character:ch.name},knownIds))added++;
       db.processed[key]=row.signature;
       pendingTags.delete(position);
@@ -564,7 +621,7 @@ async function scan(force=false,task){
     if(db.processed[key]!==row.signature&&db.processed[legacyKey]!==row.signature)return;
     const signature=JSON.stringify([key,row.signature]);
     if(signature===scanFollowSignature)return;
-    const track=pl.songs.find(song=>song.id===row.found.at(-1).id);
+    const track=pl.songs.find(song=>song.id===lastItem(row.found).id);
     if(!track||(!validUrl(track.audioUrl)&&!shared.online?.ready()))return;
     scanFollowSignature=signature;
     if(playing?.id===track.id&&(resolving||audio.getAttribute('src')))return;
@@ -661,7 +718,7 @@ async function followStory(){
   pendingScope=null;
   if(!shouldFollowStory())return;
   const pl=playlist(ch.id,ch.name+' · 故事原声');
-  const row=bgmIndex.latest(),song=row?.found.at(-1);
+  const row=bgmIndex.latest(),song=lastItem(row?.found);
   selected=ch.id;
   if(song){
     addSong(pl,song,{chat,floor:row.id,character:ch.name});
@@ -693,89 +750,395 @@ function listPlaylists(){return Object.values(db.playlists).sort((a,b)=>(a.kind=
 function render(){
   if(disposed)return;
   fullPlayer?.refresh();
-  if(!opened&&root.childElementCount){root.querySelector('.si-panel')?.classList.remove('open');return;}
+  closeLibraryMenus(root);
+  if(!opened&&root.childElementCount){
+    root.querySelector('.si-panel')?.classList.remove('open');
+    return;
+  }
   const pl=db.playlists[selected]||db.playlists[current]||null;
   if(pl&&!db.playlists[selected])selected=pl.id;
   const tracks=pl?.songs||[];
-  if(trackPageScope!==pl?.id){trackPageScope=pl?.id;trackPage=0;}
+  const previousRail=root.querySelector('.cap-playlist-rail');
+  const previousScroll=root.querySelector('.cap-library-scroll');
+  const previousFilter=root.querySelector('#si-filter');
+  const railLeft=previousRail?.scrollLeft||0;
+  const trackTop=previousScroll?.scrollTop||0;
+  const restoreFilter=previousFilter&&D.activeElement===previousFilter;
+  const filterCursor=restoreFilter?previousFilter.selectionStart:null;
+  const scopeChanged=trackPageScope!==pl?.id;
+  if(scopeChanged){trackPageScope=pl?.id;trackPage=0;}
   const query=normalize(filterText),pageSize=40;
   const matched=query?tracks.flatMap((t,i)=>normalize(t.title+' '+t.artist).includes(query)?[{t,i}]:[]):null;
   const pageCount=Math.max(1,Math.ceil((matched?.length??tracks.length)/pageSize));
   trackPage=Math.min(trackPage,pageCount-1);
   const first=trackPage*pageSize,last=first+pageSize;
   const visibleTracks=matched?.slice(first,last)??tracks.slice(first,last).map((t,i)=>({t,i:first+i}));
-root.innerHTML=`<button type="button" class="si-island" aria-label="打开声屿播放器"><span class="si-dot"></span><span class="si-island-title">♫ ${esc(playing?playing.title:'声屿 · Sound Isle')}</span><span>⌄</span></button><div class="si-panel ${opened?'open':''}"><div class="si-head"><div><div class="si-h1">♫ 声屿</div><div class="si-muted">Sound Isle · 故事音乐库</div></div><button class="si-btn" data-action="close">收起 ⌃</button></div><div class="si-pill">当前角色：${esc(character()?.name||'未识别')}</div><div class="si-now"><img class="si-cover" src="${esc(validUrl(playing?.coverUrl)||'')}" alt="专辑封面" onerror="this.style.opacity='.25'"><div style="min-width:0;flex:1"><div style="font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(playing?.title||'尚未播放')}</div><div class="si-muted">${esc(playing?.artist||'选择一首歌曲')}</div><div class="si-muted" style="margin-top:8px">${esc(audioError||(resolving?'正在获取授权音源':audio.getAttribute('src')?'已连接音源':'尚未获取音源'))}</div></div></div><input id="si-seek" type="range" min="0" max="${Number.isFinite(audio.duration)?audio.duration:0}" step="1" value="${audio.currentTime||0}" aria-label="播放进度"><div class="si-muted si-clock" style="text-align:right">${durationText(audio.currentTime)} / ${durationText(audio.duration)}</div><div class="si-controls"><button class="si-btn" data-action="mode" title="播放模式：${playMode==='shuffle'?'随机播放':playMode==='one'?'单曲循环':'顺序播放'}" aria-label="切换播放模式">${icon(playMode==='shuffle'?'shuffle':playMode==='one'?'one':'repeat', 18)}</button><button class="si-btn" data-action="prev" aria-label="上一首">${icon("prev")}</button><button class="si-mainplay" data-action="playpause">${icon(audio.paused?'play':'pause',26)}</button><button class="si-btn" data-action="next" aria-label="下一首">${icon("next")}</button></div><div class="si-row"><span class="si-muted">音量</span><input id="si-volume" type="range" min="0" max="1" step="0.01" value="${targetVolume()}" aria-label="音量"></div><div class="si-section">全局音乐库 · 角色歌单</div><div class="si-list">${listPlaylists().map(p=>`<button class="si-item ${selected===p.id?'active':''}" data-pick="${esc(p.id)}"><span>♫</span><span class="si-grow">${esc(p.name)}</span><small>${p.songs.length}</small></button>`).join('')}</div><div class="si-row"><input class="si-input" id="si-playlist-name" placeholder="新建自定义歌单名称"><button class="si-btn" data-action="new">创建</button></div><div class="si-section">${esc(pl?.name||'请选择歌单')}</div><div class="si-muted">${tracks.length} 首 · 可手动绑定有权使用的音源</div><div class="si-row"><input class="si-input" id="si-filter" placeholder="搜索当前歌单的歌曲或歌手" value="${esc(filterText)}"><button class="si-btn" data-action="clear-filter">清空</button></div><div class="si-list">${visibleTracks.map(({t,i})=>`<div class="si-track ${playing&&playing.id===t.id?'is-playing':''}"><span class="si-grow"><div class="si-song">${esc(t.title)}</div><div class="si-muted si-song">${esc(t.artist)}${t.source?' · 第'+esc(t.source.floor)+'楼':''}</div></span><button class="si-btn" title="查看歌曲来源" data-origin="${i}">来源</button><button class="si-btn" title="复制到其他歌单" data-copy="${i}">复制</button><button class="si-btn" title="播放" data-play="${i}">▶</button><button class="si-btn" title="设置音源" data-source="${i}">音源</button><button class="si-btn" title="查找公开专辑封面候选（Apple曲库，需手动确认）" data-meta="${i}">封面</button><button class="si-btn" title="关联网易云歌曲ID" data-online="${i}">在线匹配</button><button class="si-btn" data-netease="${i}">${t.neteaseId?'已关联':'匹配'}</button><button class="si-btn" title="打开网易云歌曲或搜索" data-search="${i}">${icon("external",16)}</button><button class="si-btn" title="上移歌曲" data-up="${i}">${icon("up",16)}</button><button class="si-btn" title="下移歌曲" data-down="${i}">${icon("arrowdown",16)}</button><button class="si-btn si-danger" title="删除" data-delete="${i}">${icon("close",16)}</button></div>`).join('')||'<div class="si-muted">还没有歌曲，等待正文生成 &lt;bgm&gt; 标签，或手动添加。</div>'}</div>${pageCount>1?`<div class="si-row cap-lib-pager"><button class="si-btn" data-page="prev" ${trackPage===0?'disabled':''}>上一页</button><span>${trackPage+1} / ${pageCount}</span><button class="si-btn" data-page="next" ${trackPage+1>=pageCount?'disabled':''}>下一页</button></div>`:''}<div class="si-section">手动添加歌曲</div><div class="si-row"><input class="si-input" id="si-song-title" placeholder="歌名或关键词"></div><div class="si-row"><input class="si-input" id="si-song-artist" placeholder="歌手名称（选填）"><button class="si-btn" data-action="add">搜索添加</button></div><div class="si-row"><button class="si-btn" data-action="batch-meta">批量补封面</button><button class="si-btn" data-action="scan">扫描当前聊天</button><button class="si-btn" data-action="export-csv">导出当前歌单CSV</button><button class="si-btn" data-action="export">导出备份</button><button class="si-btn" data-action="diagnostics">播放诊断</button><button class="si-btn" data-action="import">导入备份</button></div>${pl?.kind==='custom'?'<button class="si-btn si-danger" data-action="remove-playlist">删除当前自建歌单</button>':''}<input id="si-import-file" type="file" accept="application/json,.json" hidden><div class="si-footer"><div class="si-muted si-status">${esc(statusText)}</div><div class="si-muted">v1.7 · 全屏播放器、同步歌词与独立播放队列；在线功能需配置私人网关。</div></div></div>`;
-root.querySelector('.si-island').addEventListener('click',()=>{if(drag){drag=false;return}opened=!opened;render()});root.querySelector('[data-action="close"]').onclick=()=>{opened=false;render();D.querySelector('#capricorn-hub [data-close]')?.click()};
-root.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>{trackPage+=b.dataset.page==='next'?1:-1;render()});
-root.querySelector('#si-filter').addEventListener('input',e=>{filterText=e.target.value;trackPage=0;let pos=e.target.selectionStart;render();let el=root.querySelector('#si-filter');el.focus();el.setSelectionRange(pos,pos)});root.querySelector('[data-action="clear-filter"]').onclick=()=>{filterText='';trackPage=0;render()};
- root.querySelectorAll('[data-up],[data-down]').forEach(el=>el.onclick=()=>{if(!pl)return;let i=Number(el.dataset.up??el.dataset.down),j=i+(el.hasAttribute('data-up')?-1:1);if(j<0||j>=pl.songs.length)return;[pl.songs[i],pl.songs[j]]=[pl.songs[j],pl.songs[i]];save();render()});
- root.querySelectorAll('[data-pick]').forEach(el=>el.onclick=()=>{selected=el.dataset.pick;filterText='';trackPage=0;render()});
-root.querySelectorAll('[data-origin]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.origin)];if(!t)return;let x=t.source;W.alert('歌曲：'+t.title+' — '+t.artist+'\n'+(x?'角色：'+(x.character||'未知')+'\n聊天ID：'+(x.chat||'未知')+'\n楼层/消息ID：'+(x.floor??'未知'):'手动添加或旧版歌曲：无楼层来源记录')+'\n网易云歌曲ID：'+(t.neteaseId||'未关联'));});
- root.querySelectorAll('[data-copy]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.copy)];if(!t)return;let destinations=listPlaylists().filter(p=>p.id!==pl?.id);if(!destinations.length)return status('请先创建另一份歌单');let raw=W.prompt('复制「'+t.title+'」到哪份歌单？请输入序号：\n'+destinations.map((p,i)=>(i+1)+'. '+p.name).join('\n'),'1');if(raw===null)return;let i=Number(raw)-1,target=destinations[i];if(!Number.isInteger(i)||!target)return status('无效歌单序号');if(target.songs.some(x=>x.id===t.id))return status('目标歌单已包含这首歌');target.songs.push(JSON.parse(JSON.stringify(t)));save();status('已复制到「'+target.name+'」');render();});
- root.querySelectorAll('[data-play]').forEach(el=>el.onclick=()=>playIndex(Number(el.dataset.play)));
-root.querySelectorAll('[data-source]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.source)];if(!t)return;let u=W.prompt('输入你有权播放的 HTTPS/HTTP 音频直链（留空清除）：',t.audioUrl||'');if(u===null)return;u=u.trim();if(u&&!validUrl(u))return status('音源地址必须是 http(s) URL');noteManualMatch(t);cancelTrackLoad(t);t.audioUrl=u;let c=W.prompt('可选：专辑封面 HTTPS/HTTP 图片地址（留空保持不变）：',t.coverUrl||'');if(c!==null){c=c.trim();if(!c||validUrl(c))t.coverUrl=c}save();status('音源设置已保存');render()});
-root.querySelector('[data-action="playpause"]').onclick=toggleAudio;
-const fullButton=D.createElement('button');fullButton.className='si-btn';fullButton.textContent='全屏播放';fullButton.onclick=()=>fullPlayer.open();root.querySelector('.si-now').append(fullButton);
-root.querySelector('[data-action="prev"]').onclick=()=>nextTrack(-1);
-root.querySelector('[data-action="next"]').onclick=()=>nextTrack(1);
-root.querySelector('[data-action="mode"]').onclick=()=>{playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;save();render()};
-root.querySelector('#si-seek').oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=+e.target.value};
-root.querySelector('#si-volume').oninput=e=>{db.settings.volume=+e.target.value;applyGain(fadeGain);save()};
-root.querySelectorAll('[data-delete]').forEach(el=>el.onclick=()=>{if(!pl)return;let t=pl.songs[Number(el.dataset.delete)];if(t===playing){stopPlaybackWork();playing=null;clearAudio();updateMedia()}pl.songs.splice(Number(el.dataset.delete),1);save();render()});
-root.querySelectorAll('[data-meta]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.meta)];if(t)chooseMetadata(t)});
- root.querySelectorAll('[data-online]').forEach(el=>el.onclick=async()=>{const t=tracks[Number(el.dataset.online)];try{if(!shared.online?.ready())throw Error('请先配置并启用网易云');status(await matchOnline(t,true)?'匹配成功':'未修改匹配');render()}catch(e){status(e.message)}});
- root.querySelectorAll('[data-netease]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.netease)];if(!t)return;let raw=W.prompt('粘贴网易云歌曲分享链接或歌曲数字 ID。留空可解除关联。\n可先点击 ↗ 在网易云查找准确版本。',t.neteaseId||'');if(raw===null)return;let id=neteaseId(raw);if(raw.trim()&&!id)return status('未识别歌曲ID：请使用网易云歌曲分享链接或数字ID');noteManualMatch(t);cancelTrackLoad(t);t.neteaseId=id||'';t.autoMatchDisabled=!id;save();status(id?'已关联网易云歌曲 '+id+'（仅用于定位歌曲，不代表可直接播放）':'已解除网易云关联');render()});
-root.querySelectorAll('[data-search]').forEach(el=>el.onclick=()=>{let t=tracks[Number(el.dataset.search)];if(t)openExternal(neteaseUrl(t))});
-root.querySelector('[data-action="add"]').onclick=async()=>{if(!pl)return status('请先选择歌单');let title=root.querySelector('#si-song-title').value.trim(),artist=root.querySelector('#si-song-artist').value.trim();if(!title&&!artist)return status('请输入歌名或歌手关键词');const pick=await songPicker([title,artist].filter(Boolean).join(' '),'确认添加',!!title&&!!artist);if(!pick||disposed||db.playlists[pl.id]!==pl)return;if(pick.local){status(addSong(pl,{id:trackId(title,artist),title,artist},null)?'已添加本地歌曲':'歌曲已存在');render();return}title=String(pick.title);artist=(Array.isArray(pick.artists)?pick.artists:[]).join('/')||'未知歌手';const id=String(pick.id);if(pl.songs.some(t=>String(t.neteaseId)===id)){status('歌曲已存在');return}const existing=pl.songs.find(t=>t.id===trackId(title,artist)&&!t.neteaseId);const coverUrl=validUrl(pick.cover).replace(/^http:/,'https:');if(existing){noteManualMatch(existing);cancelTrackLoad(existing);existing.neteaseId=id;existing.autoMatchDisabled=false;if(coverUrl&&!validUrl(existing.coverUrl))existing.coverUrl=coverUrl;save();status('已关联现有歌曲')}else{const base=trackId(title,artist);status(addSong(pl,{id:pl.songs.some(t=>t.id===base)?base+'|netease:'+id:base,title,artist,neteaseId:id,coverUrl},null)?'已添加歌曲':'歌曲已存在')}render()};
-root.querySelector('[data-action="new"]').onclick=()=>{let name=root.querySelector('#si-playlist-name').value.trim();if(!name)return status('请输入歌单名称');let id='custom:'+Date.now()+':'+hash(name);playlist(id,name,'custom');selected=id;render()};
-root.querySelector('[data-action="batch-meta"]').onclick=()=>batchMetadata();
- root.querySelector('[data-action="scan"]').onclick=()=>{void scan(true);status('正在检查当前聊天，内容稳定9秒后收录')};
-root.querySelector('[data-action="export-csv"]').onclick=()=>{if(!pl)return status('请先选择歌单');const q=x=>'"'+String(x??'').replace(/"/g,'""')+'"';let rows=[['歌曲名称','歌手','网易云歌曲ID','来源角色','来源聊天ID','来源楼层','音源URL','封面URL'],...pl.songs.map(t=>[t.title,t.artist,t.neteaseId||'',t.source?.character||'',t.source?.chat||'',t.source?.floor??'',t.audioUrl||'',t.coverUrl||''])];let csv='\uFEFF'+rows.map(r=>r.map(q).join(',')).join('\r\n');let blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=D.createElement('a');a.href=url;a.download='声屿_'+pl.name.replace(/[\\/:*?"<>|]/g,'_')+'_歌单.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);status('已导出当前歌单CSV（含来源记录）')};
- root.querySelector('[data-action="diagnostics"]').onclick=()=>W.prompt('复制播放诊断（不含密钥和音源链接）',diagnostic());
-root.querySelector('[data-action="export"]').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=D.createElement('a');a.href=url;a.download='声屿_音乐库备份.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000)};
-root.querySelector('[data-action="import"]').onclick=()=>root.querySelector('#si-import-file').click();
-root.querySelector('#si-import-file').onchange=async event=>{
-  const file=event.target.files?.[0], task=storyTask;
-  event.target.value='';
-  if(!file)return;
-  try{
-    const data=JSON.parse(await file.text());
-    if(!task.active()||disposed||!W.confirm('合并声屿备份并保留当前歌单、音源和设置？'))return;
-    restoreBackup(data);
-    status('备份已合并');
-  }catch(error){
-    if(task.active())status('导入失败：'+error.message);
-  }
-};
-let rm=root.querySelector('[data-action="remove-playlist"]');if(rm)rm.onclick=()=>{if(W.confirm('确定删除这个自建歌单？')){delete db.playlists[selected];selected=current;save();render()}};
-// Preserve original action handlers while reducing the visible controls.
-const panel=root.querySelector('.si-panel');
-const sections=[...panel.children];
-const libraryStart=sections.findIndex(e=>e.classList.contains('si-section'));
-const library=D.createElement('div');library.className='cap-local-library';
-for(const el of sections.slice(libraryStart)) library.append(el);
-panel.append(library);
-const group=(nodes,label,parent=library)=>{const d=D.createElement('details');d.className='cap-action-menu';const h=D.createElement('summary');if(label==='⋯')h.innerHTML=icon("more",20);else h.textContent=label;d.append(h);nodes[0]?.before(d);if(!d.parentNode)parent.append(d);for(const n of nodes)d.append(n);return d};
-for(const row of library.querySelectorAll('.si-track')){
- const play=row.querySelector('[data-play]'), text=row.querySelector('.si-grow');
- if(play&&text){const b=D.createElement('button');b.className='cap-track-title';b.append(...text.childNodes);b.onclick=play.onclick;text.replaceWith(b);play.remove();}
- const actions=[...row.querySelectorAll('button.si-btn')];if(actions.length){const d=group(actions,'⋯',row);d.querySelector('summary').setAttribute('aria-label','歌曲操作');}
-}
-const newRow=library.querySelector('#si-playlist-name')?.parentElement;if(newRow)group([newRow],'＋ 新建歌单');
-const addTitle=library.querySelector('#si-song-title')?.parentElement,addArtist=library.querySelector('#si-song-artist')?.parentElement;
-if(addTitle&&addArtist){const heading=addTitle.previousElementSibling;if(heading?.classList.contains('si-section'))heading.remove();group([addTitle,addArtist],'＋ 添加歌曲');}
-const advanced=library.querySelector('[data-action="batch-meta"]')?.parentElement;
-if(advanced)group([advanced,...library.querySelectorAll('[data-action="remove-playlist"]')],'歌单管理');
-const footer=library.querySelector('.si-footer');if(footer){footer.lastElementChild?.remove();panel.append(footer);}
-const volume=panel.querySelector('#si-volume')?.parentElement;if(volume)group([volume],'音量',panel);
 
+  const element=(tag,className,text)=>{
+    const el=D.createElement(tag);
+    if(className)el.className=className;
+    if(text!==undefined)el.textContent=text;
+    return el;
+  };
+  // Retain the original standalone controls for environments mounting the music module by itself.
+  if(!root.childElementCount){
+    root.innerHTML=`
+      <button type="button" class="si-island" aria-label="打开声屿播放器" title="打开声屿播放器">
+        <span class="si-dot"></span><span class="si-island-title"></span>${icon('down',16)}
+      </button>
+      <div class="si-panel">
+        <div class="si-head"><div class="si-h1">声屿</div><button type="button" class="si-btn" data-action="close">收起</button></div>
+        <div class="si-now">
+          <img class="si-cover" alt="专辑封面" hidden>
+          <div class="si-current"><strong></strong><div class="si-muted"></div></div>
+        </div>
+        <input id="si-seek" type="range" min="0" step="1" aria-label="播放进度"><div class="si-muted si-clock"></div>
+        <div class="si-controls">
+          <button type="button" class="si-btn" data-action="mode" title="播放模式"></button>
+          <button type="button" class="si-btn" data-action="prev" aria-label="上一首" title="上一首">${icon('prev')}</button>
+          <button type="button" class="si-mainplay" data-action="playpause" aria-label="播放" title="播放"></button>
+          <button type="button" class="si-btn" data-action="next" aria-label="下一首" title="下一首">${icon('next')}</button>
+        </div>
+        <div class="si-row"><span class="si-muted">音量</span><input id="si-volume" type="range" min="0" max="1" step="0.01" aria-label="音量"></div>
+      </div>`;
+    root.querySelector('.si-island').onclick=()=>{if(drag){drag=false;return}opened=!opened;render()};
+    root.querySelector('[data-action="close"]').onclick=()=>{opened=false;render();D.querySelector('#capricorn-hub [data-close]')?.click()};
+    root.querySelector('[data-action="playpause"]').onclick=toggleAudio;
+    root.querySelector('[data-action="prev"]').onclick=()=>nextTrack(-1);
+    root.querySelector('[data-action="next"]').onclick=()=>nextTrack(1);
+    root.querySelector('[data-action="mode"]').onclick=()=>{playMode=playMode==='order'?'shuffle':playMode==='shuffle'?'one':'order';db.settings.playMode=playMode;save();render()};
+    root.querySelector('#si-seek').oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=+e.target.value};
+    root.querySelector('#si-volume').oninput=e=>{db.settings.volume=+e.target.value;applyGain(fadeGain);save()};
+    const cover=root.querySelector('.si-cover');cover.onerror=()=>{cover.hidden=true};
+    const fullButton=libraryButton(root.querySelector('.si-now'),'全屏播放',()=>fullPlayer.open());
+    fullButton.className='si-btn';
+  }
+  const panel=root.querySelector('.si-panel');
+  panel.classList.toggle('open',opened);
+  updateLegacyPlayer();
+  const cover=panel.querySelector('.si-cover'),coverUrl=validUrl(playing?.coverUrl);
+  if(coverUrl&&cover.getAttribute('src')!==coverUrl){cover.hidden=false;cover.src=coverUrl}
+  if(!coverUrl){cover.hidden=true;cover.removeAttribute('src')}
+  panel.querySelector('.si-current strong').textContent=playing?.title||'尚未播放';
+  panel.querySelector('.si-current .si-muted').textContent=playing?.artist||'选择一首歌曲';
+  panel.querySelector('[data-action="mode"]').textContent=playMode==='shuffle'?'随机':playMode==='one'?'单曲':'顺序';
+  const seek=panel.querySelector('#si-seek');
+  seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);
+  seek.value=String(audio.currentTime||0);
+  panel.querySelector('.si-clock').textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration);
+  panel.querySelector('#si-volume').value=String(targetVolume());
+
+  const library=element('div','cap-local-library cap-library-panel');
+  const playlistBar=element('div','cap-playlist-bar');
+  const rail=element('div','cap-playlist-rail');
+  rail.setAttribute('role','group');
+  rail.setAttribute('aria-label','本地歌单');
+  const choices=listPlaylists();
+  let picked;
+  for(const list of choices){
+    const active=list.id===selected;
+    const button=libraryButton(rail,list.name,()=>{
+      selected=list.id;
+      filterText='';
+      trackPage=0;
+      render();
+    });
+    button.className='cap-playlist-pill';
+    button.dataset.pick=list.id;
+    button.title=list.name;
+    button.setAttribute('aria-pressed',String(active));
+    const name=element('span','cap-playlist-name',list.name);
+    button.textContent='';
+    button.append(name,element('small','',list.songs.length));
+    if(active)picked=button;
+  }
+  playlistBar.append(rail);
+  const newForm=element('form','cap-library-form');
+  const playlistName=element('input');
+  playlistName.id='si-playlist-name';
+  playlistName.setAttribute('aria-label','新建自定义歌单名称');
+  playlistName.placeholder='歌单名称';
+  playlistName.required=true;
+  playlistName.value=playlistNameDraft;
+  playlistName.oninput=()=>{playlistNameDraft=playlistName.value};
+  newForm.append(playlistName);
+  const create=element('button','', '创建歌单');
+  create.type='submit';
+  newForm.append(create);
+  const newButton=libraryMenu(playlistBar,'新建歌单','plus',{content:newForm,role:'dialog',initialFocus:playlistName});
+  newButton.dataset.action='new';
+  newForm.onsubmit=event=>{
+    event.preventDefault();
+    const name=playlistName.value.trim();
+    if(!name)return status('请输入歌单名称');
+    const id='custom:'+Date.now()+':'+hash(name);
+    playlist(id,name,'custom');
+    selected=id;
+    playlistNameDraft='';
+    filterText='';
+    render();
+    root.querySelector('[data-action="new"]')?.focus();
+  };
+  library.append(playlistBar);
+
+  const tools=element('div','cap-library-tools');
+  const filter=element('input');
+  filter.type='search';
+  filter.id='si-filter';
+  filter.placeholder='搜索歌曲或歌手';
+  filter.setAttribute('aria-label','搜索当前歌单的歌曲或歌手');
+  filter.value=filterText;
+  filter.oninput=()=>{
+    filterText=filter.value;
+    trackPage=0;
+    previousTrackScrollReset=true;
+    render();
+  };
+  tools.append(filter);
+  const addForm=element('form','cap-library-form');
+  const titleInput=element('input'),artistInput=element('input');
+  titleInput.id='si-song-title';
+  titleInput.placeholder='歌名或关键词';
+  titleInput.setAttribute('aria-label','歌名或关键词');
+  titleInput.value=songTitleDraft;
+  titleInput.oninput=()=>{songTitleDraft=titleInput.value};
+  artistInput.id='si-song-artist';
+  artistInput.placeholder='歌手名称（选填）';
+  artistInput.setAttribute('aria-label','歌手名称（选填）');
+  artistInput.value=songArtistDraft;
+  artistInput.oninput=()=>{songArtistDraft=artistInput.value};
+  const add=element('button','','搜索添加');
+  add.type='submit';
+  addForm.append(titleInput,artistInput,add);
+  const addButton=libraryMenu(tools,'添加歌曲','music',{content:addForm,role:'dialog',initialFocus:titleInput});
+  addButton.disabled=!pl;
+  addForm.onsubmit=async event=>{
+    event.preventDefault();
+    if(!pl)return status('请先选择歌单');
+    let title=titleInput.value.trim(),artist=artistInput.value.trim();
+    if(!title&&!artist)return status('请输入歌名或歌手关键词');
+    closeLibraryMenus(root);
+    const pick=await songPicker([title,artist].filter(Boolean).join(' '),'确认添加',!!title&&!!artist);
+    if(!pick||disposed||db.playlists[pl.id]!==pl)return;
+    if(pick.local){
+      status(addSong(pl,{id:trackId(title,artist),title,artist},null)?'已添加本地歌曲':'歌曲已存在');
+    }else{
+      title=String(pick.title);
+      artist=(Array.isArray(pick.artists)?pick.artists:[]).join('/')||'未知歌手';
+      const id=String(pick.id);
+      if(pl.songs.some(t=>String(t.neteaseId)===id)){status('歌曲已存在');return}
+      const existing=pl.songs.find(t=>t.id===trackId(title,artist)&&!t.neteaseId);
+      const coverUrl=validUrl(pick.cover).replace(/^http:/,'https:');
+      if(existing){
+        noteManualMatch(existing);cancelTrackLoad(existing);existing.neteaseId=id;existing.autoMatchDisabled=false;
+        if(coverUrl&&!validUrl(existing.coverUrl))existing.coverUrl=coverUrl;
+        save();status('已关联现有歌曲');
+      }else{
+        const base=trackId(title,artist);
+        status(addSong(pl,{id:pl.songs.some(t=>t.id===base)?base+'|netease:'+id:base,title,artist,neteaseId:id,coverUrl},null)?'已添加歌曲':'歌曲已存在');
+      }
+    }
+    songTitleDraft='';songArtistDraft='';
+    render();
+  };
+  const importFile=element('input');
+  importFile.id='si-import-file';
+  importFile.type='file';
+  importFile.accept='application/json,.json';
+  importFile.hidden=true;
+  importFile.onchange=async event=>{
+    const file=event.target.files?.[0], task=storyTask;
+    event.target.value='';
+    if(!file)return;
+    try{
+      const data=JSON.parse(await file.text());
+      if(!task.active()||disposed||!W.confirm('合并声屿备份并保留当前歌单、音源和设置？'))return;
+      restoreBackup(data);
+      status('备份已合并');
+    }catch(error){
+      if(task.active())status('导入失败：'+error.message);
+    }
+  };
+  libraryMenu(tools,'歌单管理','more',{items:()=>{
+    const items=[
+      {label:'批量补封面',icon:'image',action:()=>batchMetadata()},
+      {label:'扫描当前聊天',icon:'refresh',action:()=>{void scan(true);status('正在检查当前聊天，内容稳定9秒后收录')}},
+      {label:'导出当前歌单 CSV',icon:'download',disabled:!pl,action:()=>exportPlaylist(pl)},
+      {label:'导出音乐库备份',icon:'download',action:()=>downloadLibrary(JSON.stringify(db,null,2),'application/json','声屿_音乐库备份.json')},
+      {label:'播放诊断',icon:'note',action:()=>W.prompt('复制播放诊断（不含密钥和音源链接）',diagnostic())},
+      {label:'导入音乐库备份',icon:'upload',action:()=>importFile.click()},
+    ];
+    if(pl?.kind==='custom')items.push({
+      label:'删除当前自建歌单',icon:'trash',danger:true,action:()=>{
+        if(!W.confirm('确定删除自建歌单「'+pl.name+'」？'))return;
+        delete db.playlists[pl.id];selected=current;save();render();
+      },
+    });
+    return items;
+  }});
+  library.append(tools,importFile);
+
+  const scroller=element('div','cap-library-scroll');
+  if(!visibleTracks.length){
+    scroller.append(element('p','cap-library-empty',query?'没有匹配的歌曲':'暂无歌曲。可手动添加，或从聊天的 <bgm> 标签收录。'));
+  }
+  for(const {t,i} of visibleTracks){
+    const active=playing?.id===t.id;
+    const row=element('div','si-track');
+    row.classList.toggle('is-current',active);
+    const play=libraryButton(row,t.title,()=>playIndex(i));
+    play.className='cap-track-title';
+    play.dataset.play=String(i);
+    if(active)play.setAttribute('aria-current','true');
+    play.textContent='';
+    play.append(element('span','si-song',t.title),element('small','si-muted si-song',t.artist+(t.source?' · 第'+t.source.floor+'楼':'')));
+    const menu=libraryMenu(row,'歌曲操作','more',{items:()=>localTrackActions(pl,t,i)});
+    menu.classList.add('cap-action-menu');
+    scroller.append(row);
+  }
+  library.append(scroller);
+
+  if(pageCount>1){
+    const pager=element('div','cap-library-pager');
+    const page=offset=>{
+      trackPage+=offset;
+      previousTrackScrollReset=true;
+      render();
+    };
+    const prev=libraryButton(pager,'上一页',()=>page(-1),'left');
+    prev.disabled=trackPage===0;
+    prev.dataset.page='prev';
+    pager.append(element('span','',String(trackPage+1)+' / '+pageCount));
+    const next=libraryButton(pager,'下一页',()=>page(1),'right');
+    next.disabled=trackPage+1>=pageCount;
+    next.dataset.page='next';
+    library.append(pager);
+  }
+  const message=element('p','si-status cap-library-status',statusText);
+  message.setAttribute('role','status');
+  library.append(message);
+  panel.querySelector('.cap-local-library')?.remove();
+  panel.append(library);
+  rail.scrollLeft=railLeft;
+  if(scopeChanged&&picked){
+    const bar=rail.getBoundingClientRect(),pill=picked.getBoundingClientRect();
+    if(pill.right>bar.right)rail.scrollLeft+=pill.right-bar.right;
+    else if(pill.left<bar.left)rail.scrollLeft-=bar.left-pill.left;
+  }
+  scroller.scrollTop=scopeChanged||previousTrackScrollReset?0:trackTop;
+  previousTrackScrollReset=false;
+  if(restoreFilter){filter.focus();filter.setSelectionRange(filterCursor,filterCursor)}
 }
-// 拖动悬浮岛：只在移动超过阈值时视为拖动；展开后面板跟随。
-let start=null;root.addEventListener('pointerdown',e=>{if(!e.target.closest('.si-island'))return;start={x:e.clientX,y:e.clientY,left:root.getBoundingClientRect().left,top:root.getBoundingClientRect().top};drag=false});
-D.addEventListener('pointermove',move);function move(e){if(!start)return;let dx=e.clientX-start.x,dy=e.clientY-start.y;if(Math.abs(dx)+Math.abs(dy)<8&&!drag)return;drag=true;root.style.left=Math.max(5,Math.min(W.innerWidth-155,start.left+dx))+'px';root.style.top=Math.max(5,Math.min(W.innerHeight-60,start.top+dy))+'px';root.style.right='auto'}
-D.addEventListener('pointerup',up);function up(){if(start&&drag){db.settings.position={left:root.style.left,top:root.style.top};save();setTimeout(()=>{drag=false},100)}start=null}
-if(db.settings.position){root.style.left=db.settings.position.left;root.style.top=db.settings.position.top;root.style.right='auto'}
+
+function downloadLibrary(value,type,filename){
+  const url=URL.createObjectURL(new Blob([value],{type}));
+  const link=D.createElement('a');link.href=url;link.download=filename;link.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+function exportPlaylist(pl){
+  const quote=value=>'"'+String(value??'').replace(/"/g,'""')+'"';
+  const rows=[['歌曲名称','歌手','网易云歌曲ID','来源角色','来源聊天ID','来源楼层','音源URL','封面URL']];
+  for(const t of pl.songs)rows.push([t.title,t.artist,t.neteaseId||'',t.source?.character||'',t.source?.chat||'',t.source?.floor??'',t.audioUrl||'',t.coverUrl||'']);
+  downloadLibrary('\uFEFF'+rows.map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8','声屿_'+pl.name.replace(/[\\/:*?"<>|]/g,'_')+'_歌单.csv');
+  status('已导出当前歌单 CSV（含来源记录）');
+}
+function localTrackActions(pl,t,i){
+  const move=offset=>{
+    const j=i+offset;
+    if(j<0||j>=pl.songs.length)return;
+    [pl.songs[i],pl.songs[j]]=[pl.songs[j],pl.songs[i]];
+    save();render();
+  };
+  return [
+    {label:'播放',icon:'play',action:()=>playIndex(i)},
+    {label:'查看歌曲来源',icon:'note',action:()=>{
+      const x=t.source;
+      W.alert('歌曲：'+t.title+' — '+t.artist+'\n'+(x?'角色：'+(x.character||'未知')+'\n聊天ID：'+(x.chat||'未知')+'\n楼层/消息ID：'+(x.floor??'未知'):'手动添加或旧版歌曲：无楼层来源记录')+'\n网易云歌曲ID：'+(t.neteaseId||'未关联'));
+    }},
+    {label:'复制到其他歌单',icon:'copy',action:()=>{
+      const destinations=listPlaylists().filter(p=>p.id!==pl.id);
+      if(!destinations.length)return status('请先创建另一份歌单');
+      const raw=W.prompt('复制「'+t.title+'」到哪份歌单？请输入序号：\n'+destinations.map((p,n)=>(n+1)+'. '+p.name).join('\n'),'1');
+      if(raw===null)return;
+      const index=Number(raw)-1,target=destinations[index];
+      if(!Number.isInteger(index)||!target)return status('无效歌单序号');
+      if(target.songs.some(x=>x.id===t.id))return status('目标歌单已包含这首歌');
+      target.songs.push(JSON.parse(JSON.stringify(t)));save();status('已复制到「'+target.name+'」');render();
+    }},
+    {label:'设置音源',icon:'link',action:()=>{
+      let url=W.prompt('输入你有权播放的 HTTPS/HTTP 音频直链（留空清除）：',t.audioUrl||'');
+      if(url===null)return;
+      url=url.trim();
+      if(url&&!validUrl(url))return status('音源地址必须是 http(s) URL');
+      noteManualMatch(t);cancelTrackLoad(t);t.audioUrl=url;
+      const cover=W.prompt('可选：专辑封面 HTTPS/HTTP 图片地址（留空保持不变）：',t.coverUrl||'');
+      if(cover!==null&&(!cover.trim()||validUrl(cover.trim())))t.coverUrl=cover.trim();
+      save();status('音源设置已保存');render();
+    }},
+    {label:'查找公开专辑封面候选',icon:'image',action:()=>chooseMetadata(t)},
+    {heading:'歌曲匹配'},
+    {label:'在线搜索匹配',icon:'search',action:async()=>{
+      try{
+        if(!shared.online?.ready())throw Error('请先配置并启用网易云');
+        status(await matchOnline(t,true)?'匹配成功':'未修改匹配');render();
+      }catch(error){status(error.message)}
+    }},
+    {label:t.neteaseId?'修改或解除网易云 ID':'手动输入网易云 ID',icon:'link',action:()=>{
+      const raw=W.prompt('粘贴网易云歌曲分享链接或歌曲数字 ID。留空可解除关联。\n可先在网易云查找准确版本。',t.neteaseId||'');
+      if(raw===null)return;
+      const id=neteaseId(raw);
+      if(raw.trim()&&!id)return status('未识别歌曲ID：请使用网易云歌曲分享链接或数字ID');
+      noteManualMatch(t);cancelTrackLoad(t);t.neteaseId=id||'';t.autoMatchDisabled=!id;
+      save();status(id?'已关联网易云歌曲 '+id+'（仅用于定位歌曲，不代表可直接播放）':'已解除网易云关联');render();
+    }},
+    {label:'在网易云打开或搜索',icon:'external',action:()=>openExternal(neteaseUrl(t))},
+    {heading:'排序'},
+    {label:'上移歌曲',icon:'up',disabled:i===0,action:()=>move(-1)},
+    {label:'下移歌曲',icon:'arrowdown',disabled:i+1===pl.songs.length,action:()=>move(1)},
+    {label:'删除歌曲',icon:'trash',danger:true,action:()=>{
+      if(!W.confirm('从「'+pl.name+'」删除歌曲「'+t.title+'」？'))return;
+      if(t===playing){stopPlaybackWork();playing=null;clearAudio();updateMedia()}
+      pl.songs.splice(i,1);save();render();
+    }},
+  ];
+}
+
+// The standalone island only moves once the pointer crosses the drag threshold.
+let dragStart=null;
+root.addEventListener('pointerdown',event=>{
+  if(!event.target.closest('.si-island'))return;
+  const rect=root.getBoundingClientRect();
+  dragStart={x:event.clientX,y:event.clientY,left:rect.left,top:rect.top};
+  drag=false;
+});
+function move(event){
+  if(!dragStart)return;
+  const dx=event.clientX-dragStart.x,dy=event.clientY-dragStart.y;
+  if(!drag&&Math.abs(dx)+Math.abs(dy)<8)return;
+  drag=true;
+  root.style.left=Math.max(5,Math.min(W.innerWidth-155,dragStart.left+dx))+'px';
+  root.style.top=Math.max(5,Math.min(W.innerHeight-60,dragStart.top+dy))+'px';
+  root.style.right='auto';
+}
+let dragResetTimer;
+function up(){
+  if(dragStart&&drag){
+    db.settings.position={left:root.style.left,top:root.style.top};
+    save();
+    clearTimeout(dragResetTimer);
+    dragResetTimer=setTimeout(()=>{drag=false},100);
+  }
+  dragStart=null;
+}
+D.addEventListener('pointermove',move);
+D.addEventListener('pointerup',up);
+if(db.settings.position){
+  root.style.left=db.settings.position.left;
+  root.style.top=db.settings.position.top;
+  root.style.right='auto';
+}
 applyGain(1);
+
 function readPlayback(){
   const saved=db.settings.playback;
   if(!Array.isArray(saved?.queue)||!saved.queue[saved.index])return;
@@ -917,6 +1280,7 @@ W[INSTANCE]={
     storyTasks.cancel();
     autoMatchTasks.cancel();
     closeSongPicker?.();
+    closeLibraryMenus(root);
     if(shared.onMusicConnectionChange===connectionChanged)delete shared.onMusicConnectionChange;
     D.removeEventListener('visibilitychange',onMediaVisibility);
     if(mediaSession){
@@ -927,6 +1291,7 @@ W[INSTANCE]={
     bgmIndex.clear();
     pendingTags.clear();
     clearTimeout(followTimer);
+    clearTimeout(dragResetTimer);
     unbindScan();
     D.removeEventListener('pointermove',move);
     D.removeEventListener('pointerup',up);

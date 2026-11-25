@@ -22,16 +22,21 @@ export async function withMusicTimeout(run, timeout, ...signals) {
     if (signal?.aborted) abort();
     else signal?.addEventListener('abort', abort, { once: true });
   }
-  const timer = setTimeout(() => controller.abort(new DOMException('请求超时', 'AbortError')), timeout);
+  let fallbackReason = new DOMException('请求已取消', 'AbortError');
+  const timer = setTimeout(() => {
+    fallbackReason = new DOMException('请求超时', 'AbortError');
+    controller.abort(fallbackReason);
+  }, timeout);
+  const abortReason = () => controller.signal.reason || fallbackReason;
   let rejectAborted;
   try {
     if (controller.signal.aborted) throw new DOMException('请求已取消', 'AbortError');
     const interruption = new Promise((_, reject) => {
-      rejectAborted = () => reject(controller.signal.reason);
+      rejectAborted = () => reject(abortReason());
       controller.signal.addEventListener('abort', rejectAborted, { once: true });
     });
     const operation = Promise.resolve().then(() => {
-      if (controller.signal.aborted) throw controller.signal.reason;
+      if (controller.signal.aborted) throw abortReason();
       return run(controller.signal);
     });
     return await Promise.race([operation, interruption]);
