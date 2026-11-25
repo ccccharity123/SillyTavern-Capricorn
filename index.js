@@ -1,5 +1,6 @@
 import { createScheduler, maintenancePriority } from './scheduler.js';
 import { mountPresetControls } from './preset.js';
+import { mountGlobalRegexControl } from './regex-global.js';
 import { createGenerationLifecycle } from './generation-lifecycle.js';
 import { getChatIdentity, getHostContext } from './host-context.js';
 import {
@@ -372,6 +373,7 @@ W.__capricornExtension = {
     recall?.close();
     maintenance.close();
     D.removeEventListener('visibilitychange', resume);
+    D.removeEventListener('keydown', onKeyDown);
     appearanceApi?.destroy();
     cleanupMobile?.destroy();
     cleanupMemorySide?.();
@@ -390,6 +392,13 @@ function resume() {
   if (D.hidden || dead) return;
   maintenance.resume();
   tick();
+}
+
+function onKeyDown(e) {
+  if (e.key !== 'Escape' || dead) return;
+  if (!nav.hidden) { close(); return; }
+  if (music?.isPlayerOpen?.()) { music.closePlayer(); return; }
+  if (memoryOpen()) memory.root.classList.add('shiyi-collapsed');
 }
 
 async function boot() {
@@ -496,7 +505,12 @@ if (memory?.root) {
   refreshIconBtn.innerHTML = SHIYI_ICONS.refresh;
   refreshIconBtn.title = '刷新时间轴';
   refreshIconBtn.setAttribute('aria-label', '刷新时间轴');
-  refreshIconBtn.onclick = () => void refreshTimeline();
+  refreshIconBtn.onclick = () => {
+    refreshIconBtn.classList.remove('is-spinning');
+    void refreshIconBtn.offsetWidth;
+    refreshIconBtn.classList.add('is-spinning');
+    void refreshTimeline();
+  };
 
   const styleBtn = D.createElement('button');
   styleBtn.type = 'button';
@@ -527,17 +541,41 @@ if (memory?.root) {
   more.append(label);
   tools.before(timeline, more);
   more.append(tools);
+  // Main memory destinations stay visible. Management actions remain in "more".
+  // Move the original buttons rather than cloning them, preserving their handlers.
+  const primaryNav = D.createElement('nav');
+  primaryNav.className = 'cap-memory-primary-nav';
+  primaryNav.setAttribute('aria-label', '拾忆主要功能');
+  for (const [id, label] of [
+    ['shiyi-timeline', '时间轴'],
+    ['shiyi-table', '表格'],
+    ['shiyi-dossier', '档案'],
+  ]) {
+    const button = id === 'shiyi-table'
+      ? [...tools.querySelectorAll('button')].find(el => el.textContent.trim() === '表格档案')
+      : id === 'shiyi-dossier'
+        ? [...tools.querySelectorAll('button')].find(el => el.textContent.trim() === '留痕档案')
+        : tools.querySelector('#shiyi-timeline');
+    if (!button) continue;
+    button.id = id;
+    button.textContent = label;
+    button.type = 'button';
+    button.classList.add('cap-memory-primary-btn');
+    primaryNav.append(button);
+  }
+  more.before(primaryNav);
   more.addEventListener('toggle', () => { if (!more.open) appearanceApi?.closeInlineDrawer(); });
   expandBtn?.addEventListener('click', () => void refreshTimeline());
   const refresh = memory.root.querySelector('#shiyi-timeline');
   if (refresh) {
-    refresh.textContent = '刷新时间轴';
+    refresh.textContent = '时间轴';
     refresh.onclick = () => void refreshTimeline();
   }
 }
 
 if (music?.root) { content.append(music.root); }
 D.addEventListener('visibilitychange',resume);
+D.addEventListener('keydown',onKeyDown);
 timer = setInterval(() => { if (!D.hidden) tick(); }, 4000);
 tick();
 
@@ -606,6 +644,7 @@ function mountNativeControls(){
   }
   switches(panel.querySelector('[data-switches]'));switches(menu);
   mountPresetControls(body,W,D);
+  const cleanupRegex=mountGlobalRegexControl(body,W,D);
   const open=D.createElement('button');open.className='menu_button';open.textContent='更多设置';open.onclick=()=>{nav.hidden=false;select('settings');};body.append(open);
   function attach(){
     if (!panel.isConnected) {
@@ -615,7 +654,7 @@ function mountNativeControls(){
     if (!menu.isConnected) D.querySelector('#extensionsMenu')?.append(menu);
   }
   attach();const observer=new MutationObserver(attach);observer.observe(D.body,{childList:true,subtree:true});
-  return ()=>{observer.disconnect();panel.remove();menu.remove();};
+  return ()=>{observer.disconnect();cleanupRegex();panel.remove();menu.remove();};
 }
 nativeControlsCleanup=mountNativeControls();
 const backupButton = controls.querySelector('[data-backup]');

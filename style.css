@@ -1526,3 +1526,619 @@ body .cap-full-player[data-size][data-android-viewport="true"]{left:var(--cap-re
 body .cap-full-player[data-light="true"]{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}
 body .cap-full-player[data-light="true"] .cap-ambient img{filter:none!important;opacity:.25;}
 body .cap-full-player[data-light="true"] *{animation:none!important;transition:none!important;scroll-behavior:auto!important;}
+
+/* v4.5.6: primary memory destinations are always visible on narrow phones. */
+body #shiyi-dock .cap-memory-primary-nav {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;
+  margin:10px 0 12px;min-width:0;width:100%;box-sizing:border-box;
+}
+body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
+  display:block!important;min-width:0!important;width:100%!important;
+  margin:0!important;padding:11px 3px!important;text-align:center!important;
+  font-size:13px!important;font-weight:650!important;white-space:nowrap!important;
+  overflow:hidden;text-overflow:ellipsis;
+}
+body #shiyi-dock.shiyi-collapsed .cap-memory-primary-nav{display:none!important}
+
+/* =========================================================
+   Apple HIG 审美与交互重构层 (Liquid Glass + Spring Physics)
+   ========================================================= */
+
+:root {
+  --apple-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --apple-bounce: cubic-bezier(0.22, 1, 0.36, 1);
+  --apple-tap: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* 1. 全局滚动条隐形化与细腻化 */
+#capricorn-hub nav::-webkit-scrollbar,
+#shiyi-dock.cap-memory-side::-webkit-scrollbar,
+.cap-resonance::-webkit-scrollbar,
+.cap-song-picker-results::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+#capricorn-hub nav::-webkit-scrollbar-thumb,
+#shiyi-dock.cap-memory-side::-webkit-scrollbar-thumb,
+.cap-resonance::-webkit-scrollbar-thumb,
+.cap-song-picker-results::-webkit-scrollbar-thumb {
+  background: rgba(128, 128, 128, 0.28);
+  border-radius: 999px;
+}
+#capricorn-hub nav::-webkit-scrollbar-track,
+#shiyi-dock.cap-memory-side::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 2. 主弹窗弹簧入场与 Liquid Glass 质感升级 */
+@keyframes capApplePopIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes capFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+#capricorn-hub nav:not([hidden]) {
+  animation: capApplePopIn 0.34s var(--apple-spring) both;
+  border-radius: 28px;
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 24px 64px rgba(0, 0, 0, 0.22),
+    0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* 3. 统一微交互：轻按回弹与键盘焦点环 */
+#capricorn-hub button,
+#shiyi-dock.cap-memory-side button,
+.cap-full-player button,
+.cap-song-picker button,
+.cap-recall button {
+  transition:
+    transform 0.16s var(--apple-tap),
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+#capricorn-hub button:active:not(:disabled),
+#shiyi-dock.cap-memory-side button:active:not(:disabled),
+.cap-song-picker button:active:not(:disabled),
+.cap-recall button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+#capricorn-hub :is(button, input, select, textarea):focus-visible,
+#shiyi-dock :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--am-accent, #fa243c) 75%, transparent);
+  outline-offset: 2px;
+}
+
+/* 4. 灵动岛：更细腻的玻璃折射、拖拽反馈与歌词切换动效 */
+#capricorn-hub .cap-island {
+  transition:
+    padding 0.44s var(--apple-spring),
+    max-width 0.46s var(--apple-spring),
+    height 0.32s var(--apple-spring),
+    transform 0.18s var(--apple-tap),
+    box-shadow 0.3s ease;
+}
+#capricorn-hub .cap-island:hover {
+  box-shadow:
+    inset 0 1.5px 4px var(--glass-highlight),
+    0 12px 32px rgba(0, 0, 0, 0.22);
+}
+#capricorn-hub .cap-island[data-dragging="true"] {
+  transition: transform 0.14s var(--apple-spring), box-shadow 0.14s ease !important;
+  transform: scale(1.05);
+  box-shadow:
+    inset 0 1.5px 4px var(--glass-highlight),
+    0 18px 40px rgba(0, 0, 0, 0.28) !important;
+  cursor: grabbing;
+}
+@keyframes capLyricFade {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 5. Apple Music 进度条交互增强（悬停/拖拽变粗，更易操控） */
+.cap-scrubber input[type="range"] {
+  height: 5px;
+  transition: height 0.18s var(--apple-spring);
+}
+.cap-scrubber input[type="range"]:hover,
+.cap-scrubber input[type="range"]:active {
+  height: 8px;
+}
+.cap-scrubber input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.18s var(--apple-spring), box-shadow 0.18s ease;
+}
+.cap-scrubber input[type="range"]:hover::-webkit-slider-thumb,
+.cap-scrubber input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+/* 6. 全屏歌词景深效果（Apple Music 标志性微模糊） */
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric {
+  filter: blur(0.6px);
+  transition:
+    opacity 0.32s var(--apple-spring),
+    transform 0.32s var(--apple-spring),
+    filter 0.32s var(--apple-spring);
+}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric:hover {
+  opacity: 0.78;
+  filter: blur(0);
+}
+body .cap-full-player[data-size="large"][data-detail="lyrics"] .cap-lyric.active {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1.02);
+  transform-origin: left center;
+}
+
+/* 7. 修复音质选择浮层：毛玻璃 + 正确响应日夜模式 */
+.cap-quality-menu {
+  background: var(--glass-bg, rgba(250, 250, 252, 0.88)) !important;
+  color: var(--glass-fg, #1d1d1f) !important;
+  border: 1px solid var(--glass-line, rgba(60, 60, 67, 0.14)) !important;
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  border-radius: 16px !important;
+  padding: 6px !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.22) !important;
+  animation: capApplePopIn 0.22s var(--apple-spring) both;
+}
+.cap-quality-menu button:hover {
+  background: var(--glass-control-hover, rgba(120, 120, 128, 0.16)) !important;
+}
+
+/* 8. 彻底重做「共鸣 · 剧情原声」界面 */
+.cap-resonance {
+  padding: 4px 2px 12px;
+  gap: 10px;
+}
+.cap-resonance h3 {
+  margin: 2px 2px 4px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cap-resonance input,
+.cap-resonance select {
+  background: var(--glass-control) !important;
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 12px !important;
+  padding: 9px 12px !important;
+  font-size: 13px !important;
+}
+.cap-resonance > button {
+  background: var(--glass-card) !important;
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 12px !important;
+  padding: 9px 14px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+.cap-resonance > button:hover:not(:disabled) {
+  background: var(--glass-control-hover) !important;
+}
+.cap-resonance details {
+  background: var(--glass-card);
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 16px;
+  padding: 12px 14px !important;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.04);
+}
+.cap-resonance summary {
+  font-weight: 600;
+  font-size: 14px;
+  list-style: none;
+}
+.cap-resonance summary::-webkit-details-marker { display: none; }
+.cap-resonance details button {
+  background: var(--am-accent-soft) !important;
+  color: var(--am-accent) !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  margin: 6px 6px 4px 0;
+}
+
+/* 9. 重做「选歌弹窗」为 iOS 毛玻璃模态框 */
+.cap-song-picker-overlay {
+  background: rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.cap-song-picker {
+  background: var(--glass-bg, rgba(32, 32, 36, 0.88)) !important;
+  color: var(--glass-fg, #f5f5f7) !important;
+  border: 1px solid var(--glass-line, rgba(255, 255, 255, 0.14));
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  border-radius: 24px !important;
+  padding: 18px !important;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.36) !important;
+  animation: capApplePopIn 0.28s var(--apple-spring) both;
+}
+.cap-song-picker input {
+  background: var(--glass-control) !important;
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 12px !important;
+}
+.cap-song-picker .cap-song-picker-row {
+  background: var(--glass-card) !important;
+  border: 1px solid transparent !important;
+  border-radius: 14px !important;
+  padding: 8px 10px !important;
+}
+.cap-song-picker .cap-song-picker-row[aria-pressed="true"] {
+  background: var(--am-accent-soft) !important;
+  border-color: var(--am-accent) !important;
+}
+
+/* 10. 拾忆侧边栏：iOS 分段胶囊导航 + 刷新旋转反馈 */
+body #shiyi-dock .cap-memory-primary-nav {
+  background: color-mix(in srgb, var(--note-fg) 6%, transparent);
+  padding: 4px;
+  border-radius: 14px;
+  gap: 4px;
+}
+body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  padding: 8px 4px !important;
+  font-size: 13px !important;
+}
+body #shiyi-dock .cap-memory-primary-nav .cap-memory-primary-btn:hover {
+  background: var(--note-card) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+@keyframes capSpinOnce {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.cap-shiyi-icon-btn.is-spinning svg {
+  animation: capSpinOnce 0.55s var(--apple-spring);
+}
+
+/* 11. iOS Inset Grouped 风格设置分组 (appearance.js) */
+.cap-setting-group {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--glass-control) 55%, transparent);
+  border: 1px solid var(--glass-line);
+}
+.cap-setting-group-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--glass-muted);
+  margin: 0 0 8px 2px;
+}
+#capricorn-hub .cap-appearance details > summary,
+#shiyi-dock .cap-appearance details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  padding: 8px 4px;
+  border-radius: 10px;
+  font-weight: 600;
+  transition: background 0.18s ease;
+}
+#capricorn-hub .cap-appearance details > summary::-webkit-details-marker,
+#shiyi-dock .cap-appearance details > summary::-webkit-details-marker {
+  display: none;
+}
+#capricorn-hub .cap-appearance details > summary::after,
+#shiyi-dock .cap-appearance details > summary::after {
+  content: "›";
+  font-size: 16px;
+  font-weight: 600;
+  opacity: 0.55;
+  transform: rotate(0deg);
+  transition: transform 0.24s var(--apple-spring);
+}
+#capricorn-hub .cap-appearance details[open] > summary::after,
+#shiyi-dock .cap-appearance details[open] > summary::after {
+  transform: rotate(90deg);
+}
+.cap-appearance input[type="range"] {
+  width: 100%;
+  accent-color: var(--am-accent, #fa243c);
+  margin-top: 6px;
+  cursor: pointer;
+}
+.cap-appearance input[type="color"] {
+  height: 36px;
+  padding: 3px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+body[data-cap-paper] #shiyi-dock.cap-memory-side .cap-note-customizer:not([hidden]) {
+  animation: capApplePopIn 0.28s var(--apple-spring) both;
+  border-style: solid;
+  box-shadow: var(--note-shadow);
+}
+
+/* 12. 云端曲库 (cloud.js) 与本地曲库菜单 (music.js) */
+#capricorn-hub .cap-content > section.cap-backup {
+  padding: 14px;
+  border-radius: 20px;
+}
+#capricorn-hub .cap-content > section.cap-backup > p {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--glass-muted);
+  background: var(--glass-control);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin: 6px 0 10px;
+}
+#capricorn-hub .cap-content > section.cap-backup .si-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  margin: 2px 0;
+  border-radius: 12px;
+  transition: background 0.16s ease;
+}
+#capricorn-hub .cap-content > section.cap-backup .si-row:hover {
+  background: var(--glass-control);
+}
+#capricorn-hub .cap-content > section.cap-backup .si-row .cap-track-title {
+  margin: 0 !important;
+  padding: 6px 4px !important;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+#capricorn-hub .cap-action-menu {
+  border-radius: 12px;
+  transition: background 0.18s ease;
+}
+#capricorn-hub .cap-action-menu[open] {
+  background: color-mix(in srgb, var(--glass-control) 55%, transparent);
+  padding: 4px 8px 8px;
+  margin-top: 4px;
+}
+#capricorn-hub .cap-action-menu > summary {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--glass-muted);
+}
+#capricorn-hub .cap-action-menu > summary::-webkit-details-marker { display: none; }
+#capricorn-hub .cap-action-menu > summary:hover { color: var(--glass-fg); }
+
+/* 13. 网易云与隐私设置 (netease.js) */
+#capricorn-hub .cap-settings .cap-backup > p:not([role="status"]) {
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--glass-muted);
+  margin: 6px 0 10px;
+}
+#capricorn-hub .cap-settings img[alt*="二维码"] {
+  display: block;
+  margin: 10px auto;
+  padding: 10px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+/* 14. 拾忆弹窗、留痕档案 (dossier.js) 与来源追溯 (memory-provenance.js) */
+.shiyi-overlay {
+  animation: capFadeIn 0.2s ease both;
+}
+.shiyi-dialog {
+  animation: capApplePopIn 0.3s var(--apple-spring) both;
+}
+.shiyi-dialog .shiyi-history-item {
+  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid rgba(120, 130, 150, 0.16) !important;
+  border-radius: 16px;
+  padding: 14px 16px !important;
+  margin: 10px 0;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  transition: transform 0.2s var(--apple-spring), box-shadow 0.2s ease;
+}
+.shiyi-dialog .shiyi-history-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+}
+.shiyi-dialog .shiyi-history-item > strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+.shiyi-dialog .shiyi-history-item > p {
+  margin: 4px 0 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--sy-muted, #526071);
+}
+.shiyi-dialog .shiyi-history-item > button {
+  padding: 6px 11px !important;
+  font-size: 12px !important;
+  border-radius: 10px !important;
+  margin: 4px 6px 0 0 !important;
+}
+.shiyi-dialog select {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 148, 177, 0.25);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.62);
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+.shiyi-dialog select:focus {
+  border-color: rgba(22, 119, 242, 0.5);
+  background: rgba(255, 255, 255, 0.85);
+}
+.cap-memory-provenance {
+  margin: 8px 0;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(128, 128, 128, 0.08);
+  font-size: 12px;
+}
+.cap-memory-provenance > summary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+  padding: 2px 0;
+}
+.cap-memory-provenance > summary::-webkit-details-marker { display: none; }
+.cap-memory-provenance ul {
+  margin: 8px 0 4px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cap-memory-provenance li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* 15. 主播放器精修 (now-playing.js) + 回响漫游 (recall.js) + 预设 (preset.js) */
+.cap-full-player .cap-art img {
+  opacity: 0;
+  transition: opacity 0.42s var(--apple-spring), transform 0.42s var(--apple-spring);
+}
+.cap-full-player .cap-art img.is-loaded {
+  opacity: 1;
+}
+.cap-full-player[data-size] .cap-grabber {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 28%, transparent);
+  transition: background 0.2s ease, width 0.2s var(--apple-spring);
+}
+.cap-full-player[data-size] .cap-grabber:hover {
+  width: 48px;
+  background: color-mix(in srgb, currentColor 48%, transparent);
+}
+.cap-full-player .cap-queue-row {
+  border-radius: 14px;
+  padding: 6px 8px;
+  transition: background 0.18s ease, transform 0.16s var(--apple-tap);
+}
+.cap-full-player .cap-queue-row.is-current {
+  background: color-mix(in srgb, var(--am-accent, #fa243c) 22%, rgba(255, 255, 255, 0.12));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--am-accent, #fa243c) 38%, transparent);
+}
+.cap-recall {
+  background: radial-gradient(circle at 50% 18%, #242b38, #12161f 85%) !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", system-ui, sans-serif !important;
+  animation: capFadeIn 0.28s ease both;
+}
+.cap-recall-cover {
+  filter: blur(55px) saturate(160%) !important;
+  opacity: 0.28 !important;
+  transform: scale(1.15);
+  transition: opacity 0.6s ease;
+}
+.cap-recall header strong {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cap-recall .cap-recall-controls {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 10px 14px;
+}
+.cap-recall article {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border-radius: 24px !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.cap-recall article small {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+  opacity: 0.85;
+}
+.cap-recall article h2 {
+  margin: 12px 0 14px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cap-recall button,
+.cap-recall select {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-radius: 12px !important;
+  padding: 8px 14px !important;
+  font-size: 13px;
+  font-weight: 600;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.cap-recall button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+#capricorn-native-settings .cap-backup > div {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid rgba(128, 128, 128, 0.16);
+}

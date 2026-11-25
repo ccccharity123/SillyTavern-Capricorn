@@ -40,7 +40,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   panel.innerHTML = `
     <div class="cap-ambient" aria-hidden="true"><img alt="" hidden></div>
     <div class="cap-fp-shell">
-      
+      <div class="cap-grabber" data-close title="收起播放器" aria-hidden="true"></div>
       <header>
         <button data-close class="cap-fp-pill" aria-label="收起播放器">${icon("down")}</button>
         <span data-heading class="cap-fp-heading">声屿</span>
@@ -88,7 +88,15 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   function closeQuality(){qualityMenu.hidden=true;qualityButton.setAttribute('aria-expanded','false')}
   qualityButton.onclick=()=>{if(!qualityMenu.hidden){closeQuality();return}qualityMenu.replaceChildren();for(const [level,label] of Object.entries(qualityLabels)){const b=D.createElement('button');b.type='button';b.textContent=label+(state().preferredQuality===level?'  ✓':'');b.onclick=()=>{closeQuality();quality?.(level)};qualityMenu.append(b)}qualityMenu.hidden=false;qualityButton.setAttribute('aria-expanded','true')};
   panel.addEventListener('click',e=>{if(!qualityMenu.contains(e.target)&&!qualityButton.contains(e.target))closeQuality()});
-  panel.addEventListener('keydown',e=>{if(e.key==='Escape')closeQuality()});
+  panel.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (!qualityMenu.hidden) closeQuality();
+      else closePanel();
+    } else if (e.key === ' ' && !/INPUT|TEXTAREA|SELECT|BUTTON/.test(e.target?.tagName)) {
+      e.preventDefault();
+      toggle?.();
+    }
+  });
   const sizes = ['compact','half','large'];
   let size = 'half'; try { const saved = W.localStorage.getItem('capricorn_player_size'); if(sizes.includes(saved)) size=saved; } catch {}
   panel.dataset.size=size;
@@ -188,6 +196,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     panel.style.removeProperty('--cap-art-color');
   };
   img.onload=()=>{
+    img.classList.add('is-loaded');
     cancelColorProbe();
     const url=img.src;
     const probe=new W.Image();
@@ -415,6 +424,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     if(id!==identity){
       identity=id;
       cancelColorProbe();
+      img.classList.remove('is-loaded');
       img.hidden=true;
       img.removeAttribute('src');
       img.alt='专辑封面';
