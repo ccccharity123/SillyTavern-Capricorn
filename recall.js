@@ -1,11 +1,13 @@
+import { indexStoryThreads } from './story-threads.js';
+import { indexStoryTracks } from './story-soundtrack.js';
 import { appendMemoryProvenance } from './memory-provenance.js';
 import { mountSelects, refreshSelect } from './ui-select.js';
 import { icon } from './icons.js';
 
 export function createRecall({ D, W, scope, memory, music, shared }) {
-  let panel = null, timer = null, epoch = 0, key = '', prior = false, rows = [], songs = [], pos = 0, auto = false, lastSong = '', touch = null;
+  let panel = null, timer = null, epoch = 0, key = '', prior = false, rows = [], songs = new Map(), pos = 0, auto = false, lastSong = '', touch = null;
   let chapter, star, person, body, progress, prev, next, run, sound, caption, captionText, cover, people = [];
-  let selects;
+  let selects, threads = new Map();
   const el = (tag, text, parent, cls = '') => {
     const n = D.createElement(tag);
     if (cls) n.className = cls;
@@ -92,9 +94,37 @@ export function createRecall({ D, W, scope, memory, music, shared }) {
     el('h2', r.title, body);
     el('p', r.content, body, 'cap-recall-text');
     renderSource(r);
+    const related = threads.get(r.sourceKey) || [];
+    if (related.length) {
+      const details = el('details', null, body, 'cap-memory-provenance');
+      el('summary', `关联事件与伏笔 · ${related.length}`, details);
+      const list = el('div', null, details);
+      let shown = 0;
+      function more() {
+        const end = Math.min(shown + 15, related.length);
+        for (; shown < end; shown++) {
+          const {thread,previous,next} = related[shown];
+          const item = el('div', null, list);
+          el('p', `${thread.kind} · ${thread.title}${thread.status ? ' · 最新档案状态：'+thread.status : ''}`, item);
+          for (const [label,target] of [['较早关联节点',previous],['较晚关联节点',next]]) {
+            if (!target) continue;
+            const button = el('button',label,item); button.type='button';
+            button.onclick=()=>{
+              if (!panel || scope()!==key) return close();
+              const index=filtered().findIndex(row=>row.sourceKey===target);
+              if(index<0){button.textContent='节点不在当前筛选范围';return;}
+              pos=index;render(false);
+            };
+          }
+        }
+        load.hidden=shown>=related.length;
+      }
+      const load=el('button','更多关联',details);load.type='button';load.onclick=more;
+      details.addEventListener('toggle',()=>{if(details.open&&!shown)more();});
+    }
     body.scrollTop = 0;
 
-    const tracks = songs.filter(t => String(t.floor) === String(r.floor));
+    const tracks = songs.get(String(r.floor)) || [];
     const t = tracks.find(track => track.playable);
     if (tracks.length) {
       caption.dataset.empty = 'false';
@@ -135,8 +165,9 @@ export function createRecall({ D, W, scope, memory, music, shared }) {
       const nextSongs = await music?.timelineSongs() || [];
       if (!panel || n !== epoch || scope() !== key) return;
       rows = data.sort((a, b) => a.floor - b.floor);
-      songs = nextSongs;
+      songs = indexStoryTracks(nextSongs);
       people = memory.recallPeople?.() || [];
+      threads = indexStoryThreads(rows, memory.recallThreads?.() || []);
       const c = chapter.value, p = person.value;
       chapter.replaceChildren();
       person.replaceChildren();
@@ -173,7 +204,7 @@ export function createRecall({ D, W, scope, memory, music, shared }) {
     key = scope();
     prior = !!shared.recallLocked;
     shared.recallLocked = true;
-    rows = []; songs = []; people = []; pos = 0; auto = false; lastSong = '';
+    rows = []; songs = new Map(); threads = new Map(); people = []; pos = 0; auto = false; lastSong = '';
     panel = el('section', null, D.body, 'cap-recall');
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-label', '回响 · 剧情漫游');

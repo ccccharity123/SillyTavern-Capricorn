@@ -1,4 +1,5 @@
 import { popover } from './ui-popover.js';
+import { attachSegmentSlider } from './ui-motion.js';
 
 const pages = [
   ['memory', '拾忆'], ['music', '声屿'], ['appearance', '外观'],
@@ -24,7 +25,16 @@ export function mountSettings(root) {
       entry.tab.tabIndex = current ? 0 : -1;
       entry.view.hidden = !current;
     }
-    if (focus) groups.get(id).tab.focus();
+    const activeTab = groups.get(id)?.tab;
+    if (activeTab) {
+      tabSlider?.sync();
+      if (focus) activeTab.focus();
+      if (activeTab.offsetParent && typeof activeTab.scrollIntoView === 'function') {
+        const reduce = document.defaultView?.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+        try { activeTab.scrollIntoView({ inline: 'center', block: 'nearest', behavior: reduce ? 'auto' : 'smooth' }); }
+        catch (_) {}
+      }
+    }
   }
 
   for (const [id, label] of pages) {
@@ -53,7 +63,7 @@ export function mountSettings(root) {
     }
   }
   tabs.onkeydown = event => {
-    const buttons = Array.from(tabs.children);
+    const buttons = Array.from(tabs.querySelectorAll('button[role="tab"]'));
     const index = buttons.indexOf(event.target);
     if (index < 0) return;
     let next;
@@ -68,15 +78,22 @@ export function mountSettings(root) {
     activate(pages[next][0], true);
   };
   root.prepend(tabs, views);
+  const tabSlider = attachSegmentSlider(tabs, {
+    itemSelector: 'button[role="tab"]:not([hidden])',
+    isActive: el => el.getAttribute('aria-selected') === 'true',
+  });
   classify();
   activate('appearance', false);
+  tabSlider.sync(true);
   root.classList.add('cap-settings-paged');
   const Observer = document.defaultView.MutationObserver;
   const observer = typeof Observer === 'function' ? new Observer(classify) : null;
   if (observer) observer.observe(root, { childList: true });
   return {
     activate(id) { if (groups.has(id)) activate(id, false); },
+    sync(instant = false) { tabSlider?.sync(instant); },
     destroy() {
+      tabSlider?.destroy();
       if (observer) observer.disconnect();
       for (const entry of groups.values()) root.append(...entry.view.children);
       tabs.remove();

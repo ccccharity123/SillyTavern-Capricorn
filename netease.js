@@ -1,6 +1,7 @@
 import { mountGD } from './gd.js';
 import { createLatestTask, withMusicTimeout } from './music-tasks.js';
 import { refreshSelect } from './ui-select.js';
+import { uiConfirm, uiToast } from './ui-dialog.js';
 
 export function mountNetease(settings, shared) {
   const box = document.createElement('section');
@@ -113,8 +114,8 @@ export function mountNetease(settings, shared) {
     return path === '/health' || path.startsWith('/music/');
   };
 
-  mode.onchange = () => {
-    if (mode.value !== 'local' && !confirm(disclosure.textContent + ' 是否授权？')) {
+  mode.onchange = async () => {
+    if (mode.value !== 'local' && !await uiConfirm(disclosure.textContent + '\n\n是否授权切换？', { title: '联网与隐私授权', confirmText: '同意并切换' })) {
       mode.value = localStorage.getItem('capricorn_privacy_mode') || 'local';
       refreshSelect(mode);
       syncModeVisibility();
@@ -152,7 +153,7 @@ export function mountNetease(settings, shared) {
       localStorage.removeItem('capricorn_music_token:' + endpoint());
       key.value = '';
       adminPanel.hidden = true;
-      status.textContent = '本地凭证已清除';
+      status.textContent = '本地凭证已清除'; uiToast('已清除本地凭证', { kind: 'info' });
     } catch (e) {
       status.textContent = e.message;
     }
@@ -170,7 +171,7 @@ export function mountNetease(settings, shared) {
     try {
       localStorage.setItem('capricorn_music_endpoint', endpoint());
       localStorage.setItem('capricorn_music_token:' + endpoint(), key.value.trim());
-      status.textContent = '连接已保存';
+      status.textContent = '连接已保存'; uiToast('网关连接已保存', { kind: 'success' });
       void check(0);
     } catch (e) {
       status.textContent = e.message;
@@ -252,7 +253,7 @@ export function mountNetease(settings, shared) {
       b.type = 'button';
       b.textContent = '撤销';
       b.onclick = async () => {
-        if (!confirm('撤销此好友访问权限？')) return;
+        if (!await uiConfirm('撤销后该好友将无法继续连接共享服务。', { title: '撤销访问权限', danger: true, confirmText: '撤销' })) return;
         try { await manage('/admin/revoke?id=' + encodeURIComponent(g.id), 'POST'); await list(); }
         catch (e) { status.textContent = e.message; }
       };

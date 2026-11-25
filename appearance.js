@@ -8,6 +8,7 @@ import {
   clearBgImage
 } from './fonts.js';
 import { refreshSelect } from './ui-select.js';
+import { uiConfirm, uiToast } from './ui-dialog.js';
 
 export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   const D = root.ownerDocument, W = D.defaultView, key = 'capricorn_appearance_v1';
@@ -505,7 +506,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         if (!f) return;
         if (f.size > 25 * 1024 * 1024) throw Error("图片不能超过25MB");
         bgImageUrl = await saveBgImage(f);
-        if (bgTip) bgTip.textContent = '已应用背景图';
+        if (bgTip) bgTip.textContent = '已应用背景图'; uiToast('已应用自定义背景图', { doc: D, kind: 'success' });
         apply(p);
       } catch (e) {
         if (bgTip) bgTip.textContent = e.message;
@@ -539,11 +540,11 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     box.querySelector('[data-import-font]').onclick = () => file.click();
     file.onchange = async () => {
       try { const f = file.files?.[0]; if (!f) return; if (f.size > 25*1024*1024) throw Error('字体不能超过25MB');
-        const font = await saveFontFile(f); p[k] = font.id; await refreshFonts(); save(); setFontStatus('字体已导入');
+        const font = await saveFontFile(f); p[k] = font.id; await refreshFonts(); save(); setFontStatus('字体已导入'); uiToast('字体已导入并应用', { doc: D, kind: 'success' });
       } catch(e) { setFontStatus(e.message); } finally { file.value = ''; }
     };
     box.querySelector('[data-delete-font]').onclick = async () => {
-      const id = sel.value; if (!id || id === 'shared' || !W.confirm('删除共享字体？')) return;
+      const id = sel.value; if (!id || id === 'shared' || !await uiConfirm('删除后将从本地字体库移除该字体文件。', { doc: D, title: '删除共享字体', danger: true, confirmText: '删除' })) return;
       try { await deleteFont(id); if (p.sharedFontId === id) p.sharedFontId = ''; if (p.noteFontId === id) p.noteFontId = 'shared'; await refreshFonts(); save(); } catch(e) { setFontStatus(e.message); }
     };
   }
@@ -555,7 +556,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     const status = msg => { statusNode.textContent = msg; };
     function commit(values) {
       const old = p; p = {...p, ...values};
-      try { apply(p); save(); sync(); status('已保存'); } catch(e) { p = old; apply(p); status(e.message); }
+      try { apply(p); save(); sync(); status('已保存'); uiToast('自定义样式已保存', { doc: D, kind: 'success' }); } catch(e) { p = old; apply(p); status(e.message); }
     }
     sync();
     fields.forEach((el,i) => { el.oninput = () => { try { apply({...p,...Object.fromEntries(fields.map((f,j)=>[keys[j],f.value]))}); status('预览中'); } catch(e) { status(e.message); } }; });

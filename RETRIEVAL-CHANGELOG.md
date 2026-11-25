@@ -1,0 +1,2 @@
+# 4.6.0 beta.5
+Hybrid recall: retain uncovered chapter sources, exclude already selected summary sources and previously emitted chapter sources; filter missing sources. Do not emit a chapter if its complete projected line cannot fit. Only register dated event deduplication for an authoritative full summary, not a truncated projection. No storage or audio changes. Classic/legacy and semantic cross-category deduplication unchanged. Run: node --experimental-default-type=module tests/regression.mjs.

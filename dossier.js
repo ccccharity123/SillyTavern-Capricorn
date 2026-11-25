@@ -1,3 +1,4 @@
+import {indexDossierLinks} from './dossier-links.js';
 import { hasOwn } from './compat.js';
 import {fuzzy} from './traces.js';
 import { appendMemoryProvenance } from './memory-provenance.js';
@@ -45,7 +46,12 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
    const summaries = view.summaries();
    const rows = [...manualRows, ...ledger.entities.filter(row => !manualIds.has(row.id))];
 
-   function render() {
+   const isActive = row => (row.sources || []).length > 0 && (row.sources || []).every(key => hasOwn(ledger.rows, key) || hasOwn(summaries, key));
+   const links = indexDossierLinks(ledger.entities.filter(row => !manualIds.has(row.id)), isActive);
+   let limit = 40;
+   function render(reset = true) {
+    if (reset) limit = 40;
+    let matched = 0;
     if (identity() !== id) return;
     list.replaceChildren();
     const query = search.value.toLowerCase();
@@ -54,6 +60,8 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      if (!fuzzy(`${row.title} ${row.people} ${row.body} ${row.status}`, query)) continue;
      const stale = (row.sources || []).some(key => !hasOwn(ledger.rows, key) && !hasOwn(summaries, key));
      if (filter.value !== '全部' && filter.value !== row.kind && !(filter.value === '来源失效' && stale)) continue;
+     matched++;
+     if (matched > limit) continue;
      const pinned = pins.includes(row.id);
      const card = el('div', list);
      card.className = 'shiyi-history-item cap-dossier-card';
@@ -97,6 +105,54 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
      appendMemoryProvenance(D, card, () => identity() === id && view.provenance(
       row.kind === '伏笔' ? 'foreshadow' : 'dossier', row.id, { origin }), jumpSource);
 
+     if (!stale && !manualIds.has(row.id) && row.relationshipTimeline?.length) {
+      const timeline = el('details', card);
+      el('summary', timeline, `关系演变 · ${row.relationshipTimeline.length}条`);
+      timeline.addEventListener('toggle', () => {
+       if (!timeline.open || timeline.dataset.loaded || identity() !== id || !active()) return;
+       timeline.dataset.loaded = 'true';
+       const items = el('div', timeline);
+       let offset = row.relationshipTimeline.length;
+       const more = el('button', timeline, '查看更早记录');
+       more.type = 'button';
+       const page = () => {
+        if (identity() !== id || !active()) return;
+        const start = Math.max(0, offset - 20);
+        for (let i = offset - 1; i >= start; i--) {
+         const event = row.relationshipTimeline[i];
+         if (!hasOwn(read().ledger().rows, event.source)) continue;
+         el('p', items, `${event.floor}楼 · ${event.current ? '当时状态' : event.frame}${event.when ? ' · '+event.when : ''}：${Object.entries(event.changes).map(([k,v])=>`${k}：${v}`).join('；')}`);
+        }
+        offset = start; more.hidden = !offset;
+       };
+       more.onclick = page; page();
+      });
+     }
+     const related = !stale && links.get(row.id);
+     if (related?.length) {
+      const details = el('details', card);
+      el('summary', details, `关联档案 · ${related.length}项`);
+      details.addEventListener('toggle', () => {
+       if (!details.open || details.dataset.loaded || identity() !== id || !active()) return;
+       details.dataset.loaded = 'true';
+       const items = el('div', details);
+       let offset = 0;
+       const more = el('button', details, '加载更多关联');
+       more.type = 'button';
+       function appendPage() {
+        if (identity() !== id || !active()) return;
+        for (const linked of related.slice(offset, offset + 20)) {
+         const item = el('div', items);
+         el('strong', item, `${linked.kind} · ${linked.title}`);
+         appendMemoryProvenance(D, item, () => identity() === id && active() && read().provenance(linked.kind === '伏笔' ? 'foreshadow' : 'dossier', linked.id, {origin:'derived'}), jumpSource);
+        }
+        offset += 20;
+        more.hidden = offset >= related.length;
+       }
+       more.onclick = appendPage;
+       appendPage();
+      });
+     }
      const actions = el('div', card);
      actions.className = 'cap-dossier-actions';
      const pin = el('button', actions);
@@ -129,7 +185,12 @@ export function createDossier({D,modal,identity,check,archive,archivePatch,seria
       };
      }
     }
-    if (setCount) setCount(list.children.length);
+    if (setCount) setCount(matched);
+    if (matched > limit) {
+     const more = el('button', list, `加载更多（${Math.min(limit, matched)}/${matched}）`);
+     more.type = 'button';
+     more.onclick = () => { limit += 40; render(false); };
+    }
     if (!list.children.length) el('p', list, '暂无匹配的留痕档案');
    }
 

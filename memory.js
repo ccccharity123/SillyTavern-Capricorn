@@ -1,5 +1,6 @@
 import { hasOwn } from './compat.js';
 import { icon } from './icons.js';
+import { uiAlert, uiConfirm, uiPrompt, uiToast } from './ui-dialog.js';
 import { mountSelects } from './ui-select.js';
 import {boundedRecall,RecallTimeout} from './recall-deadline.js';
 import {createVectorHealth} from './vector-health.js';
@@ -266,7 +267,15 @@ export async function startMemory(shared) {
   };
   function hash(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return (h>>>0).toString(16).toUpperCase().padStart(8,'0');}
   const sourceKey=m=>`${m.message_id}:${hash(String(m.message??''))}`;
-  const notice=(msg)=>{console.info('[拾忆]',msg); const el=$('#shiyi-status',state.root);if(el)el.textContent=msg;};
+  const notice=(msg,toastKind='auto')=>{
+    console.info('[拾忆]',msg);
+    const el=$('#shiyi-status',state.root);
+    if(el)el.textContent=msg;
+    if(toastKind===false||hostDocument.hidden||!msg)return;
+    const text=String(msg);
+    const kind=toastKind!=='auto'?toastKind:/失败|异常/.test(text)?'error':/未加载|为空|未发现|不存在|禁止|冲突|取消|没有选中|没有可核对|已切换|请先/.test(text)?'warn':/已更新|已保存|成功|已隐藏|已恢复|已归档|修改成功/.test(text)?'success':'info';
+    uiToast(text,{doc:hostDocument,kind});
+  };
   const error=(e)=>{console.error('[拾忆]',e);notice('操作失败：'+(e?.message||e));};
   const messageCatalog=createMessageCatalog({context,scope:identity,last:()=>api('getLastMessageId'),
     read:(start,end,full)=>api('getChatMessages',full||start!==end?`${start}-${end}`:String(start),{role:'assistant',hide_state:'all'}),
@@ -651,19 +660,19 @@ export async function startMemory(shared) {
   }
   let inputWarmTimer, inputWarmSnapshot;
   function onDraftInput(event){
-    if(event.target?.id!=='send_textarea'||event.isComposing)return;
+    if(shared.flags.memory===false||event.target?.id!=='send_textarea'||event.isComposing)return;
     clearTimeout(inputWarmTimer);
     const snapshot=inputWarmSnapshot;
     if(!snapshot||generation||state.disposed)return;
     inputWarmTimer=setTimeout(()=>{
-      if(snapshot!==inputWarmSnapshot||generation||state.disposed||identity()!==snapshot.id||state.messageVersion?.()!==snapshot.version||archiveRevision!==snapshot.revision)return;
+      if(shared.flags.memory===false||snapshot!==inputWarmSnapshot||generation||state.disposed||identity()!==snapshot.id||state.messageVersion?.()!==snapshot.version||archiveRevision!==snapshot.revision)return;
       warmLocal(snapshot.id,snapshot.messages,config());
     },350);
   }
   hostDocument.addEventListener?.('input',onDraftInput);
   let warmKey='', warmStatus='等待空闲', warming=false, warmRetryAt=0;
   function warmLocal(id,messages,cfg){
-    if(warming||Date.now()<warmRetryAt||generation||hostDocument.hidden||state.open||state.queue.length||cfg.engine!=='hybrid'||state.routeMode!=='unified'||typeof Worker==='undefined')return;
+    if(shared.flags.memory===false||warming||Date.now()<warmRetryAt||generation||hostDocument.hidden||state.open||state.queue.length||cfg.engine!=='hybrid'||state.routeMode!=='unified'||typeof Worker==='undefined')return;
     const revision=archiveRevision, sourceVersion=state.messageVersion?.();
     const key=JSON.stringify([id,revision,sourceVersion,persistedTableRevision,cfg.weaveMode,cfg.weaveKinds,cfg.layers]);
     if(key===warmKey)return;
@@ -689,7 +698,7 @@ export async function startMemory(shared) {
     else setTimeout(()=>void run(),50);
   }
   async function scan(task){
-    if(state.busy||state.disposed||generation)return;
+    if(shared.flags.memory===false||state.busy||state.disposed||generation)return;
     const id=identity();if(!id)return;
     if(id!==state.current){retrieval.stop();vector.reset();migration.reset();migrationScope="";state.closeModal?.();state.current=id;state.seen.clear();state.deferred.clear();state.stability.clear();state.queue=[];state.reviewRevision=undefined;archiveRevision++;}
     let messages;
@@ -919,7 +928,7 @@ export async function startMemory(shared) {
         const legacyNotice=legacy?'。旧版楼层记录缺少来源指纹，可在酒馆核对后手动恢复':'';
         const entries=Object.entries(d.manualHidden||{});
         if(!entries.length)return notice('没有可核对的拾忆归档'+legacyNotice);
-        if(!hostWindow.confirm(`恢复拾忆隐藏且来源一致的 ${entries.length} 条消息？`))return;
+        if(!await uiConfirm(`恢复拾忆隐藏且来源一致的 ${entries.length} 条消息？`,{doc:hostDocument,title:'恢复正文归档',confirmText:'恢复'}))return;
         const count=await serial(async()=>{
           check(chat);
           const owned={...vars().shiyi_v01?.manualHidden};
@@ -964,12 +973,12 @@ export async function startMemory(shared) {
     const search=hostDocument.createElement('input');search.placeholder='搜索标题、人物、地点、正文';
     const filter=hostDocument.createElement('select');for(const [v,t] of [['all','有效记忆'],['star','星标'],['inactive','非当前剧情版本'],['trash','回收站']]){const o=hostDocument.createElement('option');o.value=v;o.textContent=t;filter.append(o);}
     const stats=hostDocument.createElement('p'),list=hostDocument.createElement('div'),more=hostDocument.createElement('button'),batch=hostDocument.createElement('button');more.textContent='下一页';const previous=hostDocument.createElement('button');previous.textContent='上一页';batch.textContent='删除选中';const limit=40;let page=0,searchTimer=null;const selected=new Set();
-    const button=(label,fn)=>{const b=hostDocument.createElement('button');b.textContent=label;b.onclick=async()=>{try{check(id);await fn();}catch(e){error(e);hostWindow.alert(e.message);}};return b;};
-    async function remove(keys){if(!keys.length||!hostWindow.confirm(`删除 ${keys.length} 条摘要？可在回收站恢复。`))return;await serial(async()=>{check(id);const rows={...records()};recycle(keys,rows);markDeleted(keys);for(const k of keys)state.seen.add(k);changed();});selected.clear();render();}
+    const button=(label,fn)=>{const b=hostDocument.createElement('button');b.textContent=label;b.onclick=async()=>{try{check(id);await fn();}catch(e){error(e);void uiAlert(e.message,{doc:hostDocument,title:'操作失败'});}};return b;};
+    async function remove(keys){if(!keys.length||!await uiConfirm(`删除选中的 ${keys.length} 条摘要？可在回收站中恢复。`,{doc:hostDocument,title:'删除摘要',danger:true,confirmText:'移入回收站'}))return;await serial(async()=>{check(id);const rows={...records()};recycle(keys,rows);markDeleted(keys);for(const k of keys)state.seen.add(k);changed();});selected.clear();render();}
     async function restore(k,r){const m=getMessages().find(m=>m.message_id===r.sourceMessage);if(!m||`${m.message_id}:${hash(String(m.message??''))}`!==k)throw Error('原正文已变化，不能恢复旧正史');await addMemory({chat:id,id:r.sourceMessage,key:k},r.title,r.content,true);check(id);const trash={...archive().trash};delete trash[k];archivePatch({trash});render();}
     function render(){if(identity()!==id)return;list.replaceChildren();const a=archive(),meta=a.meta||{},trash=filter.value==='trash';const active=activeRecords();const inactive=()=>Object.fromEntries(Object.entries(records()).filter(([k])=>!hasOwn(active,k)&&!blocked(k)));const rows=ordered(trash?a.trash||{}:numbered(filter.value==='inactive'?inactive():active));const q=search.value.trim().toLowerCase();const matches=rows.filter(([k,r])=>(filter.value!=='star'||meta[k]?.star)&&fuzzy(`${r.title} ${r.content} ${meta[k]?.chapter||''}`,q));stats.textContent=`有效 ${Object.keys(active).length} · 回收站 ${Object.keys(a.trash||{}).length} · 匹配 ${matches.length}`;batch.hidden=trash;page=Math.min(page,Math.max(0,Math.ceil(matches.length/limit)-1));previous.disabled=page===0;more.disabled=(page+1)*limit>=matches.length;stats.textContent+=` · 第 ${page+1}/${Math.max(1,Math.ceil(matches.length/limit))} 页 · 已选 ${selected.size}`;
       for(const [k,r] of matches.slice(page*limit,(page+1)*limit)){const row=hostDocument.createElement('div');row.className='shiyi-history-item';const title=hostDocument.createElement('strong');title.textContent=`${meta[k]?.star?'★ ':''}${r.title} · 第${r.sourceMessage}楼`;const text=hostDocument.createElement('p');text.textContent=r.content;const details=hostDocument.createElement('details');const summary=hostDocument.createElement('summary');summary.textContent='查看完整摘要';details.append(summary,text);row.append(title,details);
-        if(trash){row.append(button('恢复',()=>restore(k,r)));}else{const cb=hostDocument.createElement('input');cb.type='checkbox';cb.checked=selected.has(k);cb.style.width='auto';cb.onchange=()=>cb.checked?selected.add(k):selected.delete(k);row.prepend(cb);row.append(button(meta[k]?.star?'取消星标':'星标',()=>{archivePatch({meta:{...archive().meta,[k]:{...meta[k],star:!meta[k]?.star}}});changed();render();}),button('章节',()=>{const chapter=hostWindow.prompt('章节名称（留空取消归类）',meta[k]?.chapter||'');if(chapter!==null){archivePatch({meta:{...archive().meta,[k]:{...meta[k],chapter:chapter.trim()}}});changed();render();}}),button('溯源',()=>{if(jump(r.sourceMessage))state.closeModal?.();else hostWindow.alert('请先加载该历史楼层');}),button('编辑',()=>{state.closeModal?.();return editMemory(id,k);}),button('历史',async()=>{state.closeModal?.();const box=hostDocument.createElement('div');for(const v of archive().history?.[k]||[]){const p=hostDocument.createElement('p');p.textContent=v.savedAt+' · '+v.title+'\n'+v.content;box.append(p,button('回退此版本',async()=>{await serial(async()=>{check(id);const rows={...records()};if(!rows[k]||blocked(k))throw Error('记忆已失效');snapshot(k,rows[k],'回退前');rows[k]={...rows[k],title:v.title,content:v.content,storyTime:parseStoryTime(v.content)};writeRows(id,rows);});state.closeModal?.();}));}if(!box.children.length)box.textContent='暂无历史版本';await modal('修改历史',box,[{label:'返回',value:'close'}]);if(identity()===id&&!state.open)await manage();}),button('删除',()=>remove([k])));if(meta[k]?.chapter){const p=hostDocument.createElement('p');p.textContent='章节：'+meta[k].chapter;row.append(p);}}
+        if(trash){row.append(button('恢复',()=>restore(k,r)));}else{const cb=hostDocument.createElement('input');cb.type='checkbox';cb.checked=selected.has(k);cb.style.width='auto';cb.onchange=()=>cb.checked?selected.add(k):selected.delete(k);row.prepend(cb);row.append(button(meta[k]?.star?'取消星标':'星标',()=>{archivePatch({meta:{...archive().meta,[k]:{...meta[k],star:!meta[k]?.star}}});changed();render();}),button('章节',async()=>{const chapter=await uiPrompt('输入章节名称（留空取消归类）：',meta[k]?.chapter||'',{doc:hostDocument,title:'设置章节',placeholder:'章节名称'});if(chapter!==null){archivePatch({meta:{...archive().meta,[k]:{...meta[k],chapter:chapter.trim()}}});changed();render();uiToast('章节已更新',{doc:hostDocument,kind:'success'});}}),button('溯源',()=>{if(jump(r.sourceMessage))state.closeModal?.();else uiToast('请先加载该历史楼层',{doc:hostDocument,kind:'warn'});}),button('编辑',()=>{state.closeModal?.();return editMemory(id,k);}),button('历史',async()=>{state.closeModal?.();const box=hostDocument.createElement('div');for(const v of archive().history?.[k]||[]){const p=hostDocument.createElement('p');p.textContent=v.savedAt+' · '+v.title+'\n'+v.content;box.append(p,button('回退此版本',async()=>{await serial(async()=>{check(id);const rows={...records()};if(!rows[k]||blocked(k))throw Error('记忆已失效');snapshot(k,rows[k],'回退前');rows[k]={...rows[k],title:v.title,content:v.content,storyTime:parseStoryTime(v.content)};writeRows(id,rows);});state.closeModal?.();}));}if(!box.children.length)box.textContent='暂无历史版本';await modal('修改历史',box,[{label:'返回',value:'close'}]);if(identity()===id&&!state.open)await manage();}),button('删除',()=>remove([k])));if(meta[k]?.chapter){const p=hostDocument.createElement('p');p.textContent='章节：'+meta[k].chapter;row.append(p);}}
         list.append(row);}}
     search.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{page=0;selected.clear();render();},180);};filter.onchange=()=>{clearTimeout(searchTimer);page=0;selected.clear();render();};previous.onclick=()=>{page=Math.max(0,page-1);render();};more.onclick=()=>{page++;render();};batch.onclick=()=>remove([...selected]).catch(error);container.append(search,filter,stats,batch,list,previous,more);render();try{await modal('拾忆 · 剧情档案',container,[{label:'关闭',value:'close'}]);}finally{clearTimeout(searchTimer);}
   }
@@ -1247,7 +1256,7 @@ export async function startMemory(shared) {
     if (typeof eventOn==='function' && typeof getButtonEvent==='function') {
       const event = getButtonEvent('拾忆·打开面板');
       const openCommand = () => {
-        if (state.disposed) return;
+        if (state.disposed || shared.flags.memory===false) return;
         try { if(!state.root?.isConnected) ui(); state.setCollapsed(false); notice('通过脚本按钮打开面板'); }
         catch(e) { hostWindow.alert('拾忆面板异常：'+e.message); }
       };
@@ -1286,10 +1295,27 @@ export async function startMemory(shared) {
   state.invalidateGeneration=invalidateGeneration;
   state.setSettings=settings=>saveSettings(identity(),settings);
   state.setViewpoint=name=>setViewpoint(identity(),name);
+  state.suspend=async()=>{
+    invalidateGeneration();
+    clearTimeout(inputWarmTimer);
+    inputWarmSnapshot=null;
+    retrieval.stop(); vector.reset(); migration.reset();
+    state.closeModal?.();
+    await state.restoreAutoHidden();
+    await state.detach();
+    projectedRevision=undefined;
+    state.root?.style.setProperty('display','none','important');
+  };
+  state.resume=()=>{
+    projectedRevision=undefined;
+    warmKey='';
+    state.root?.style.removeProperty('display');
+  };
   state.detach=()=>{
     invalidateGeneration();
     return serial(()=>syncWorldbookMounts(api,check,identity(),null));
   };
+  state.recallThreads=()=>readMemory().activeDossiers().filter(r=>['事件','伏笔'].includes(r.kind)).map(r=>({id:r.id,kind:r.kind,title:r.title,status:r.status,sources:r.sources||[]}));
   state.recallPeople=()=> [...(archive().dossier||[]),...autoDossier()]
     .filter(r=>r.kind==='人物').map(r=>({id:r.id,title:r.title,sources:r.sources||[]}));
   state.timelineRows=async()=>{

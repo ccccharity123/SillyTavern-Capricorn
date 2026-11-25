@@ -7,5 +7,5 @@
   "generate_interceptor": "capricornPrepareGeneration",
   "css": "style.css",
   "author": "Capricorn",
-  "version": "4.5.13-apple-master"
+  "version": "4.6.0-rc.2-apple-native"
 }

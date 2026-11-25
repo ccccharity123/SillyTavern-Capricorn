@@ -1,0 +1,1 @@
+v4.5.14: iOS defaults to Web Audio volume; explicit background preference uses a new key (old default is not migrated). Android native volume probe and graph fallback retained. Preserve requested volume even on mute-only backend. Media Session unchanged. Device testing pending; CORS and host restrictions remain.

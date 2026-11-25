@@ -2,6 +2,8 @@ import { icon } from './icons.js';
 import { popover } from './ui-popover.js';
 import { fuzzy } from './traces.js';
 import { viewport } from './viewport.js';
+import { attachSegmentSlider, prefersReducedMotion } from './ui-motion.js';
+import { uiToast } from './ui-dialog.js';
 
 const destinations = [
   ['timeline', '便签', '搜索剧情便签', 'note'],
@@ -102,7 +104,7 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   const brand = original && original.querySelector('.shiyi-brand');
   if (!expand || !collapse || !status || !scan || !original || !brand || tabs.some(tab => !tab)) return null;
   const tools = scan.parentElement;
-  let active = 'timeline', key = '', loaded = false, closed = false, epoch = 0, jumpFrame = 0;
+  let active = 'timeline', key = '', loaded = false, closed = false, epoch = 0, jumpFrame = 0, starOnly = false;
   let searchCurrent = null, disposeView = null, endDossier = null;
   const searches = new Map();
   const filters = {};
@@ -148,6 +150,10 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     nav.append(button);
     return pictogram;
   });
+  const navSlider = attachSegmentSlider(nav, {
+    itemSelector: 'button.cap-memory-primary-btn',
+    isActive: el => el.getAttribute('aria-pressed') === 'true',
+  });
   const actions = make('div', 'cap-shiyi-icon-actions', primary);
   const style = iconButton(make('button', 'cap-note-style-btn', actions), '拾忆外观、字体与自定义 CSS', 'palette');
   style.onclick = () => { if (openAppearance) openAppearance(); };
@@ -163,6 +169,14 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   magnifier.innerHTML = icon('search', 17);
   const search = make('input', '', searchBox);
   search.type = 'search';
+  const starFilter = iconButton(make('button', 'cap-shiyi-star-filter', searchBox), '仅看星标便签', 'star');
+  starFilter.setAttribute('aria-pressed', 'false');
+  starFilter.onclick = () => {
+    starOnly = !starOnly;
+    starFilter.setAttribute('aria-pressed', String(starOnly));
+    starFilter.innerHTML = icon('star', 16, { weight: starOnly ? 'fill' : 'regular' });
+    if (searchCurrent) searchCurrent(search.value);
+  };
   const count = make('span', 'cap-shiyi-count', searchBox);
   count.hidden = true;
   const refresh = iconButton(make('button', '', searchBox), '刷新当前内容', 'refresh');
@@ -179,6 +193,8 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
   const cleanupPosition = mountPosition(dock, expand);
 
   const scroller = make('div', 'cap-shiyi-scroll', original);
+  const onScroll = () => { heading.dataset.scrolled = scroller.scrollTop > 2 ? 'true' : 'false'; };
+  scroller.addEventListener('scroll', onScroll, { passive: true });
   const timeline = make('section', 'cap-timeline', scroller);
   const content = make('section', 'cap-shiyi-view', scroller);
   status.setAttribute('role', 'status');
@@ -360,7 +376,7 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
         srcText.textContent = '第 ' + row.floor + ' 楼';
         source.insertAdjacentHTML('beforeend', icon('external', 12));
         source.title = '跳转到聊天原楼层';
-        source.onclick = () => { if (valid() && !memory.jump(row.floor)) W.alert('请先加载该历史楼层'); };
+        source.onclick = () => { if (valid() && !memory.jump(row.floor)) uiToast('请先加载该历史楼层', { doc: D, kind: 'warn' }); };
         if (jump && row.floor === targetFloor) {
           card.open = true;
           jumpFrame = W.requestAnimationFrame(() => {
@@ -375,14 +391,15 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     next.onclick = () => { offset += pageSize; draw(); scroller.scrollTop = 0; };
     searchCurrent = text => {
       const term = text.trim();
-      filtered = term ? rows.filter(row => {
+      const base = starOnly ? rows.filter(row => row.star) : rows;
+      filtered = term ? base.filter(row => {
         const tracks = songs.get(String(row.floor)) || [];
         return fuzzy([row.title, row.content, row.chapter, row.traceText || '', ...tracks.map(track => track.title + ' ' + track.artist)].join(' '), term);
-      }) : rows;
+      }) : base;
       offset = 0;
       draw();
     };
-    if (search.value) searchCurrent(search.value);
+    if (search.value || starOnly) searchCurrent(search.value);
     else draw();
   }
 
@@ -406,7 +423,13 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
       if (!scoped) {
         make('p', 'cap-timeline-empty', host).textContent = '请先打开聊天';
       } else if (active === 'timeline') {
-        make('p', 'cap-timeline-empty', host).textContent = '正在读取剧情便签…';
+        const skList = make('div', 'cap-story-list', host);
+        skList.setAttribute('aria-label', '正在读取剧情便签');
+        for (let s = 0; s < 3; s++) {
+          const sk = make('div', 'cap-skeleton-note', skList);
+          sk.setAttribute('aria-hidden', 'true');
+          sk.innerHTML = '<div class="cap-sk-bar short"></div><div class="cap-sk-bar title"></div><div class="cap-sk-bar meta"></div>';
+        }
         const [rows, songs] = await Promise.all([memory.timelineRows(), music ? music.timelineSongs() : []]);
         if (valid()) renderTimeline(rows, songs, targetFloor, renderEpoch, valid);
       } else if (active === 'table') {
@@ -459,28 +482,89 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
       tab.setAttribute('aria-pressed', pressed);
       tabIcons[index].innerHTML = icon(destinations[index][3], 15, {active: pressed === 'true'});
     });
+    navSlider.sync();
+    starFilter.hidden = id !== 'timeline';
     timeline.hidden = id !== 'timeline';
     content.hidden = !timeline.hidden;
-    if (previous !== id) scroller.scrollTop = 0;
+    if (previous !== id) { scroller.scrollTop = 0; heading.dataset.scrolled = 'false'; }
     void render(targetFloor);
   }
-  function open(targetFloor) {
-    memory.setCollapsed(false);
-    if (targetFloor != null) searches.delete('timeline');
-    show(targetFloor == null ? active : 'timeline', targetFloor);
+  let dockCloseAnim = null;
+  function cancelDockClose() {
+    if (dockCloseAnim) {
+      try { dockCloseAnim.cancel(); } catch (_) {}
+      dockCloseAnim = null;
+    }
+    dock.classList.remove('is-closing');
   }
-  function onExpand() { open(); }
-  function onCollapse(event) {
+  function finalizeCollapse(focusExpand) {
+    dockCloseAnim = null;
+    dock.classList.remove('is-closing');
     loaded = false;
     setCount(null);
     clearView();
     popover.closeWithin(dock);
     closeFallback();
     if (closeAppearance) closeAppearance();
-    if (event) expand.focus();
+    memory.setCollapsed(true);
+    if (focusExpand) expand.focus();
   }
+  function smoothCollapse(focusExpand = false) {
+    if (dock.classList.contains('shiyi-collapsed') || dockCloseAnim) return;
+    if (prefersReducedMotion(W) || !dock.animate) {
+      finalizeCollapse(focusExpand);
+      return;
+    }
+    dock.classList.add('is-closing');
+    dockCloseAnim = dock.animate([
+      { transform: 'translateX(0)', opacity: 1 },
+      { transform: 'translateX(26px) scale(0.985)', opacity: 0 }
+    ], { duration: 180, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' });
+    dockCloseAnim.onfinish = () => finalizeCollapse(focusExpand);
+    dockCloseAnim.oncancel = () => { dockCloseAnim = null; dock.classList.remove('is-closing'); };
+  }
+  function open(targetFloor) {
+    cancelDockClose();
+    memory.setCollapsed(false);
+    if (targetFloor != null) searches.delete('timeline');
+    show(targetFloor == null ? active : 'timeline', targetFloor);
+    navSlider.sync(true);
+  }
+  function onExpand() { open(); }
+  function onCollapse(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      smoothCollapse(true);
+      return;
+    }
+    cancelDockClose();
+    loaded = false;
+    setCount(null);
+    clearView();
+    popover.closeWithin(dock);
+    closeFallback();
+    if (closeAppearance) closeAppearance();
+  }
+  // Swipe right anywhere on expanded dock to smoothly collapse
+  let swipeStart = null;
+  function onDockTouchStart(event) {
+    if (dock.classList.contains('shiyi-collapsed') || event.touches.length !== 1) return;
+    if (event.target.closest('input, textarea, select')) return;
+    swipeStart = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }
+  function onDockTouchEnd(event) {
+    if (!swipeStart || dock.classList.contains('shiyi-collapsed')) { swipeStart = null; return; }
+    const t = event.changedTouches[0];
+    const dx = t.clientX - swipeStart.x;
+    const dy = t.clientY - swipeStart.y;
+    swipeStart = null;
+    if (dx > 68 && dx > Math.abs(dy) * 1.55) smoothCollapse(false);
+  }
+  dock.addEventListener('touchstart', onDockTouchStart, { passive: true });
+  dock.addEventListener('touchend', onDockTouchEnd, { passive: true });
   expand.addEventListener('click', onExpand);
-  collapse.addEventListener('click', onCollapse);
+  collapse.addEventListener('click', onCollapse, true);
   show(active);
   updateBadges();
   return {
@@ -504,20 +588,28 @@ export function mountMemoryDock({memory, music, scope, openAppearance, closeAppe
     },
     isOpen,
     open,
+    close: () => smoothCollapse(false),
     navigate(id) {
       if (destinations.some(item => item[0] === id)) {
+        cancelDockClose();
         memory.setCollapsed(false);
         show(id);
+        navSlider.sync(true);
       }
     },
     destroy() {
       closed = true;
+      cancelDockClose();
+      navSlider.destroy();
       onCollapse();
       cleanupPosition();
+      dock.removeEventListener('touchstart', onDockTouchStart);
+      dock.removeEventListener('touchend', onDockTouchEnd);
       for (const name of pointerEvents) D.removeEventListener(name, fallbackPointer);
       D.removeEventListener('keydown', fallbackKey);
+      scroller.removeEventListener('scroll', onScroll);
       expand.removeEventListener('click', onExpand);
-      collapse.removeEventListener('click', onCollapse);
+      collapse.removeEventListener('click', onCollapse, true);
     },
   };
 }
