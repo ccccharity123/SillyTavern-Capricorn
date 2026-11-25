@@ -3460,3 +3460,817 @@ body[data-cap-paper="ink"] .cap-rel-node[data-flashback="true"] .cap-rel-frame {
     transition: none !important;
   }
 }
+/* =========================================================================
+   Capricorn v4.6.0-rc6 · True Apple iOS 26 Liquid Glass & Player Craft Layer
+   1) Fixed Immersive Lyrics & Queue Bottom Toolbar (always visible, never scrolled off)
+   2) Redesigned Half-Screen Horizontal Hero Card (balanced Apple Media Sheet)
+   3) Seamless Apple Music / iOS 26 Recessed Capsule Sliders (Seek · Settings · Volume)
+   4) Authentic Optical Liquid Glass (Hollow Refraction + Conic Fresnel Rim + Translucent Sidebar)
+   ========================================================================= */
+
+/* ---------- 1. Immersive Lyrics, Queue & Half-Screen Layout Overhaul ---------- */
+.cap-full-player.cap-player-layout[data-size][data-detail] .cap-fp-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 10px 18px 12px;
+  gap: 8px;
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-grabber,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-header,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-main,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-current-lyric,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-scrubber,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-transport,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-tabs,
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-color-note {
+  flex-shrink: 0;
+}
+
+/* Always keep the 5-icon bottom toolbar centered, crisp, and pinned at the bottom */
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  width: 100%;
+  margin: 0;
+  padding: 4px 0 0;
+  gap: 2px;
+  overflow: visible;
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-tabs button {
+  width: 44px;
+  height: 40px;
+  min-width: 44px;
+  min-height: 40px;
+  border-radius: 14px;
+  opacity: 0.78;
+  transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.16s var(--cap-tap);
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-tabs button:hover:not(:disabled) {
+  opacity: 1;
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-fp-tabs button[aria-pressed="true"] {
+  opacity: 1;
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  box-shadow: inset 0 0.5px 0 color-mix(in srgb, currentColor 20%, transparent);
+}
+
+/* Large Cover Mode (no detail open): centered iconic artwork + left-aligned meta + scrubber + transport */
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-fp-shell {
+  padding: 10px 22px 14px;
+  gap: 10px;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-fp-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-art {
+  width: min(62vw, 34vh, var(--cap-cover-size, 250px));
+  height: min(62vw, 34vh, var(--cap-cover-size, 250px));
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-meta {
+  width: 100%;
+  text-align: left;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-meta h2 {
+  font-size: 20px;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-meta p {
+  font-size: 14.5px;
+}
+
+/* Half-Screen Cover Mode (data-size="half" data-detail=""): Apple Control Center Horizontal Hero Card */
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-fp-shell {
+  padding: 10px 20px 12px;
+  gap: 10px;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-fp-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 102px minmax(0, 1fr);
+  align-items: center;
+  justify-items: stretch;
+  gap: 16px;
+  padding: 4px 0;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-art {
+  width: 102px;
+  height: 102px;
+  border-radius: var(--cap-cover-radius, 16px);
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  text-align: left;
+  padding: 0;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-meta-text {
+  width: 100%;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-meta h2 {
+  font-size: 17.5px;
+  line-height: 1.28;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-meta p {
+  font-size: 13.5px;
+  margin-top: 3px;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail=""] .cap-current-lyric {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  cursor: pointer;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail=""] .cap-current-lyric {
+  cursor: pointer;
+}
+
+/* Transport Spacing (Hero Cover vs Detail Modes) */
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-transport {
+  gap: 26px;
+  padding: 2px 0;
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-transport .cap-play-btn {
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+  min-height: 54px;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  box-shadow: inset 0 0.5px 0 color-mix(in srgb, currentColor 18%, transparent);
+}
+.cap-full-player.cap-player-layout[data-size]:not([data-size="compact"]) .cap-transport .cap-play-btn:hover {
+  background: color-mix(in srgb, currentColor 15%, transparent);
+}
+
+/* Immersive Lyrics & Queue Mode (BOTH large AND half!):
+   Top Mini Track Header + Middle Flex-1 Scrollable Detail + Bottom Pinned Scrubber/Transport/5-Icon Tabs! */
+.cap-full-player.cap-player-layout[data-size="large"][data-detail]:not([data-detail=""]) .cap-fp-shell,
+.cap-full-player.cap-player-layout[data-size="half"][data-detail]:not([data-detail=""]) .cap-fp-shell {
+  padding: 8px 18px 10px;
+  gap: 6px;
+}
+.cap-full-player.cap-player-layout[data-size="large"][data-detail]:not([data-detail=""]) .cap-fp-main,
+.cap-full-player.cap-player-layout[data-size="half"][data-detail]:not([data-detail=""]) .cap-fp-main {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  justify-items: stretch;
+  gap: 12px;
+  padding: 2px 0 4px;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  text-align: left;
+  padding: 0;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-meta h2 {
+  font-size: 15px;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-meta p {
+  font-size: 12.5px;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-current-lyric {
+  display: none;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-fp-detail {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-transport {
+  gap: 22px;
+  padding: 0;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-transport button {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+.cap-full-player.cap-player-layout[data-size][data-detail]:not([data-detail=""]):not([data-size="compact"]) .cap-transport .cap-play-btn {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  min-height: 46px;
+}
+.cap-full-player.cap-player-layout[data-size="half"][data-detail="lyrics"] .cap-lyric {
+  font-size: 16.5px;
+  padding: 7px 4px;
+}
+
+/* Compact Mode Grid Updated for Direct-Child .cap-transport */
+.cap-full-player.cap-player-layout[data-size="compact"][data-detail] .cap-fp-shell {
+  display: grid;
+  gap: 0;
+  grid-template-columns: minmax(48px, 1fr) repeat(4, 40px);
+  grid-template-rows: 50px 36px 20px minmax(16px, auto);
+  grid-template-areas:
+    "media media transport transport transport"
+    "status volume more size close"
+    "seek seek seek seek seek"
+    "lyric lyric lyric lyric lyric";
+  align-items: center;
+  align-content: start;
+  overflow: hidden;
+  padding: 8px 10px;
+}
+.cap-player-layout[data-size="compact"] .cap-fp-main {
+  grid-area: media;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 9px;
+}
+.cap-full-player.cap-player-layout[data-size="compact"] .cap-transport {
+  grid-area: transport;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 0;
+}
+.cap-full-player.cap-player-layout[data-size="compact"] .cap-transport button,
+.cap-full-player.cap-player-layout[data-size="compact"] .cap-transport .cap-play-btn {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- 2. Apple Music / iOS 26 Seamless Liquid Glass Sliders ---------- */
+
+/* 2A. Player Scrubber: Seamless Recessed Capsule (NO protruding ball!) */
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek] {
+  height: 22px;
+  cursor: pointer;
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, currentColor 76%, transparent) var(--cap-progress, 0%),
+    color-mix(in srgb, currentColor 16%, transparent) var(--cap-progress, 0%)
+  );
+  box-shadow: inset 0 0.5px 1.5px rgba(0, 0, 0, 0.14);
+  transition: height 0.22s var(--cap-spring), background 0.16s ease;
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]:is(:hover, :active)::-webkit-slider-runnable-track,
+.cap-full-player.cap-player-layout[data-seeking="true"] .cap-scrubber input[data-seek]::-webkit-slider-runnable-track {
+  height: 9.5px;
+  background: linear-gradient(
+    to right,
+    currentColor var(--cap-progress, 0%),
+    color-mix(in srgb, currentColor 20%, transparent) var(--cap-progress, 0%)
+  );
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1px;
+  height: 1px;
+  margin-top: 2px;
+  opacity: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]:is(:hover, :active)::-webkit-slider-thumb {
+  transform: none;
+  margin-top: 2px;
+  box-shadow: none;
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 16%, transparent);
+  box-shadow: inset 0 0.5px 1.5px rgba(0, 0, 0, 0.14);
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 82%, transparent);
+}
+.cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek]::-moz-range-thumb {
+  width: 0;
+  height: 0;
+  border: 0;
+  opacity: 0;
+  background: transparent;
+}
+.cap-full-player.cap-player-layout[data-size] .cap-clock-row {
+  margin-top: 2px;
+  font-size: 11px;
+  letter-spacing: 0.01em;
+}
+
+/* 2B. Volume Popover: Apple Control Center Liquid Glass Capsule */
+.cap-ui-portal .cap-popover.cap-volume-popover {
+  padding: 10px 12px;
+  border-radius: 22px;
+}
+.cap-volume-content {
+  padding: 0;
+}
+.cap-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.cap-vol-mute {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.18s ease, transform 0.16s var(--cap-tap);
+}
+.cap-vol-mute:hover { background: color-mix(in srgb, currentColor 15%, transparent); }
+.cap-vol-mute:active { transform: scale(0.9); }
+.cap-vol-high {
+  display: inline-flex;
+  flex: none;
+  opacity: 0.68;
+}
+.cap-vol-pct {
+  flex: none;
+  min-width: 34px;
+  text-align: right;
+  font-size: 11.5px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.78;
+}
+.cap-volume-row input[data-volume] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1 1 auto;
+  min-width: 96px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+}
+.cap-volume-row input[data-volume]::-webkit-slider-runnable-track {
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, currentColor 82%, transparent) var(--cap-vol-progress, 80%),
+    color-mix(in srgb, currentColor 15%, transparent) var(--cap-vol-progress, 80%)
+  );
+  box-shadow: inset 0 0.5px 1.5px rgba(0, 0, 0, 0.15);
+  transition: height 0.2s var(--cap-spring), background 0.16s ease;
+}
+.cap-volume-content[data-dragging="true"] input[data-volume]::-webkit-slider-runnable-track,
+.cap-volume-row input[data-volume]:is(:hover, :active)::-webkit-slider-runnable-track {
+  height: 12px;
+  background: linear-gradient(
+    to right,
+    currentColor var(--cap-vol-progress, 80%),
+    color-mix(in srgb, currentColor 18%, transparent) var(--cap-vol-progress, 80%)
+  );
+}
+.cap-volume-row input[data-volume]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.cap-volume-row input[data-volume]::-moz-range-track {
+  height: 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 15%, transparent);
+  box-shadow: inset 0 0.5px 1.5px rgba(0, 0, 0, 0.15);
+}
+.cap-volume-row input[data-volume]::-moz-range-progress {
+  height: 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 84%, transparent);
+}
+.cap-volume-row input[data-volume]::-moz-range-thumb {
+  width: 0;
+  height: 0;
+  border: 0;
+  opacity: 0;
+  background: transparent;
+}
+.cap-volume-content .cap-volume-note {
+  display: block;
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 0.5px solid var(--cap-ui-stroke, rgba(128, 128, 128, 0.16));
+  font-size: 11px;
+  line-height: 1.48;
+  opacity: 0.74;
+}
+
+/* 2C. Settings Sliders: Live Progress Groove + iOS 26 Elongated Liquid Glass Pill Thumb */
+#capricorn-hub .cap-range-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 6px 0;
+}
+#capricorn-hub .cap-range-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 580;
+  color: var(--cap-text-secondary);
+}
+#capricorn-hub .cap-range-pill {
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  background: var(--glass-control);
+  color: var(--cap-text-primary);
+  font-size: 11px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+#capricorn-hub .cap-settings input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+#capricorn-hub .cap-settings input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--cap-text-primary) 72%, transparent) var(--cap-range-pct, 50%),
+    color-mix(in srgb, var(--cap-text-primary) 13%, transparent) var(--cap-range-pct, 50%)
+  );
+  box-shadow: inset 0 0.5px 1.5px rgba(0, 0, 0, 0.12);
+}
+#capricorn-hub .cap-settings input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 15px;
+  margin-top: -4.5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 0.5px solid rgba(0, 0, 0, 0.10);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 1),
+    0 2px 7px rgba(0, 0, 0, 0.18),
+    0 0.5px 2px rgba(0, 0, 0, 0.10);
+  transition: transform 0.2s var(--cap-spring), background-color 0.2s ease, box-shadow 0.2s ease;
+}
+#capricorn-hub .cap-settings input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.14);
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    0 4px 12px rgba(0, 0, 0, 0.22);
+}
+#capricorn-hub .cap-settings input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cap-text-primary) 13%, transparent);
+}
+#capricorn-hub .cap-settings input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cap-text-primary) 72%, transparent);
+}
+#capricorn-hub .cap-settings input[type="range"]::-moz-range-thumb {
+  width: 24px;
+  height: 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 0.5px solid rgba(0, 0, 0, 0.10);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.18);
+}
+
+/* ---------- 3. Authentic Apple iOS 26 Optical Liquid Glass ----------
+   (Ultra-clear crystal center + Conic Fresnel Specular Rim + Hollow Edge Meniscus) */
+
+:where(#capricorn-hub, .cap-full-player, #shiyi-dock, .cap-ui-portal) {
+  --cap-glass-float-bg: rgba(255, 255, 255, 0.12);
+  --cap-glass-work-bg: rgba(255, 255, 255, 0.58);
+  --cap-glass-pop-bg: rgba(255, 255, 255, 0.72);
+  --cap-glass-float-filter: blur(7px) saturate(210%) contrast(1.06) brightness(1.06);
+  --cap-glass-work-filter: blur(36px) saturate(210%);
+  --cap-glass-pop-filter: blur(36px) saturate(210%);
+}
+:where(body[data-cap-look="dark"] :is(#capricorn-hub, .cap-full-player, #shiyi-dock, .cap-ui-portal)) {
+  --cap-glass-float-bg: rgba(18, 18, 20, 0.16);
+  --cap-glass-work-bg: rgba(24, 24, 26, 0.58);
+  --cap-glass-pop-bg: rgba(30, 30, 32, 0.74);
+  --cap-glass-float-filter: blur(8px) saturate(210%) contrast(1.08) brightness(1.07);
+}
+:where(body[data-cap-material="glass"] :is(#capricorn-hub, .cap-full-player, #shiyi-dock, .cap-ui-portal)) {
+  --cap-glass-float-bg: rgba(255, 255, 255, 0.09);
+  --cap-glass-float-filter: blur(4.5px) saturate(225%) contrast(1.08) brightness(1.08);
+}
+:where(body[data-cap-material="glass"][data-cap-look="dark"] :is(#capricorn-hub, .cap-full-player, #shiyi-dock, .cap-ui-portal)) {
+  --cap-glass-float-bg: rgba(14, 14, 16, 0.13);
+  --cap-glass-float-filter: blur(5.5px) saturate(220%) contrast(1.09) brightness(1.08);
+}
+
+/* 3A. Floating Orb & Dynamic Island: Conic Specular Rim + Crystal-Clear Hollow Meniscus */
+#capricorn-hub > .cap-island {
+  box-shadow:
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.92),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.36),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.28),
+    0 0 0 0.5px rgba(0, 0, 0, 0.07),
+    0 10px 28px -4px rgba(0, 0, 0, 0.15),
+    0 2px 7px rgba(0, 0, 0, 0.07);
+}
+body[data-cap-look="dark"] #capricorn-hub > .cap-island {
+  box-shadow:
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.52),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.16),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.14),
+    0 0 0 0.5px rgba(255, 255, 255, 0.10),
+    0 12px 32px -4px rgba(0, 0, 0, 0.48),
+    0 2px 8px rgba(0, 0, 0, 0.24);
+}
+#capricorn-hub > .cap-island::before {
+  padding: 1.35px;
+  background: conic-gradient(
+    from 215deg at 50% 50%,
+    rgba(255, 255, 255, 0.12) 0deg,
+    rgba(255, 255, 255, 0.98) 52deg,
+    rgba(255, 255, 255, 0.36) 105deg,
+    rgba(255, 255, 255, 0.05) 165deg,
+    rgba(255, 255, 255, 0.76) 232deg,
+    rgba(255, 255, 255, 0.24) 288deg,
+    rgba(255, 255, 255, 0.12) 360deg
+  );
+}
+body[data-cap-look="dark"] #capricorn-hub > .cap-island::before {
+  background: conic-gradient(
+    from 215deg at 50% 50%,
+    rgba(255, 255, 255, 0.06) 0deg,
+    rgba(255, 255, 255, 0.72) 52deg,
+    rgba(255, 255, 255, 0.20) 105deg,
+    rgba(255, 255, 255, 0.03) 165deg,
+    rgba(255, 255, 255, 0.42) 232deg,
+    rgba(255, 255, 255, 0.12) 288deg,
+    rgba(255, 255, 255, 0.06) 360deg
+  );
+}
+/* Hollow optical edge meniscus: 100% transparent in the center so background refracts purely! */
+#capricorn-hub > .cap-island::after {
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0) 64%,
+    rgba(255, 255, 255, 0.08) 84%,
+    rgba(255, 255, 255, 0.26) 100%
+  );
+}
+body[data-cap-look="dark"] #capricorn-hub > .cap-island::after {
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 255, 255, 0) 64%,
+    rgba(255, 255, 255, 0.04) 84%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+}
+body[data-cap-look="light"] #capricorn-hub:not([data-float-mode="orb"]) > .cap-island[data-playing="true"] {
+  background: rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(16px) saturate(210%) contrast(1.04) brightness(1.04);
+  backdrop-filter: blur(16px) saturate(210%) contrast(1.04) brightness(1.04);
+}
+body[data-cap-look="dark"] #capricorn-hub:not([data-float-mode="orb"]) > .cap-island[data-playing="true"] {
+  background: rgba(18, 18, 20, 0.34);
+  -webkit-backdrop-filter: blur(16px) saturate(210%) contrast(1.05) brightness(1.05);
+  backdrop-filter: blur(16px) saturate(210%) contrast(1.05) brightness(1.05);
+}
+
+/* 3B. Collapsed Shiyi Ear-Tab: Identical Hollow Optical Liquid Glass */
+#shiyi-dock.shiyi-collapsed .shiyi-orb {
+  box-shadow:
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.92),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.36),
+    inset 0.5px 0 0 rgba(255, 255, 255, 0.28),
+    -0.5px 0 0 0.5px rgba(0, 0, 0, 0.07),
+    -8px 10px 26px -4px rgba(0, 0, 0, 0.15),
+    -2px 2px 7px rgba(0, 0, 0, 0.07);
+}
+body[data-cap-look="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb,
+body[data-cap-paper-mode="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb,
+body[data-cap-paper="ink"] #shiyi-dock.shiyi-collapsed .shiyi-orb {
+  background: var(--cap-glass-float-bg);
+  box-shadow:
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.52),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.16),
+    inset 0.5px 0 0 rgba(255, 255, 255, 0.14),
+    -0.5px 0 0 0.5px rgba(255, 255, 255, 0.10),
+    -10px 12px 30px -4px rgba(0, 0, 0, 0.48),
+    -2px 2px 8px rgba(0, 0, 0, 0.24);
+}
+#shiyi-dock.shiyi-collapsed .shiyi-orb::before {
+  padding: 1.35px 0 1.35px 1.35px;
+  background: conic-gradient(
+    from 215deg at 56% 50%,
+    rgba(255, 255, 255, 0.12) 0deg,
+    rgba(255, 255, 255, 0.98) 52deg,
+    rgba(255, 255, 255, 0.36) 105deg,
+    rgba(255, 255, 255, 0.05) 165deg,
+    rgba(255, 255, 255, 0.72) 232deg,
+    rgba(255, 255, 255, 0.22) 288deg,
+    rgba(255, 255, 255, 0.12) 360deg
+  );
+}
+body[data-cap-look="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb::before,
+body[data-cap-paper-mode="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb::before,
+body[data-cap-paper="ink"] #shiyi-dock.shiyi-collapsed .shiyi-orb::before {
+  background: conic-gradient(
+    from 215deg at 56% 50%,
+    rgba(255, 255, 255, 0.06) 0deg,
+    rgba(255, 255, 255, 0.72) 52deg,
+    rgba(255, 255, 255, 0.20) 105deg,
+    rgba(255, 255, 255, 0.03) 165deg,
+    rgba(255, 255, 255, 0.40) 232deg,
+    rgba(255, 255, 255, 0.12) 288deg,
+    rgba(255, 255, 255, 0.06) 360deg
+  );
+}
+#shiyi-dock.shiyi-collapsed .shiyi-orb::after {
+  inset: 0;
+  background: radial-gradient(
+    circle at 60% 50%,
+    rgba(255, 255, 255, 0) 62%,
+    rgba(255, 255, 255, 0.08) 82%,
+    rgba(255, 255, 255, 0.26) 100%
+  );
+}
+body[data-cap-look="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb::after,
+body[data-cap-paper-mode="dark"] #shiyi-dock.shiyi-collapsed .shiyi-orb::after,
+body[data-cap-paper="ink"] #shiyi-dock.shiyi-collapsed .shiyi-orb::after {
+  background: radial-gradient(
+    circle at 60% 50%,
+    rgba(255, 255, 255, 0) 62%,
+    rgba(255, 255, 255, 0.04) 82%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+}
+
+/* 3C. Expanded Shiyi Sidebar: True Apple Liquid Glass Shell (synced with material mode & all 7 paper tints) */
+#shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
+  position: fixed;
+  isolation: isolate;
+  background-color: color-mix(in srgb, var(--note-bg) 68%, transparent);
+  -webkit-backdrop-filter: blur(34px) saturate(205%);
+  backdrop-filter: blur(34px) saturate(205%);
+  border: 0.5px solid color-mix(in srgb, var(--note-line) 72%, transparent);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.84),
+    inset 1px 0 0.5px rgba(255, 255, 255, 0.42),
+    -14px 20px 54px rgba(0, 0, 0, 0.16),
+    -2px 4px 12px rgba(0, 0, 0, 0.06);
+}
+#shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  padding: 1px;
+  border-radius: inherit;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.24) 24%,
+    rgba(255, 255, 255, 0.02) 55%,
+    rgba(255, 255, 255, 0.48) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed),
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
+  background-color: color-mix(in srgb, var(--note-bg) 66%, transparent);
+  box-shadow:
+    inset 0 1px 0.5px rgba(255, 255, 255, 0.24),
+    inset 1px 0 0.5px rgba(255, 255, 255, 0.12),
+    -16px 22px 58px rgba(0, 0, 0, 0.52),
+    -2px 4px 14px rgba(0, 0, 0, 0.24);
+}
+body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before,
+body[data-cap-paper="ink"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.44) 0%,
+    rgba(255, 255, 255, 0.12) 24%,
+    rgba(255, 255, 255, 0.02) 55%,
+    rgba(255, 255, 255, 0.22) 100%
+  );
+}
+body[data-cap-material="frost"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
+  background-color: color-mix(in srgb, var(--note-bg) 84%, transparent);
+}
+body[data-cap-material="solid"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed),
+body[data-cap-visual-lite] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
+  background-color: var(--note-bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body[data-cap-material="solid"] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before,
+body[data-cap-visual-lite] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before {
+  display: none;
+}
+#shiyi-dock .cap-shiyi-header {
+  background: color-mix(in srgb, var(--note-bg) 52%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+}
+#shiyi-dock .cap-story,
+#shiyi-dock .shiyi-table-rows details,
+#shiyi-dock .shiyi-dossier-rows .shiyi-history-item {
+  background: color-mix(in srgb, var(--note-card) 78%, transparent);
+}
+
+/* 3D. Specular Glass Rim on Main Player & Hub Panel */
+.cap-full-player.cap-player-layout[data-size]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  padding: 1px;
+  border-radius: inherit;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.88) 0%,
+    rgba(255, 255, 255, 0.22) 26%,
+    rgba(255, 255, 255, 0.02) 54%,
+    rgba(255, 255, 255, 0.48) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size]::after {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.44) 0%,
+    rgba(255, 255, 255, 0.12) 26%,
+    rgba(255, 255, 255, 0.02) 54%,
+    rgba(255, 255, 255, 0.22) 100%
+  );
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
+    background-color: var(--note-bg);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::before,
+  .cap-full-player.cap-player-layout[data-size]::after {
+    display: none;
+  }
+}

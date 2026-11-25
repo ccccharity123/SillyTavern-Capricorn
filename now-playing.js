@@ -29,7 +29,7 @@ const ICONS = {
 };
 const sizeLabels = { compact: '悬浮卡片', half: '半屏', large: '大半屏' };
 
-export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, mode, quality }) {
+export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play, move, remove, volume, retryVolume, mode, quality }) {
   const panel = D.createElement('section');
   panel.className = 'cap-full-player cap-player-layout';
   const android = /Android/i.test(W.navigator.userAgent);
@@ -68,7 +68,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       }
     }
     const rect = playerRect(box, panel.dataset.size, insets, panel.dataset.bilingual === 'true');
-    panel.dataset.short = String(rect.h < 375);
+    panel.dataset.short = String(rect.h < 310);
     panel.style.setProperty('--cap-rect-x', rect.x + 'px');
     panel.style.setProperty('--cap-rect-y', rect.y + 'px');
     panel.style.setProperty('--cap-rect-w', rect.w + 'px');
@@ -118,20 +118,20 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
           '<div class="cap-meta-text"><h2></h2><p data-artist></p></div>' +
           '<button type="button" class="cap-quality" data-quality aria-label="切换音质" title="切换音质" aria-haspopup="menu" aria-expanded="false"></button>' +
         '</div>' +
-        '<div class="cap-transport">' +
-          iconControl('data-prev', '上一首', ICONS.prev) +
-          iconControl('data-toggle class="cap-play-btn"', '播放', ICONS.play) +
-          iconControl('data-next', '下一首', ICONS.next) +
-        '</div>' +
       '</div>' +
       '<p data-status role="status" class="cap-fp-status"></p>' +
+      '<p data-current-lyric class="cap-current-lyric" title="点击展开同步歌词"><span data-line></span><span data-translation hidden></span></p>' +
+      '<div data-detail class="cap-fp-detail" hidden></div>' +
+      '<small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>' +
       '<div class="cap-scrubber">' +
         '<input data-seek type="range" min="0" max="0" step="0.1" aria-label="播放进度">' +
         '<div class="cap-clock-row"><span data-elapsed>0:00</span><span data-duration>0:00</span></div>' +
       '</div>' +
-      '<p data-current-lyric class="cap-current-lyric"><span data-line></span><span data-translation hidden></span></p>' +
-      '<div data-detail class="cap-fp-detail" hidden></div>' +
-      '<small class="cap-color-note">封面跨域限制，已使用模糊封面代替取色</small>' +
+      '<div class="cap-transport">' +
+        iconControl('data-prev', '上一首', ICONS.prev) +
+        iconControl('data-toggle class="cap-play-btn"', '播放', ICONS.play) +
+        iconControl('data-next', '下一首', ICONS.next) +
+      '</div>' +
       '<nav class="cap-fp-tabs" aria-label="播放工具">' +
         iconControl('data-mode', '播放模式', icon('repeat', 20)) +
         iconControl('data-lyrics', '歌词', ICONS.lyrics, 'aria-pressed="false"') +
@@ -142,9 +142,14 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       '</nav>' +
       '<div class="cap-volume-store" hidden>' +
         '<div class="cap-volume-content">' +
-          '<label class="cap-volume-label"><span class="cap-vol-title">' + icon('volumeHigh', 15) + '<span>音量</span></span><output data-volume-value></output>' +
-            '<input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量"></label>' +
+          '<div class="cap-volume-row">' +
+            '<button type="button" class="cap-vol-mute" data-vol-mute aria-label="静音或恢复" title="静音 / 恢复">' + icon('volumeLow', 16) + '</button>' +
+            '<input data-volume type="range" min="0" max="1" step="0.01" aria-label="音量">' +
+            '<span class="cap-vol-high" aria-hidden="true">' + icon('volumeHigh', 16) + '</span>' +
+            '<output class="cap-vol-pct" data-volume-value></output>' +
+          '</div>' +
           '<small data-volume-note class="cap-volume-note"></small>' +
+          '<button type="button" data-volume-retry hidden>重试应用内音量</button>' +
         '</div>' +
       '</div>' +
     '</div>';
@@ -361,32 +366,42 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     { label: '曲库', icon: 'library', action: () => openAux('library') },
     { label: '设置', icon: 'settings', action: () => openAux('settings') }
   ]);
-  let volumeDragging = false;
+  let volumeDragging = false, lastNonZeroVol = 0.8;
+  const volMuteBtn = q('[data-vol-mute]');
+  const volMuteIcon = icon('volumeMute', 16);
+  const volLowIcon = icon('volumeLow', 16);
   function updateVolume() {
     const audioState = state();
     const value = audioState.userVolume == null ? audio.volume : audioState.userVolume;
-    const percent = Math.round(value * 100) + '%';
+    if (value > 0) lastNonZeroVol = value;
+    const supports = audioState.volumeSupported !== false;
+    const percent = supports ? Math.round(value * 100) + '%' : value === 0 ? '静音' : '系统';
     if (!volumeDragging && Number(volumeSlider.value) !== Number(value)) volumeSlider.value = value;
-    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== percent) volumeSlider.style.setProperty('--cap-vol-progress', percent);
+    const progress = Math.round(value * 100) + '%';
+    if (volumeSlider.style.getPropertyValue('--cap-vol-progress') !== progress) volumeSlider.style.setProperty('--cap-vol-progress', progress);
     if (volumeValue.textContent !== percent) {
       volumeValue.textContent = percent;
       volumeSlider.setAttribute('aria-valuetext', percent);
       volumeButton.title = '音量 ' + percent;
     }
-    const supports = audioState.volumeSupported !== false;
-    const hint = supports ? '' : '当前通道仅支持静音／恢复；滑块保留目标音量，实际音量请用设备音量键。iOS 可关闭后台播放优先后切歌。';
+    const hint = supports ? '' : '当前通道仅支持静音／恢复；实际音量请用设备音量键。iOS 可关闭后台播放优先后切歌。';
     if (volumeNote.textContent !== hint) volumeNote.textContent = hint;
     const sliderTitle = supports ? '音量' : '目标音量（当前通道实际音量由系统控制）';
     if (volumeSlider.title !== sliderTitle) volumeSlider.title = sliderTitle;
     // Keep a functional 0/100 mute toggle in the fallback instead of displaying
     // a disabled control or a misleading continuous-volume slider.
-    if (volumeSlider.disabled) volumeSlider.disabled = false;
+    volumeSlider.disabled = !supports;
+    q('[data-volume-retry]').hidden = !audioState.canRetryVolume;
     if (volumeSlider.step !== '0.01') volumeSlider.step = '0.01';
-    if (volumeSlider.getAttribute('aria-disabled') !== 'false') volumeSlider.setAttribute('aria-disabled', 'false');
+    volumeSlider.setAttribute('aria-disabled', String(!supports));
     const muted = String(value === 0);
     if (volumeButton.dataset.muted !== muted) {
       volumeButton.dataset.muted = muted;
       volumeButton.innerHTML = muted === 'true' ? muteGraphic : volumeGraphic;
+    }
+    if (volMuteBtn && volMuteBtn.dataset.muted !== muted) {
+      volMuteBtn.dataset.muted = muted;
+      volMuteBtn.innerHTML = muted === 'true' ? volMuteIcon : volLowIcon;
     }
   }
   function applyVolume() {
@@ -400,16 +415,27 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     updateVolume();
     openSurface({
       anchor: volumeButton, role: 'dialog', label: '音量', content: volumeContent,
-      initialFocus: volumeSlider, minWidth: 216, onClose: () => { volumeDragging = false; }
+      className: 'cap-volume-popover',
+      initialFocus: volumeSlider, minWidth: 248, onClose: endVolDrag
     }, () => showInline(volumeButton, '音量', volumeContent, () => {
-      volumeDragging = false;
+      endVolDrag();
       volumeStore.append(volumeContent);
     }));
   };
-  volumeSlider.onpointerdown = () => { volumeDragging = true; };
+  if (volMuteBtn) {
+    volMuteBtn.onclick = () => {
+      const cur = state().userVolume ?? Number(volumeSlider.value);
+      const nextVol = cur === 0 ? (lastNonZeroVol || 0.8) : 0;
+      volumeSlider.value = String(nextVol);
+      applyVolume();
+    };
+  }
+  q('[data-volume-retry]').onclick = () => retryVolume?.();
+  volumeSlider.onpointerdown = () => { volumeDragging = true; volumeContent.dataset.dragging = 'true'; };
   volumeSlider.oninput = applyVolume;
-  volumeSlider.onchange = () => { applyVolume(); volumeDragging = false; };
-  volumeSlider.onpointerup = volumeSlider.onpointercancel = volumeSlider.onblur = () => { volumeDragging = false; };
+  const endVolDrag = () => { volumeDragging = false; delete volumeContent.dataset.dragging; };
+  volumeSlider.onchange = () => { applyVolume(); endVolDrag(); };
+  volumeSlider.onpointerup = volumeSlider.onpointercancel = volumeSlider.onblur = endVolDrag;
 
   const img = q('.cap-art img');
   const glowImg = q('.cap-art-glow');
@@ -914,6 +940,10 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   q('[data-prev]').onclick = () => next(-1);
   q('[data-next]').onclick = () => next(1);
   q('[data-lyrics]').onclick = () => { showTab(tab === 'lyrics' ? '' : 'lyrics'); };
+  q('[data-current-lyric]').onclick = () => {
+    if (size === 'compact') openCompactDetail('lyrics', '同步歌词');
+    else showTab('lyrics');
+  };
   q('[data-queue]').onclick = () => { showTab(tab==='queue'?(size==='large'?'lyrics':''):'queue'); };
   const endSeek = () => { dragging = false; delete panel.dataset.seeking; };
   seek.oninput = () => {

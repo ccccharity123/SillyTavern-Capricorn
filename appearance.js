@@ -83,9 +83,9 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
         <summary>背景与封面</summary>
         <!-- 以下 4 项会被脚本自动移入「外观 → 封面布局」卡片 -->
         <label>封面形状<select data-pref="coverShape"><option value="auto">主题默认</option><option value="square">方形</option><option value="rounded">圆角</option><option value="circle">圆形</option></select></label>
-        <label>大卡片封面大小 (<span data-val="coverSize"></span>px)<input type="range" min="40" max="320" data-pref-range="coverSize"></label>
-        <label>内边距 (<span data-val="coverPadding"></span>px)<input type="range" min="0" max="40" data-pref-range="coverPadding"></label>
-        <label>圆角 (<span data-val="coverRadius"></span>px)<input type="range" min="0" max="50" data-pref-range="coverRadius"></label>
+        <label class="cap-range-field"><span class="cap-range-head"><span>封面大小</span><span class="cap-range-pill"><span data-val="coverSize"></span>px</span></span><input type="range" min="40" max="320" data-pref-range="coverSize"></label>
+        <label class="cap-range-field"><span class="cap-range-head"><span>内边距</span><span class="cap-range-pill"><span data-val="coverPadding"></span>px</span></span><input type="range" min="0" max="40" data-pref-range="coverPadding"></label>
+        <label class="cap-range-field"><span class="cap-range-head"><span>圆角</span><span class="cap-range-pill"><span data-val="coverRadius"></span>px</span></span><input type="range" min="0" max="50" data-pref-range="coverRadius"></label>
 
         <div class="cap-setting-card">
           <div class="cap-setting-card-title">背景材质与氛围</div>
@@ -98,18 +98,10 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
             </select>
           </label>
           <div class="cap-appearance-grid">
-            <label>背景透明度 (<span data-val="playerBgOpacity">82</span>%)
-              <input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity">
-            </label>
-            <label>背景模糊度 (<span data-val="playerBgBlur">24</span>px)
-              <input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur">
-            </label>
-            <label>背景饱和度 (<span data-val="bgSaturation"></span>%)
-              <input type="range" min="0" max="200" data-pref-range="bgSaturation">
-            </label>
-            <label>明暗遮罩 (<span data-val="bgShade"></span>%)
-              <input type="range" min="0" max="100" data-pref-range="bgShade">
-            </label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>背景透明度</span><span class="cap-range-pill"><span data-val="playerBgOpacity">82</span>%</span></span><input type="range" min="0" max="100" step="1" data-pref-range="playerBgOpacity"></label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>背景模糊度</span><span class="cap-range-pill"><span data-val="playerBgBlur">24</span>px</span></span><input type="range" min="0" max="60" step="1" data-pref-range="playerBgBlur"></label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>背景饱和度</span><span class="cap-range-pill"><span data-val="bgSaturation"></span>%</span></span><input type="range" min="0" max="200" data-pref-range="bgSaturation"></label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>明暗遮罩</span><span class="cap-range-pill"><span data-val="bgShade"></span>%</span></span><input type="range" min="0" max="100" data-pref-range="bgShade"></label>
           </div>
           <label>自定义背景色 / 渐变（留空使用默认）
             <div class="cap-color-row">
@@ -152,15 +144,9 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
             <label>边框颜色
               <input type="color" data-cover-color>
             </label>
-            <label>边框宽度 (<span data-val="coverBorder"></span>px)
-              <input type="range" min="0" max="12" data-pref-range="coverBorder">
-            </label>
-            <label>边框透明度 (<span data-val="coverOpacity"></span>%)
-              <input type="range" min="0" max="100" data-pref-range="coverOpacity">
-            </label>
-            <label>投影强度 (<span data-val="coverShadow"></span>px)
-              <input type="range" min="0" max="40" data-pref-range="coverShadow">
-            </label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>边框宽度</span><span class="cap-range-pill"><span data-val="coverBorder"></span>px</span></span><input type="range" min="0" max="12" data-pref-range="coverBorder"></label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>边框透明度</span><span class="cap-range-pill"><span data-val="coverOpacity"></span>%</span></span><input type="range" min="0" max="100" data-pref-range="coverOpacity"></label>
+            <label class="cap-range-field"><span class="cap-range-head"><span>投影强度</span><span class="cap-range-pill"><span data-val="coverShadow"></span>px</span></span><input type="range" min="0" max="40" data-pref-range="coverShadow"></label>
           </div>
         </div>
       </details>
@@ -523,7 +509,14 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   for (const el of playerBox.querySelectorAll('[data-pref-range]')) {
     const k = el.dataset.prefRange; el.value = p[k];
     const label = playerBox.querySelector(`[data-val="${k}"]`);
-    const update = () => { if (label) label.textContent = el.value; };
+    const hostLabel = el.closest('label');
+    if (hostLabel) hostLabel.classList.add('cap-range-field');
+    const update = () => {
+      if (label) label.textContent = el.value;
+      const min = Number(el.min || 0), max = Number(el.max || 100), val = Number(el.value || 0);
+      const pct = max > min ? Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100)) : 0;
+      el.style.setProperty('--cap-range-pct', pct.toFixed(1) + '%');
+    };
     update(); el.oninput = () => { p[k] = Number(el.value); update(); save(); };
   }
   async function refreshFonts() {
