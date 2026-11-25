@@ -2608,319 +2608,189 @@ body[data-cap-paper="ink"] .cap-memory-provenance li {
 }
 
 /* =========================================================
-   3D 高透水晶玻璃球灵动岛 · 升级版 (Ultra-Clear 52px + 缓慢呼吸流光)
+   Apple iOS 26 Liquid Glass · 纯净无色清透液态玻璃（灵动岛 & 拾忆耳扣）
    ========================================================= */
 
-@keyframes capOrbSheen {
-  0%, 100% {
-    opacity: 0.88;
-    transform: rotate(-28deg) translate(0, 0) scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: rotate(-23deg) translate(1.2px, -0.6px) scale(1.06);
-  }
-}
-
-@keyframes capOrbCaustic {
-  0%, 100% {
-    opacity: 0.72;
-    filter: hue-rotate(0deg) brightness(1);
-  }
-  50% {
-    opacity: 1;
-    filter: hue-rotate(14deg) brightness(1.12);
-  }
-}
-
-@keyframes capCapsuleSheen {
-  0%, 100% { opacity: 0.78; }
-  50% { opacity: 1; }
-}
-
-#capricorn-hub .cap-island {
-  --island-orb-size: 52px;
+/* ---------- 1. 灵动岛：纯净清透液态玻璃球 / 胶囊 ---------- */
+#capricorn-hub button.cap-island[data-playing] {
+  --island-orb-size: 48px;
   position: relative;
   isolation: isolate;
   overflow: hidden;
+  border: 0 !important;
   border-radius: 999px;
   min-width: var(--island-orb-size);
   height: var(--island-orb-size);
   padding: 0;
   transition:
-    width 0.48s var(--apple-spring),
-    max-width 0.48s var(--apple-spring),
-    height 0.36s var(--apple-spring),
-    padding 0.44s var(--apple-spring),
-    transform 0.24s var(--apple-spring),
-    box-shadow 0.32s ease,
-    border-color 0.32s ease;
+    width 0.44s var(--apple-spring),
+    max-width 0.44s var(--apple-spring),
+    height 0.34s var(--apple-spring),
+    padding 0.4s var(--apple-spring),
+    transform 0.22s var(--apple-spring),
+    background-color 0.28s ease,
+    box-shadow 0.28s ease;
 }
 
-/* 歌词层始终置于高光层之上，保证日黑夜白锐利可读 */
-#capricorn-hub .cap-island .cap-island-lyric-wrap {
+#capricorn-hub button.cap-island .cap-island-lyric-wrap {
   position: relative;
   z-index: 3;
 }
 
-/* 专辑取色作为水晶球内部的柔和折光液 */
-#capricorn-hub .cap-island .cap-island-colors {
+/* 专辑取色：未播放彻底清零保持纯无色玻璃；播放中仅保留极淡底色不影响清透度 */
+#capricorn-hub button.cap-island .cap-island-colors {
   position: absolute;
-  inset: -4px;
+  inset: 0;
   z-index: 0;
   border-radius: inherit;
-  filter: blur(11px) saturate(165%);
+  filter: blur(12px) saturate(140%);
   pointer-events: none;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.5s ease;
 }
-#capricorn-hub .cap-island[data-playing="false"] .cap-island-colors {
-  opacity: 0.1;
+#capricorn-hub button.cap-island[data-playing="false"] .cap-island-colors {
+  opacity: 0 !important;
 }
-body[data-cap-look="light"] #capricorn-hub .cap-island[data-playing="true"] .cap-island-colors {
-  opacity: 0.2;
+body[data-cap-look="light"] #capricorn-hub button.cap-island[data-playing="true"] .cap-island-colors {
+  opacity: 0.12 !important;
 }
-body[data-cap-look="dark"] #capricorn-hub .cap-island[data-playing="true"] .cap-island-colors {
-  opacity: 0.3;
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"] .cap-island-colors {
+  opacity: 0.18 !important;
 }
 
-/* --- 日间模式：高透 3D 水晶弹珠（中心极透，边缘强菲涅尔厚壁折射） --- */
+/* 日间：100% 无色清透光学玻璃（白底不隐形、花底不发蓝发灰） */
 body[data-cap-look="light"] #capricorn-hub button.cap-island[data-playing] {
-  color: #0b0c10;
-  background:
-    radial-gradient(
-      circle at 30% 24%,
-      rgba(255, 255, 255, 0.72) 0%,
-      rgba(255, 255, 255, 0.12) 26%,
-      rgba(240, 248, 255, 0.03) 56%,
-      rgba(130, 168, 218, 0.2) 86%,
-      rgba(95, 138, 198, 0.32) 100%
-    ),
-    radial-gradient(
-      ellipse 70% 42% at 62% 90%,
-      rgba(255, 255, 255, 0.82) 0%,
-      rgba(182, 224, 255, 0.28) 44%,
-      transparent 72%
-    );
-  border: 1px solid rgba(255, 255, 255, 0.84);
-  backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06);
-  -webkit-backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06);
+  color: #000000;
+  background: rgba(255, 255, 255, 0.16) !important;
+  backdrop-filter: blur(4px) saturate(165%) brightness(1.03);
+  -webkit-backdrop-filter: blur(4px) saturate(165%) brightness(1.03);
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 1),
-    inset 3px 5px 10px rgba(255, 255, 255, 0.48),
-    inset -4px -8px 14px rgba(14, 34, 72, 0.22),
-    inset 0 -3px 7px rgba(255, 255, 255, 0.86),
-    0 14px 32px -4px rgba(15, 28, 56, 0.26),
-    0 4px 12px rgba(15, 28, 56, 0.12);
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.45),
+    inset 0 0 8px rgba(255, 255, 255, 0.18),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.05),
+    0 0 0 0.5px rgba(0, 0, 0, 0.08),
+    0 8px 24px rgba(0, 0, 0, 0.12),
+    0 2px 6px rgba(0, 0, 0, 0.06) !important;
 }
 body[data-cap-look="light"] #capricorn-hub button.cap-island[data-playing="true"] {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.56) 0%,
-      rgba(246, 250, 255, 0.26) 50%,
-      rgba(222, 236, 252, 0.42) 100%
-    );
-  text-shadow: 0 1px 3px rgba(255, 255, 255, 0.9), 0 0 8px rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.34) !important;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.72);
 }
 
-/* --- 夜间模式：高透黑曜水晶球（中心透亮微暗，边缘月光焦散） --- */
+/* 夜间：100% 无色清透暗玻璃（零蓝调、零泛紫） */
 body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
   color: #ffffff;
-  background:
-    radial-gradient(
-      circle at 30% 24%,
-      rgba(255, 255, 255, 0.36) 0%,
-      rgba(200, 226, 255, 0.08) 26%,
-      rgba(16, 20, 32, 0.22) 58%,
-      rgba(6, 9, 18, 0.58) 100%
-    ),
-    radial-gradient(
-      ellipse 70% 42% at 62% 90%,
-      rgba(170, 224, 255, 0.48) 0%,
-      rgba(120, 178, 255, 0.16) 46%,
-      transparent 74%
-    );
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05);
-  -webkit-backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05);
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(5px) saturate(165%) brightness(1.04);
+  -webkit-backdrop-filter: blur(5px) saturate(165%) brightness(1.04);
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.82),
-    inset 3px 5px 10px rgba(255, 255, 255, 0.18),
-    inset -5px -9px 18px rgba(0, 0, 0, 0.72),
-    inset 0 -3px 8px rgba(175, 226, 255, 0.46),
-    0 16px 36px -4px rgba(0, 0, 0, 0.6),
-    0 5px 14px rgba(0, 0, 0, 0.34);
+    inset 0 1px 1px rgba(255, 255, 255, 0.44),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.18),
+    inset 0 0 10px rgba(255, 255, 255, 0.05),
+    inset 0 -5px 12px rgba(0, 0, 0, 0.32),
+    0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 2px 8px rgba(0, 0, 0, 0.22) !important;
 }
 body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"] {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.16) 0%,
-      rgba(18, 20, 28, 0.42) 48%,
-      rgba(10, 12, 20, 0.6) 100%
-    );
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.82), 0 0 10px rgba(0, 0, 0, 0.55);
+  background: rgba(22, 22, 24, 0.38) !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
 
-/* --- 材质档位联动 --- */
-/* 液态玻璃：极低模糊，像真正透明水珠/水晶球清晰折射背后画面 */
-body[data-cap-material="glass"][data-cap-look="light"] #capricorn-hub button.cap-island[data-playing] {
-  backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08);
-  -webkit-backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08);
+/* 材质档位联动：液态玻璃(极清透) / 磨砂玻璃(细腻雾面) / 极简实色 */
+body[data-cap-material="glass"] #capricorn-hub button.cap-island[data-playing] {
+  backdrop-filter: blur(2.5px) saturate(170%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(2.5px) saturate(170%) brightness(1.04) !important;
 }
-body[data-cap-material="glass"][data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
-  backdrop-filter: blur(3px) saturate(225%) brightness(1.1) contrast(1.06);
-  -webkit-backdrop-filter: blur(3px) saturate(225%) brightness(1.1) contrast(1.06);
+body[data-cap-material="frost"] #capricorn-hub button.cap-island[data-playing] {
+  backdrop-filter: blur(18px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
 }
-/* Apple 磨砂玻璃：温润立体磨砂玻璃珠 */
-body[data-cap-material="frost"][data-cap-look="light"] #capricorn-hub button.cap-island[data-playing],
-body[data-cap-material="frost"][data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
-  backdrop-filter: blur(14px) saturate(195%) brightness(1.04);
-  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.04);
+body[data-cap-material="solid"][data-cap-look="light"] #capricorn-hub button.cap-island[data-playing] {
+  background: rgba(248, 248, 250, 0.94) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
-/* 银蓝手账主题专属冷月光折射 */
-body[data-cap-player-theme="silverblue"] #capricorn-hub button.cap-island[data-playing] {
-  border-color: rgba(215, 236, 255, 0.84);
-  box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.98),
-    inset 3px 5px 10px rgba(220, 238, 255, 0.48),
-    inset -4px -8px 14px rgba(42, 74, 112, 0.26),
-    inset 0 -3px 7px rgba(186, 224, 255, 0.72),
-    0 14px 32px -4px rgba(38, 68, 108, 0.3);
+body[data-cap-material="solid"][data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing] {
+  background: rgba(30, 30, 32, 0.94) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-/* --- 光学层 1 (::before)：球面顶部弯曲镜面高光 + 缓慢呼吸流光 --- */
-#capricorn-hub button.cap-island::before {
+/* 光学层 1 (::before)：Apple Liquid Glass 标志性 1.25px 方向性镜面细光边（左上+右下对角折射高光） */
+#capricorn-hub button.cap-island[data-playing]::before {
   content: "";
   position: absolute;
+  inset: 0;
   z-index: 2;
+  padding: 1.25px;
+  border-radius: inherit;
+  box-sizing: border-box;
   pointer-events: none;
-  will-change: transform, opacity;
-  transition:
-    top 0.36s var(--apple-spring),
-    left 0.36s var(--apple-spring),
-    right 0.36s var(--apple-spring),
-    width 0.36s var(--apple-spring),
-    height 0.36s var(--apple-spring),
-    opacity 0.28s ease;
-}
-
-/* 未播放：52px 球体专属弯曲穹顶高光弧 */
-#capricorn-hub button.cap-island[data-playing="false"]::before {
-  top: 4px;
-  left: 8px;
-  width: 24px;
-  height: 12px;
-  border-radius: 50%;
-  transform: rotate(-28deg);
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.58) 52%,
-    rgba(255, 255, 255, 0) 100%
+    135deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(255, 255, 255, 0.34) 24%,
+    rgba(255, 255, 255, 0.04) 48%,
+    rgba(255, 255, 255, 0.04) 66%,
+    rgba(255, 255, 255, 0.68) 100%
   );
-  filter: blur(0.3px);
-  animation: capOrbSheen 7.5s ease-in-out infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
 }
-body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="false"]::before {
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing]::before {
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(215, 238, 255, 0.42) 55%,
-    rgba(255, 255, 255, 0) 100%
+    135deg,
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(255, 255, 255, 0.2) 24%,
+    rgba(255, 255, 255, 0.03) 48%,
+    rgba(255, 255, 255, 0.03) 66%,
+    rgba(255, 255, 255, 0.36) 100%
   );
 }
 
-/* 播放中：沿胶囊顶部的立体柱面流光带 */
-#capricorn-hub button.cap-island[data-playing="true"]::before {
-  top: 2px;
-  left: 16px;
-  right: 16px;
-  width: auto;
-  height: 44%;
-  border-radius: 999px 999px 50% 50%;
-  transform: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.14) 56%,
-    rgba(255, 255, 255, 0) 100%
-  );
-  animation: capCapsuleSheen 6.5s ease-in-out infinite;
-}
-body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"]::before {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.34) 0%,
-    rgba(215, 238, 255, 0.06) 56%,
-    rgba(255, 255, 255, 0) 100%
-  );
-}
-
-/* --- 光学层 2 (::after)：副高光点 + 底部焦散光弧 + 微虹彩呼吸流光 --- */
-#capricorn-hub button.cap-island::after {
+/* 光学层 2 (::after)：极柔和的无色曲面折光膜（非贴纸椭圆，纯粹光学过渡） */
+#capricorn-hub button.cap-island[data-playing]::after {
   content: "";
   position: absolute;
   inset: 1px;
-  z-index: 2;
+  z-index: 1;
   border-radius: inherit;
   pointer-events: none;
-  will-change: opacity, filter;
-  animation: capOrbCaustic 6.5s ease-in-out infinite;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.06) 28%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+}
+body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing]::after {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.03) 28%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
 }
 
-#capricorn-hub button.cap-island[data-playing="false"]::after {
-  background:
-    radial-gradient(circle 2.6px at 74% 24%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0) 100%),
-    radial-gradient(ellipse 60% 30% at 56% 93%, rgba(255, 255, 255, 0.92) 0%, rgba(168, 224, 255, 0.44) 52%, transparent 100%);
-  box-shadow:
-    inset 1.6px -1.6px 4px rgba(130, 214, 255, 0.52),
-    inset -1.6px 1.6px 4px rgba(255, 182, 232, 0.36);
+/* 灵动岛交互反馈 */
+#capricorn-hub button.cap-island[data-playing]:hover {
+  transform: scale(1.04);
 }
-body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="false"]::after {
-  background:
-    radial-gradient(circle 2.5px at 74% 24%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%),
-    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(192, 236, 255, 0.7) 0%, rgba(125, 186, 255, 0.28) 54%, transparent 100%);
-  box-shadow:
-    inset 1.6px -1.6px 4px rgba(120, 208, 255, 0.46),
-    inset -1.6px 1.6px 4px rgba(214, 160, 255, 0.32);
+#capricorn-hub button.cap-island[data-playing]:active:not([data-dragging="true"]) {
+  transform: scale(0.94);
 }
-
-#capricorn-hub button.cap-island[data-playing="true"]::after {
-  background:
-    radial-gradient(ellipse 70% 34% at 50% 100%, rgba(255, 255, 255, 0.56) 0%, rgba(170, 224, 255, 0.22) 54%, transparent 100%);
-  box-shadow:
-    inset 0 -1.2px 2.5px rgba(255, 255, 255, 0.58),
-    inset 1.2px 0 3.5px rgba(135, 214, 255, 0.34),
-    inset -1.2px 0 3.5px rgba(255, 184, 232, 0.26);
-}
-body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"]::after {
-  background:
-    radial-gradient(ellipse 70% 34% at 50% 100%, rgba(185, 230, 255, 0.32) 0%, rgba(120, 178, 255, 0.1) 56%, transparent 100%);
-  box-shadow:
-    inset 0 -1.2px 2.5px rgba(185, 228, 255, 0.38),
-    inset 1.2px 0 3.5px rgba(120, 208, 255, 0.28),
-    inset -1.2px 0 3.5px rgba(214, 160, 255, 0.22);
-}
-
-/* --- 交互触感：悬停微浮、按压回弹、拖拽跟手 --- */
-#capricorn-hub button.cap-island:hover {
-  transform: translateY(-2px) scale(1.05);
-}
-#capricorn-hub button.cap-island:active:not([data-dragging="true"]) {
-  transform: scale(0.92);
-}
-#capricorn-hub button.cap-island[data-dragging="true"] {
-  transition: transform 0.14s var(--apple-spring), box-shadow 0.14s ease !important;
-  transform: scale(1.1);
+#capricorn-hub button.cap-island[data-playing][data-dragging="true"] {
+  transition: transform 0.14s var(--apple-spring) !important;
+  transform: scale(1.08);
   cursor: grabbing;
 }
-#capricorn-hub button.cap-island[data-dragging="true"]::before,
-#capricorn-hub button.cap-island[data-dragging="true"]::after {
-  animation-play-state: paused;
-}
 
-/* --- 尺寸态：52px 水晶球 -> 48px/56px 立体水晶胶囊 --- */
+/* 灵动岛尺寸态 */
 #capricorn-hub button.cap-island[data-playing="false"] {
   width: var(--island-orb-size);
   max-width: var(--island-orb-size);
@@ -2928,190 +2798,148 @@ body[data-cap-look="dark"] #capricorn-hub button.cap-island[data-playing="true"]
 }
 #capricorn-hub button.cap-island[data-playing="true"] {
   width: auto;
-  height: 48px;
-  max-width: min(80vw, 350px);
-  padding: 0 20px;
+  height: 44px;
+  max-width: min(80vw, 344px);
+  padding: 0 18px;
 }
 #capricorn-hub button.cap-island[data-playing="true"][data-bilingual="true"] {
-  height: 56px;
+  height: 54px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  #capricorn-hub button.cap-island::before,
-  #capricorn-hub button.cap-island::after {
-    animation: none !important;
-  }
-}
 
-/* =========================================================
-   拾忆收起态 · 同款 3D 立体水晶玻璃耳扣 (Crystal Glass Ear-Tab)
-   ========================================================= */
-
+/* ---------- 2. 拾忆收起态耳扣：同款纯净无色 Apple Liquid Glass ---------- */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed {
-  width: 48px !important;
-  height: 50px !important;
+  width: 46px !important;
+  height: 48px !important;
   right: max(0px, env(safe-area-inset-right)) !important;
   overflow: visible !important;
 }
 
-/* 日间高透 3D 水晶玻璃耳扣（与灵动岛玻璃球同源光学结构） */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
   position: relative !important;
   isolation: isolate;
   overflow: visible !important;
   display: grid !important;
   place-items: center !important;
-  width: 48px !important;
-  height: 50px !important;
-  min-height: 50px !important;
+  width: 46px !important;
+  height: 48px !important;
+  min-height: 48px !important;
   padding: 0 2px 0 6px !important;
-  border-radius: 25px 0 0 25px !important;
-  color: #111318 !important;
-  background:
-    radial-gradient(
-      circle at 32% 24%,
-      rgba(255, 255, 255, 0.76) 0%,
-      rgba(255, 255, 255, 0.14) 28%,
-      rgba(240, 248, 255, 0.04) 56%,
-      rgba(130, 168, 218, 0.22) 88%,
-      rgba(95, 138, 198, 0.34) 100%
-    ),
-    radial-gradient(
-      ellipse 72% 44% at 62% 90%,
-      rgba(255, 255, 255, 0.84) 0%,
-      rgba(182, 224, 255, 0.3) 45%,
-      transparent 74%
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.84) !important;
-  border-right: 0 !important;
-  backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06) !important;
-  -webkit-backdrop-filter: blur(6px) saturate(215%) brightness(1.06) contrast(1.06) !important;
+  border: 0 !important;
+  border-radius: 24px 0 0 24px !important;
+  color: #111111 !important;
+  background: rgba(255, 255, 255, 0.18) !important;
+  backdrop-filter: blur(4px) saturate(165%) brightness(1.03) !important;
+  -webkit-backdrop-filter: blur(4px) saturate(165%) brightness(1.03) !important;
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 1),
-    inset 3px 5px 10px rgba(255, 255, 255, 0.48),
-    inset -3px -7px 14px rgba(14, 34, 72, 0.2),
-    inset 0 -3px 7px rgba(255, 255, 255, 0.86),
-    -8px 12px 28px -4px rgba(15, 28, 56, 0.24),
-    -3px 4px 10px rgba(15, 28, 56, 0.1) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.8),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.45),
+    inset 0 0 8px rgba(255, 255, 255, 0.18),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.05),
+    -0.5px 0 0 0.5px rgba(0, 0, 0, 0.08),
+    -6px 8px 22px rgba(0, 0, 0, 0.12),
+    -2px 2px 6px rgba(0, 0, 0, 0.06) !important;
   transition:
-    transform 0.26s var(--apple-spring),
+    transform 0.24s var(--apple-spring),
     color 0.2s ease,
-    box-shadow 0.28s ease !important;
+    background-color 0.24s ease,
+    box-shadow 0.24s ease !important;
 }
 
-/* 夜间深邃黑曜 3D 水晶玻璃耳扣 */
 body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand,
 body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
   color: #ffffff !important;
-  background:
-    radial-gradient(
-      circle at 32% 24%,
-      rgba(255, 255, 255, 0.38) 0%,
-      rgba(200, 226, 255, 0.08) 28%,
-      rgba(16, 20, 32, 0.24) 58%,
-      rgba(6, 9, 18, 0.6) 100%
-    ),
-    radial-gradient(
-      ellipse 72% 44% at 62% 90%,
-      rgba(170, 224, 255, 0.48) 0%,
-      rgba(120, 178, 255, 0.16) 46%,
-      transparent 74%
-    ) !important;
-  border: 1px solid rgba(255, 255, 255, 0.38) !important;
-  border-right: 0 !important;
-  backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05) !important;
-  -webkit-backdrop-filter: blur(7px) saturate(210%) brightness(1.08) contrast(1.05) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(5px) saturate(165%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(5px) saturate(165%) brightness(1.04) !important;
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.82),
-    inset 3px 5px 10px rgba(255, 255, 255, 0.18),
-    inset -4px -8px 16px rgba(0, 0, 0, 0.72),
-    inset 0 -3px 8px rgba(175, 226, 255, 0.46),
-    -10px 14px 32px -4px rgba(0, 0, 0, 0.56),
-    -3px 4px 12px rgba(0, 0, 0, 0.32) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.44),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.18),
+    inset 0 0 10px rgba(255, 255, 255, 0.05),
+    inset 0 -5px 12px rgba(0, 0, 0, 0.32),
+    -0.5px 0 0 0.5px rgba(255, 255, 255, 0.1),
+    -8px 10px 26px rgba(0, 0, 0, 0.4),
+    -2px 2px 8px rgba(0, 0, 0, 0.22) !important;
 }
 
-/* 与声屿材质档位同步（液态玻璃极透 / 磨砂玻璃温润） */
+/* 耳扣材质档位联动 */
 body[data-cap-material="glass"][data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
-  backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08) !important;
-  -webkit-backdrop-filter: blur(2.5px) saturate(235%) brightness(1.07) contrast(1.08) !important;
+  backdrop-filter: blur(2.5px) saturate(170%) brightness(1.04) !important;
+  -webkit-backdrop-filter: blur(2.5px) saturate(170%) brightness(1.04) !important;
 }
 body[data-cap-material="frost"][data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand {
-  backdrop-filter: blur(14px) saturate(195%) brightness(1.04) !important;
-  -webkit-backdrop-filter: blur(14px) saturate(195%) brightness(1.04) !important;
+  backdrop-filter: blur(18px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
 }
 
-/* 图标置于光学高光层之上，保证锐利立体 */
+/* 耳扣图标层 */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon {
   position: relative;
   z-index: 3;
-  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.55));
-  transition: transform 0.24s var(--apple-spring);
-}
-body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon,
-body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-icon {
-  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.65));
+  transition: transform 0.22s var(--apple-spring);
 }
 
-/* 光学层 1 (::before)：耳扣顶部弧面主高光 + 缓慢呼吸流光 */
+/* 耳扣 1.25px 方向性镜面细光边（右侧贴屏无缝留空） */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before {
   content: "";
   position: absolute;
-  top: 4px;
-  left: 8px;
-  width: 22px;
-  height: 11px;
+  inset: 0;
   z-index: 2;
-  border-radius: 50%;
+  padding: 1.25px 0 1.25px 1.25px;
+  border-radius: inherit;
+  box-sizing: border-box;
   pointer-events: none;
-  transform: rotate(-24deg);
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.98) 0%,
-    rgba(255, 255, 255, 0.56) 52%,
-    rgba(255, 255, 255, 0) 100%
+    135deg,
+    rgba(255, 255, 255, 0.96) 0%,
+    rgba(255, 255, 255, 0.34) 26%,
+    rgba(255, 255, 255, 0.04) 52%,
+    rgba(255, 255, 255, 0.62) 100%
   );
-  filter: blur(0.3px);
-  will-change: transform, opacity;
-  animation: capOrbSheen 7.5s ease-in-out infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
 }
 body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before,
 body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before {
   background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.9) 0%,
-    rgba(215, 238, 255, 0.4) 55%,
-    rgba(255, 255, 255, 0) 100%
+    135deg,
+    rgba(255, 255, 255, 0.68) 0%,
+    rgba(255, 255, 255, 0.2) 26%,
+    rgba(255, 255, 255, 0.03) 52%,
+    rgba(255, 255, 255, 0.34) 100%
   );
 }
 
-/* 光学层 2 (::after)：底部焦散反光 + 边缘微虹彩色散 */
+/* 耳扣柔和无色曲面折光膜 */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
   content: "";
   position: absolute;
   inset: 1px 0 1px 1px;
-  z-index: 2;
+  z-index: 1;
   border-radius: inherit;
   pointer-events: none;
-  background:
-    radial-gradient(circle 2.4px at 76% 24%, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0) 100%),
-    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(255, 255, 255, 0.9) 0%, rgba(168, 224, 255, 0.42) 54%, transparent 100%);
-  box-shadow:
-    inset 1.5px -1.5px 4px rgba(130, 214, 255, 0.5),
-    inset 0 1.5px 4px rgba(255, 182, 232, 0.32);
-  will-change: opacity, filter;
-  animation: capOrbCaustic 6.5s ease-in-out infinite;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.06) 28%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
 }
 body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after,
 body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
-  background:
-    radial-gradient(circle 2.3px at 76% 24%, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0) 100%),
-    radial-gradient(ellipse 62% 30% at 56% 93%, rgba(192, 236, 255, 0.68) 0%, rgba(125, 186, 255, 0.26) 54%, transparent 100%);
-  box-shadow:
-    inset 1.5px -1.5px 4px rgba(120, 208, 255, 0.44),
-    inset 0 1.5px 4px rgba(214, 160, 255, 0.28);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.03) 28%,
+    rgba(255, 255, 255, 0) 52%,
+    rgba(255, 255, 255, 0.07) 100%
+  );
 }
 
-/* 待审核角标：iOS 悬浮红/主题色光点，不被裁切 */
+/* 待审核悬浮角标 */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .cap-shiyi-dot {
   top: -2px;
   left: -2px;
@@ -3120,53 +2948,44 @@ body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand .
   height: 17px;
   line-height: 17px;
   font-size: 10px;
-  border: 1.5px solid rgba(255, 255, 255, 0.88);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.28);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
 }
 
-/* 交互触感：悬停左滑透出、按压回弹、拖动浮起不掉阴影 */
+/* 耳扣交互反馈（保持纯中性投影，绝不掉材质） */
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover {
-  transform: translateX(-4px) scale(1.04) !important;
+  transform: translateX(-3px) scale(1.03) !important;
   color: var(--note-accent) !important;
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 1),
-    inset 3px 5px 11px rgba(255, 255, 255, 0.56),
-    inset -3px -7px 14px rgba(14, 34, 72, 0.22),
-    inset 0 -3px 8px rgba(255, 255, 255, 0.92),
-    -12px 16px 34px -4px rgba(15, 28, 56, 0.28),
-    -4px 5px 12px rgba(15, 28, 56, 0.14) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.5),
+    inset 0 0 10px rgba(255, 255, 255, 0.24),
+    inset 0 -4px 10px rgba(0, 0, 0, 0.05),
+    -0.5px 0 0 0.5px rgba(0, 0, 0, 0.1),
+    -8px 10px 26px rgba(0, 0, 0, 0.16),
+    -2px 3px 8px rgba(0, 0, 0, 0.08) !important;
 }
 body[data-cap-paper-mode="dark"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover,
 body[data-cap-paper="ink"] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover {
   box-shadow:
-    inset 0 2px 3px rgba(255, 255, 255, 0.9),
-    inset 3px 5px 11px rgba(255, 255, 255, 0.24),
-    inset -4px -8px 16px rgba(0, 0, 0, 0.76),
-    inset 0 -3px 9px rgba(185, 232, 255, 0.54),
-    -12px 18px 38px -4px rgba(0, 0, 0, 0.64),
-    -4px 6px 14px rgba(0, 0, 0, 0.38) !important;
+    inset 0 1px 1px rgba(255, 255, 255, 0.56),
+    inset 0 -1px 2px rgba(255, 255, 255, 0.24),
+    inset 0 0 12px rgba(255, 255, 255, 0.08),
+    inset 0 -5px 12px rgba(0, 0, 0, 0.36),
+    -0.5px 0 0 0.5px rgba(255, 255, 255, 0.14),
+    -10px 12px 30px rgba(0, 0, 0, 0.48),
+    -2px 3px 10px rgba(0, 0, 0, 0.28) !important;
 }
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:hover .cap-icon {
-  transform: scale(1.08);
+  transform: scale(1.06);
 }
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand:active:not([data-dragging="true"]) {
-  transform: translateX(-1px) scale(0.94) !important;
+  transform: translateX(-1px) scale(0.95) !important;
 }
 body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"] {
   transition: transform 0.14s var(--apple-spring) !important;
-  transform: translateX(-4px) scale(1.08) !important;
+  transform: translateX(-3px) scale(1.06) !important;
   cursor: grabbing;
-}
-body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"]::before,
-body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand[data-dragging="true"]::after {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::before,
-  body[data-cap-paper] #shiyi-dock.cap-memory-side.shiyi-collapsed #shiyi-expand::after {
-    animation: none !important;
-  }
 }
 
 /* =========================================================
