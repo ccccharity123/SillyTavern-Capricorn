@@ -859,7 +859,7 @@ if (music) {
   backgroundLabel.append(bgText, backgroundInput);
   musicPrefs.append(backgroundLabel);
   backgroundInput.addEventListener('change', () => music.setBackgroundPriority?.(backgroundInput.checked));
-  musicFootnote.textContent = 'iOS 后台播放优先默认关闭：开启后优先原生通道（可能仅支持静音键）；关闭后优先尝试网页内连续调节音量；若音源或宿主不支持 Web Audio，将回退系统音量，切后台也可能暂停。更改后下一首生效。';
+  musicFootnote.textContent = 'iOS 后台播放优先默认关闭（保留应用内音量）。需要锁屏、后台及系统灵动岛时建议开启，再切换歌曲：使用原生音频及系统音量键。后台播放还取决于宿主权限；关闭时尝试系统播放会话与网页音量并存。更改后下一首生效。';
 } else {
   musicFootnote.textContent = '声屿已停用；重新开启将刷新页面并恢复原有歌单与设置。';
 }

@@ -50,6 +50,10 @@ function makeAudio(){const a=D.createElement('audio');a.preload='metadata';a.pla
 const mobileMedia=/Android|iPhone|iPad|iPod/i.test(W.navigator.userAgent)||(W.navigator.platform==='MacIntel'&&W.navigator.maxTouchPoints>1);
 const mediaSession=W.navigator?.mediaSession||window.navigator?.mediaSession||null;
 const mediaMetadataCtor=W.MediaMetadata||window.MediaMetadata;
+const systemAudioSession=W.navigator?.audioSession||window.navigator?.audioSession;
+let previousSessionType=null;
+function requestPlaybackSession(){try{if(systemAudioSession){if(previousSessionType===null)previousSessionType=systemAudioSession.type;systemAudioSession.type='playback'}}catch{}}
+function releasePlaybackSession(){try{if(systemAudioSession&&previousSessionType!==null&&systemAudioSession.type==='playback')systemAudioSession.type=previousSessionType}catch{}previousSessionType=null}
 const fallbackArtwork=new URL('./sound-isle-cover.png',import.meta.url).href;
 const isAppleMobile=/iPhone|iPad|iPod/.test(W.navigator.userAgent)||(W.navigator.platform==='MacIntel'&&W.navigator.maxTouchPoints>1);
 // A native HTMLAudioElement is much more likely to keep iOS background media alive
@@ -134,12 +138,12 @@ function unlockAudio(){
 D.addEventListener('pointerdown',unlockAudio,true);D.addEventListener('touchend',unlockAudio,true);D.addEventListener('click',unlockAudio,true);
 async function chooseAudio(alive,forceNative=false){
  if(!alive())return false;
- if(!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())){
+ if(!forceNative&&!nativeVolume&&!(isAppleMobile&&(backgroundPriority()||D.hidden))){
   // Never let a suspended/resuming audio graph stall normal playback indefinitely.
   await Promise.race([unlockAudio(),new Promise(resolve=>setTimeout(()=>resolve(false),500))]);
  }
  if(!alive())return false;
- activeAudio=!forceNative&&!nativeVolume&&!(isAppleMobile&&backgroundPriority())&&gainNode&&audioContext?.state==='running'?graphAudio:nativeAudio;
+ activeAudio=!forceNative&&!nativeVolume&&!(isAppleMobile&&(backgroundPriority()||D.hidden))&&gainNode&&audioContext?.state==='running'?graphAudio:nativeAudio;
  return true;
 }
 function volumeCapability(){return nativeVolume||activeAudio===graphAudio&&!!gainNode&&audioContext?.state==='running'}
@@ -182,11 +186,11 @@ function updateMedia(){
  try{mediaSession.playbackState=audio.paused?'paused':'playing'}catch{}
  updatePosition();
 }
-function onMediaVisibility(){if(D.hidden&&!audio.paused&&!resolving)applyGain(1);updateMedia();storePlayback();if(!D.hidden)updateMini()}
+function onMediaVisibility(){if(disposed)return;if(!audio.paused&&!resolving){requestPlaybackSession();if(D.hidden)applyGain(1);else if(activeAudio===graphAudio)void unlockAudio();}updateMedia();storePlayback();if(!D.hidden)updateMini()}
 D.addEventListener('visibilitychange',onMediaVisibility);
 // pageshow/resume can run when the WebView is restored; no forced autoplay
 // because app termination and OS media interruptions are controlled by the host.
-const onMediaRestore=()=>{if(!disposed){updateMedia();storePlayback();updateMini()}};
+const onMediaRestore=()=>{if(!disposed){onMediaVisibility();}};
 const onMediaPageHide=()=>{if(!disposed)storePlayback()};
 W.addEventListener('pagehide',onMediaPageHide);
 W.addEventListener('pageshow',onMediaRestore);
@@ -360,6 +364,7 @@ function cancelTrackLoad(track){
 }
 async function attemptPlay(timeout=12000,signal){
   try {
+    requestPlaybackSession();
     await withMusicTimeout(() => audio.play(), timeout, signal);
   } catch (error) {
     if (error.name === 'AbortError' && error.message === '请求超时' && !signal?.aborted) {
@@ -392,7 +397,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
      t.coverUrl=cover.replace(/^http:/,'https:');
      save();
      coverState='已取得地址';
-     fullPlayer?.refresh();
+     fullPlayer?.refresh();updateMedia();
    } catch(error) {
      if(alive())coverState='详情请求失败：'+error.name;
    }
@@ -406,7 +411,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  }else if(!ok&&!manual)throw Error('请启用网易云并填写访问密钥');if(!alive())return;if(!ok)throw Error('未能加载完整音源，请查看播放诊断');resolving=false;rememberPlay(t);storePlayback();updateMedia();render();trace('播放成功：'+actualQuality+(volumeCapability()?'':' · 当前音源请使用系统音量键'));
  }catch(e){if(!alive())return;resolving=false;audioError=e.name==='NotAllowedError'?'系统要求再次点击播放':e.message;render();trace(audioError)}
 }
-function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'后台播放优先：'+String(isAppleMobile&&backgroundPriority()),'音频通道：'+(activeAudio===nativeAudio?'HTMLAudioElement':'Web Audio'),'系统媒体构造器：'+(mediaMetadataCtor?'支持':'不支持'),'音量引擎：'+volumeBackend(),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
+function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'系统音频会话：'+(systemAudioSession?.type||'不支持'),'系统音频状态：'+(systemAudioSession?.state||'未知'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'后台播放优先：'+String(isAppleMobile&&backgroundPriority()),'音频通道：'+(activeAudio===nativeAudio?'HTMLAudioElement':'Web Audio'),'系统媒体构造器：'+(mediaMetadataCtor?'支持':'不支持'),'音量引擎：'+volumeBackend(),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
 function nextTrack(direction=1){if(!queue.length){let tracks=audioTracks();if(!tracks.length)return;queue=tracks.slice();queueRevision++;queueIndex=0;queuePlaylistName=db.playlists[selected]?.name||'声屿';return playQueued(0)}let i=queueIndex;if(playMode==='shuffle'&&queue.length>1){let n=Math.floor(Math.random()*(queue.length-1));i=n>=i?n+1:n}else i=(i+direction+queue.length)%queue.length;playQueued(i)}
 async function toggleAudio(){
   if(resolving){stopPlaybackWork();clearAudio();trace('已取消加载，再点播放重试');render();return;}
@@ -450,7 +455,7 @@ audio.addEventListener('ended',()=>{
     audio.play().catch(()=>{});
   } else nextTrack(1);
 });
-audio.addEventListener('play',()=>{updateMedia();updateMini()});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
+audio.addEventListener('play',()=>{requestPlaybackSession();updateMedia();updateMini()});audio.addEventListener('playing',()=>{updateMedia();});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
 audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>(D.hidden?30000:5000)){lastMemory=Date.now();storePlayback();updatePosition()}if(D.hidden)return;let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock)clock.textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration)});
 function updateMini(){
   root.dataset.audioPaused=String(audio.paused);
@@ -1399,6 +1404,7 @@ W[INSTANCE]={
     if(disposed)return;
     storePlayback();
     disposed=true;
+    releasePlaybackSession();
     stopPlaybackWork();
     storyTasks.cancel();
     autoMatchTasks.cancel();
