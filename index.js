@@ -842,6 +842,9 @@ const characterFollowInput=characterFollowLabel.querySelector('input');
 characterFollowInput.checked=W.localStorage.getItem('capricorn_follow_character')!=='off';
 characterFollowInput.onchange=()=>W.localStorage.setItem('capricorn_follow_character',characterFollowInput.checked?'on':'off');
 musicPrefs.append(characterFollowLabel);
+for(const [key,label] of [['startup','进入酒馆时自动播放'],['open','打开播放器时自动播放'],['story','静止时允许剧情 BGM 自动播放']]){
+ const row=D.createElement('label');row.className='cap-ios-row';const title=D.createElement('span');title.textContent=label;const input=D.createElement('input');input.type='checkbox';input.checked=W.localStorage.getItem('capricorn_auto_'+key)==='on';input.onchange=()=>W.localStorage.setItem('capricorn_auto_'+key,input.checked?'on':'off');row.append(title,input);musicPrefs.append(row);
+}
 
 if (music) {
   const backgroundLabel = D.createElement('label');
