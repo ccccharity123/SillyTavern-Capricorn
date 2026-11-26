@@ -279,39 +279,25 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     try { W.localStorage.setItem('capricorn_player_size', size); } catch (_) {}
     animateFrom(before, art);
   }
-  let closingAnim = null;
+  // Visibility is committed synchronously; never leave a finished fill-forwards
+  // animation masking a reopened player or its launcher.
   function cancelCloseAnim() {
-    if (closingAnim) {
-      try { closingAnim.cancel(); } catch (_) {}
-      closingAnim = null;
+    for (const animation of panel.getAnimations?.() || []) {
+      try { animation.cancel(); } catch (_) {}
     }
     panel.classList.remove('is-closing');
+    panel.style.transform = '';
   }
-  function closePanel(instant = false) {
+  function closePanel() {
+    cancelCloseAnim();
     closeMenus();
-    if (panel.hidden) return;
-    if (closingAnim) return;
-    const finish = () => {
-      closingAnim = null;
-      panel.classList.remove('is-closing');
-      panel.hidden = true;
-      D.body.removeAttribute('data-cap-player-open');
-      panel.style.transform = '';
-      if (composerObserver) composerObserver.disconnect();
-      observedComposer = null;
-      if (shared.onPlayerClose) shared.onPlayerClose();
-    };
-    if (instant || reduce() || !panel.animate) {
-      finish();
-      return;
-    }
-    panel.classList.add('is-closing');
-    closingAnim = panel.animate([
-      { transform: panel.style.transform || 'none', opacity: 1 },
-      { transform: 'translateY(18px) scale(0.965)', opacity: 0 }
-    ], { duration: 185, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' });
-    closingAnim.onfinish = finish;
-    closingAnim.oncancel = () => { closingAnim = null; panel.classList.remove('is-closing'); };
+    panel.hidden = true;
+    D.body.removeAttribute('data-cap-player-open');
+    if (viewportFrame) W.cancelAnimationFrame(viewportFrame);
+    viewportFrame = 0;
+    composerObserver?.disconnect();
+    observedComposer = null;
+    shared.onPlayerClose?.();
   }
   function openAux(name) {
     closePanel(true);
@@ -943,7 +929,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   return {
     open() {
       cancelCloseAnim();
-      if (!panel.hidden) return;
+      if (!panel.isConnected) D.body.append(panel);
+      if (!panel.hidden) { D.body.dataset.capPlayerOpen='true'; return; }
       const island = D.querySelector('#capricorn-hub .cap-island');
       openedAt=Date.now();
       panel.hidden = false;
@@ -954,7 +941,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       refresh();
       const openingRect=W.__soundIsleOpenOrigin || (island && island.getBoundingClientRect());
       delete W.__soundIsleOpenOrigin;
-      animateFrom(openingRect);
+      // Mobile WebViews can stall compositing animated backdrop-filter layers.
+      if (!mobile) animateFrom(openingRect);
     },
     close: closePanel,
     isOpen: () => !panel.hidden,

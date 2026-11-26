@@ -432,37 +432,21 @@ function select(t) {
   if (t === 'memory' && flags.memory) memoryDock?.open();
 }
 
-let hubCloseAnim = null;
 function cancelHubClose() {
-  if (hubCloseAnim) {
-    try { hubCloseAnim.cancel(); } catch (_) {}
-    hubCloseAnim = null;
+  for (const animation of nav.getAnimations?.() || []) {
+    try { animation.cancel(); } catch (_) {}
   }
   nav.classList.remove('is-closing');
 }
-function close(instant = false) {
+function close() {
+  cancelHubClose();
   popover.closeWithin(nav);
-  if (nav.hidden || hubCloseAnim) return;
-  const finish = () => {
-    hubCloseAnim = null;
-    nav.classList.remove('is-closing');
-    nav.hidden = true;
-    root.dataset.panelOpen = 'false';
-    island.setAttribute('aria-expanded', 'false');
-    select('');
-    launcher?.onPanelChange();
-  };
-  if (instant || prefersReducedMotion(W) || !nav.animate) {
-    finish();
-    return;
-  }
-  nav.classList.add('is-closing');
-  hubCloseAnim = nav.animate([
-    { transform: 'translateY(0) scale(1)', opacity: 1 },
-    { transform: 'translateY(-7px) scale(0.965)', opacity: 0 }
-  ], { duration: 165, easing: 'cubic-bezier(0.32, 0.72, 0, 1)', fill: 'forwards' });
-  hubCloseAnim.onfinish = finish;
-  hubCloseAnim.oncancel = () => { hubCloseAnim = null; nav.classList.remove('is-closing'); };
+  if (nav.hidden) return;
+  nav.hidden = true;
+  root.dataset.panelOpen = 'false';
+  island.setAttribute('aria-expanded', 'false');
+  select('');
+  launcher?.onPanelChange();
 }
 
 shared.onPlayerClose=()=>{island.setAttribute('aria-expanded','false');launcher?.onPanelChange();};
@@ -492,7 +476,7 @@ function openPlayer() {
 
 // Click outside hub nav smoothly dismisses it
 function onOutsideHubPointerDown(event) {
-  if (nav.hidden || hubCloseAnim || dead || performance.now() - hubOpenedAt < 650) return;
+  if (nav.hidden || dead || performance.now() - hubOpenedAt < 650) return;
   const t = event.target;
   if (!t || root.contains(t) || t.closest?.('.cap-full-player, .si-edge-handle')) return;
   if (t.closest?.('.cap-ui-portal, .cap-dialog-overlay, .cap-spotlight-overlay, .cap-song-picker-overlay, .shiyi-overlay, .cap-recall')) return;
