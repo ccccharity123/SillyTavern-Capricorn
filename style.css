@@ -3798,38 +3798,6 @@ body[data-cap-visual-lite] #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed)::be
   background: color-mix(in srgb, var(--note-card) 78%, transparent);
 }
 
-/* 3D. Specular Glass Rim on Main Player & Hub Panel */
-.cap-full-player.cap-player-layout[data-size]::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-  padding: 1px;
-  border-radius: inherit;
-  box-sizing: border-box;
-  pointer-events: none;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.88) 0%,
-    rgba(255, 255, 255, 0.22) 26%,
-    rgba(255, 255, 255, 0.02) 54%,
-    rgba(255, 255, 255, 0.48) 100%
-  );
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-}
-body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size]::after {
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.44) 0%,
-    rgba(255, 255, 255, 0.12) 26%,
-    rgba(255, 255, 255, 0.02) 54%,
-    rgba(255, 255, 255, 0.22) 100%
-  );
-}
-
 @media (prefers-reduced-transparency: reduce) {
   #shiyi-dock.cap-memory-dock:not(.shiyi-collapsed) {
     background-color: var(--note-bg);
@@ -3842,3 +3810,12 @@ body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size]::after 
   }
 }
 
+
+/* Settings: independent scroll container; preserve glass filter. */
+#capricorn-hub .cap-settings.cap-settings-paged[data-settings-page="home"] { overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; touch-action:pan-y; }
+#capricorn-hub .cap-settings-home { flex:0 0 auto; min-height:min-content; padding-bottom:max(12px,env(safe-area-inset-bottom,0px)); }
+#capricorn-hub .cap-settings-paged [hidden] { display:none !important; }
+#capricorn-hub > nav > small:empty { display:none; }
+#capricorn-hub > nav > small { flex:0 0 auto; overflow-wrap:anywhere; }
+#capricorn-hub > nav:has(.cap-settings:not([hidden])) { --cap-glass-work-bg:rgba(255,255,255,.86); }
+body[data-cap-look="dark"] #capricorn-hub > nav:has(.cap-settings:not([hidden])) { --cap-glass-work-bg:rgba(24,24,26,.86); }

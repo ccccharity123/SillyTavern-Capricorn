@@ -124,13 +124,13 @@ export function mountSettings(root, options = {}) {
       let info = '';
       try { info = getSummary(id) || ''; } catch {}
       if (typeof info === 'object' && info) {
-        entry.summary.textContent = info.text || '';
-        entry.summary.dataset.tone = info.tone || '';
+        if (entry.summary.textContent !== (info.text || '')) entry.summary.textContent = info.text || '';
+        if (entry.summary.dataset.tone !== (info.tone || '')) entry.summary.dataset.tone = info.tone || '';
       } else {
-        entry.summary.textContent = String(info || '');
-        entry.summary.dataset.tone = '';
+        if (entry.summary.textContent !== String(info || '')) entry.summary.textContent = String(info || '');
+        if (entry.summary.dataset.tone) entry.summary.dataset.tone = '';
       }
-      entry.summary.hidden = !entry.summary.textContent;
+      if (entry.summary.hidden !== !entry.summary.textContent) entry.summary.hidden = !entry.summary.textContent;
     }
   }
 

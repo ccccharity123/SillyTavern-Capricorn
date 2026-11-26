@@ -45,6 +45,7 @@ const shared = { flags, onIslandUpdate: null, scope, chatIdentity };
 let nativeControlsCleanup;
 const selectAdapters = [];
 let settingsUi;
+let refreshUnifiedStatus = null;
 let memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, cleanupUnifiedRegex, spotlight, memory, music, timer, dead = false, tab = '';
 let memoryStartup;
 let preparingGeneration = 0;
@@ -543,13 +544,14 @@ function tick() {
       { lane: 'audio', scoped: true, duringForeground: true });
     if (memory && flags.memory) maintenance.enqueue('拾忆', task => memory.tick(task), maintenancePriority.memory, { scoped: true });
     if (flags.memory) memoryDock?.tick();
-    if (!nav.hidden && tab === 'settings') updateUnifiedStatus();
+    if (!nav.hidden && tab === 'settings') refreshUnifiedStatus?.();
     if (flags.memory && tab === 'resonance' && resonance.dataset.scope !== key) {
       unlockRecall();
       void showResonance();
     }
   } catch (e) {
-    root.querySelector('small').textContent = e.message;
+    const status = nav.querySelector(':scope > small');
+    if (status && status.textContent !== e.message) status.textContent = e.message;
   }
 }
 
@@ -563,7 +565,7 @@ const generation = createGenerationLifecycle({
     else context().setExtensionPrompt?.('capricorn_weave', '', 1, 4, false, 0);
   },
   report({ type, result, enabled, error }) {
-    const status = root.querySelector('small');
+    const status = nav.querySelector(':scope > small');
     if (error) {
       lastGeneration = '已停止本轮生成，拾忆校验失败：' + error.message;
       status.textContent = lastGeneration;
@@ -823,6 +825,7 @@ function updateUnifiedStatus() {
   musicPanel.querySelector('.cap-unified-status').textContent = music ? '运行中 · 悬浮球 / 灵动岛就绪' : '未启用';
   settingsUi?.refreshSummaries?.();
 }
+refreshUnifiedStatus = updateUnifiedStatus;
 updateUnifiedStatus();
 
 const musicPrefs = musicPanel.querySelector('[data-music-prefs]');
@@ -1197,6 +1200,6 @@ mountSelectRoot(memory?.root);
 }
 
 void boot().catch(error => {
-  if (!dead) root.querySelector('small').textContent = '摩羯座启动失败：' + error.message;
+  if (!dead) nav.querySelector(':scope > small').textContent = '摩羯座启动失败：' + error.message;
   console.error('[Capricorn] startup', error);
 });

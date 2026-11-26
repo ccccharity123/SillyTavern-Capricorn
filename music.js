@@ -190,7 +190,7 @@ function onMediaVisibility(){if(disposed)return;if(!audio.paused&&!resolving){re
 D.addEventListener('visibilitychange',onMediaVisibility);
 // pageshow/resume can run when the WebView is restored; no forced autoplay
 // because app termination and OS media interruptions are controlled by the host.
-const onMediaRestore=()=>{if(!disposed){onMediaVisibility();}};
+const onMediaRestore=()=>{if(!disposed){mediaKey='';onMediaVisibility();}};
 const onMediaPageHide=()=>{if(!disposed)storePlayback()};
 W.addEventListener('pagehide',onMediaPageHide);
 W.addEventListener('pageshow',onMediaRestore);
@@ -464,10 +464,10 @@ function updateMini(){
 }
 function updateLegacyPlayer(){
   const title=root.querySelector('.si-island-title'),button=root.querySelector('[data-action="playpause"]');
-  if(title)title.textContent=playing?.title||'声屿';
+  if(title&&title.textContent!==(playing?.title||'声屿'))title.textContent=playing?.title||'声屿';
   if(button){
     const action=audio.paused?'播放':'暂停';
-    button.innerHTML=icon(audio.paused?'play':'pause',26);
+    if(button.dataset.mediaAction!==action){button.innerHTML=icon(audio.paused?'play':'pause',26);button.dataset.mediaAction=action;}
     button.setAttribute('aria-label',action);
     button.title=action;
   }
