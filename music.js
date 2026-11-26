@@ -135,7 +135,7 @@ function unlockAudio(){
   return Promise.resolve(false);
  }
 }
-D.addEventListener('pointerdown',unlockAudio,true);D.addEventListener('touchend',unlockAudio,true);D.addEventListener('click',unlockAudio,true);
+D.addEventListener('click',unlockAudio,true);
 async function chooseAudio(alive,forceNative=false){
  if(!alive())return false;
  if(!forceNative&&!nativeVolume&&!(isAppleMobile&&(backgroundPriority()||D.hidden))){

@@ -494,7 +494,12 @@ function onOutsideHubPointerDown(event) {
   if (t.closest?.('.cap-ui-portal, .cap-dialog-overlay, .cap-spotlight-overlay, .cap-song-picker-overlay, .shiyi-overlay, .cap-recall')) return;
   close();
 }
-island.onclick = () => {
+let lastIslandClick = -Infinity;
+island.onclick = (event) => {
+  event?.stopPropagation();
+  const now = performance.now();
+  if (now - lastIslandClick < 450) return;
+  lastIslandClick = now;
   if (cleanupMobile?.consumeDrag()) return;
   if(music?.isPlayerOpen()){music.closePlayer();return;}
   openPlayer();
@@ -964,8 +969,9 @@ function mountNativeControls(){
   }
   attach();
   mountSelectRoot(panel);
-  const observer=new MutationObserver(attach);observer.observe(D.body,{childList:true,subtree:true});
-  return ()=>{observer.disconnect();cleanupRegex();panel.remove();menu.remove();};
+  let attachTimer=0;
+  const observer=new MutationObserver(()=>{if(panel.isConnected&&menu.isConnected)return;if(!attachTimer)attachTimer=W.setTimeout(()=>{attachTimer=0;attach();},250);});observer.observe(D.body,{childList:true,subtree:true});
+  return ()=>{observer.disconnect();W.clearTimeout(attachTimer);cleanupRegex();panel.remove();menu.remove();};
 }
 nativeControlsCleanup=mountNativeControls();
 const backupButton = controls.querySelector('[data-backup]');

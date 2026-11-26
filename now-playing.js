@@ -40,12 +40,13 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   const transparency = media('(prefers-reduced-transparency: reduce)');
   const reduce = () => Boolean((motion && motion.matches) || (transparency && transparency.matches) ||
     (W.navigator.deviceMemory > 0 && W.navigator.deviceMemory <= 4));
+  let openedAt = -Infinity;
   let viewportFrame = 0;
   let observedComposer = null;
   const composerObserver = W.ResizeObserver ? new W.ResizeObserver(scheduleViewport) : null;
   function fitViewport() {
     if (panel.hidden) return;
-    panel.dataset.light = String(reduce());
+    panel.dataset.light = String(Boolean(transparency?.matches));
     const box = viewport(W);
     const computed = W.getComputedStyle(q('.cap-fp-safe'));
     const insets = {
@@ -703,9 +704,9 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     const time=audio.currentTime||0,duration=Number.isFinite(audio.duration)?audio.duration:0;
     seek.max=duration;
     if(!dragging)seek.value=time;
-    seek.style.setProperty('--cap-progress',(duration>0?Math.min(100,Math.max(0,time/duration*100)):0)+'%');
-    q('[data-elapsed]').textContent=clock(time);
-    q('[data-duration]').textContent=clock(audio.duration);
+    if(!dragging)seek.style.setProperty('--cap-progress',(duration>0?Math.min(100,Math.max(0,time/duration*100)):0)+'%');
+    if(!dragging){const elapsed=q('[data-elapsed]');const value=clock(time);if(elapsed.textContent!==value)elapsed.textContent=value;}
+    const total=q('[data-duration]');const value=clock(audio.duration);if(total.textContent!==value)total.textContent=value;
     const index = currentLyricIndex(time);
     const current = lines[index];
     const text = current ? current.text : '';
@@ -720,7 +721,6 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       panel.dataset.bilingual = bilingual;
       if (size === 'compact') fitViewport();
     }
-    updateVolume();
     if(tab!=='lyrics'||detail.hidden||!lines.length||index===active)return;
     detail.children[active]?.classList.remove('active');
     active=index;
@@ -821,6 +821,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   let sheetDrag = null;
   const grabber = q('.cap-fp-grabber');
   function onSheetDown(event) {
+    if (Date.now()-openedAt < 450) return;
     if (event.button != null && event.button !== 0) return;
     if (event.target.closest('button, input, select, textarea, a, .cap-fp-detail, .cap-fp-inline')) return;
     sheetDrag = {
@@ -882,11 +883,11 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   panel.addEventListener('pointerdown', onSheetDown);
   panel.addEventListener('pointermove', onSheetMove);
   panel.addEventListener('pointerup', onSheetEnd);
-  panel.addEventListener('pointercancel', onSheetEnd);
+  panel.addEventListener('pointercancel', () => {sheetDrag=null;panel.classList.remove('is-sheet-dragging');panel.style.transform='';});
   if (grabber) {
     grabber.onclick = event => {
       if (suppressSheetClick) { suppressSheetClick = false; event.preventDefault(); return; }
-      closePanel();
+      if(Date.now()-openedAt >= 450) closePanel();
     };
   }
 
@@ -937,6 +938,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       cancelCloseAnim();
       if (!panel.hidden) return;
       const island = D.querySelector('#capricorn-hub .cap-island');
+      openedAt=Date.now();
       panel.hidden = false;
       fitViewport();
       manualScrollUntil = 0;
