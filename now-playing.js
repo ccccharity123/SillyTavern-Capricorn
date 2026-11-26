@@ -351,7 +351,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
   qualityButton.onclick = () => openChoices(qualityButton, '播放音质', Object.keys(qualityLabels).map(level => ({
     label: qualityLabels[level], checked: state().preferredQuality === level, action: () => { if (quality) quality(level); }
   })));
-  q('[data-settings]').onclick = () => openAux('settings');
+  q('[data-settings]').onclick = event => { event.stopPropagation(); openAux('settings'); };
   q('[data-library]').onclick = () => openAux('library');
   q('[data-mode]').onclick = switchMode;
   moreButton.onclick = () => openChoices(moreButton, '播放工具', [
@@ -702,7 +702,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     emitIsland();
     if(panel.hidden)return;
     const time=audio.currentTime||0,duration=Number.isFinite(audio.duration)?audio.duration:0;
-    seek.max=duration;
+    if(Number(seek.max)!==duration)seek.max=duration;
     if(!dragging)seek.value=time;
     if(!dragging)seek.style.setProperty('--cap-progress',(duration>0?Math.min(100,Math.max(0,time/duration*100)):0)+'%');
     if(!dragging){const elapsed=q('[data-elapsed]');const value=clock(time);if(elapsed.textContent!==value)elapsed.textContent=value;}

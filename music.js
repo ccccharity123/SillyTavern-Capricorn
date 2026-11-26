@@ -455,8 +455,8 @@ audio.addEventListener('ended',()=>{
     audio.play().catch(()=>{});
   } else nextTrack(1);
 });
-audio.addEventListener('play',()=>{requestPlaybackSession();updateMedia();updateMini()});audio.addEventListener('playing',()=>{updateMedia();});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
-audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>(D.hidden?30000:5000)){lastMemory=Date.now();storePlayback();updatePosition()}if(D.hidden)return;let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock)clock.textContent=durationText(audio.currentTime)+' / '+durationText(audio.duration)});
+audio.addEventListener('play',()=>{requestPlaybackSession();updateMedia();updateMini()});audio.addEventListener('playing',()=>{mediaKey='';updateMedia();});audio.addEventListener('pause',()=>{updateMedia();updateMini();storePlayback()});
+audio.addEventListener('timeupdate',()=>{if(Date.now()-lastMemory>(D.hidden?30000:5000)){lastMemory=Date.now();storePlayback();updatePosition()}if(D.hidden)return;let seek=root.querySelector('#si-seek'),clock=root.querySelector('.si-clock');if(seek&&!seek.matches(':active')){seek.max=String(Number.isFinite(audio.duration)?audio.duration:0);seek.value=String(audio.currentTime||0)}if(clock){const text=durationText(audio.currentTime)+' / '+durationText(audio.duration);if(clock.textContent!==text)clock.textContent=text}});
 function updateMini(){
   root.dataset.audioPaused=String(audio.paused);
   fullPlayer?.refresh();

@@ -464,7 +464,9 @@ function close(instant = false) {
 }
 
 shared.onPlayerClose=()=>{island.setAttribute('aria-expanded','false');launcher?.onPanelChange();};
+let hubOpenedAt = -Infinity;
 function openHub(t) {
+  hubOpenedAt = performance.now();
   cancelHubClose();
   nav.hidden = false;
   root.dataset.panelOpen = 'true';
@@ -488,9 +490,9 @@ function openPlayer() {
 
 // Click outside hub nav smoothly dismisses it
 function onOutsideHubPointerDown(event) {
-  if (nav.hidden || hubCloseAnim || dead) return;
+  if (nav.hidden || hubCloseAnim || dead || performance.now() - hubOpenedAt < 650) return;
   const t = event.target;
-  if (!t || root.contains(t)) return;
+  if (!t || root.contains(t) || t.closest?.('.cap-full-player, .si-edge-handle')) return;
   if (t.closest?.('.cap-ui-portal, .cap-dialog-overlay, .cap-spotlight-overlay, .cap-song-picker-overlay, .shiyi-overlay, .cap-recall')) return;
   close();
 }

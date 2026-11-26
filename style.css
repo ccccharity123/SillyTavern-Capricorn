@@ -3824,3 +3824,6 @@ body[data-cap-look="dark"] #capricorn-hub > nav:has(.cap-settings:not([hidden]))
 .cap-full-player.cap-player-layout[data-size] .cap-scrubber,
 .cap-full-player.cap-player-layout[data-size] .cap-scrubber input[data-seek] { background:transparent !important; box-shadow:none !important; border:0 !important; backdrop-filter:none !important; -webkit-backdrop-filter:none !important; }
 .cap-full-player.cap-player-layout[data-size] .cap-scrubber::before, .cap-full-player.cap-player-layout[data-size] .cap-scrubber::after { content:none !important; }
+
+#capricorn-hub .cap-settings.cap-settings-paged:not([hidden]) { min-height:0; flex:1 1 0%; }
+#capricorn-hub .cap-settings-view:not([hidden]) { min-height:0; overflow-y:auto; }
