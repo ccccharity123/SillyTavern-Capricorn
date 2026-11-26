@@ -39,6 +39,62 @@ export function parseTheater(source) {
   try { return normalize(JSON.parse(str.slice(i + START.length, j).trim())); }
   catch { return null; }
 }
+// Hide the JSON payload that SillyTavern has already rendered as plain text.
+// DOMPurify may strip unknown <cap-theater> tags, leaving the JSON visible.
+// Work on text nodes, not innerHTML, to avoid disturbing user themes/formatting.
+function hideRawTheater(target, source) {
+  const start = source.lastIndexOf(START);
+  if (start < 0) return false;
+  const end = source.indexOf(END, start + START.length);
+  if (end < 0) return false;
+  const payload = source.slice(start + START.length, end).trim();
+  if (!payload || payload.length > 14000) return false;
+
+  // Some ST renderers preserve custom elements, others unwrap them.
+  const wrappers = target.querySelectorAll('cap-theater');
+  if (wrappers.length) {
+    wrappers.forEach(node => node.remove());
+    return true;
+  }
+
+  const walker = target.ownerDocument.createTreeWalker(target, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  let textNode;
+  while ((textNode = walker.nextNode())) {
+    if (textNode.parentElement?.closest('.cap-theater-panel,script,style')) continue;
+    nodes.push(textNode);
+  }
+  // Build a whitespace-insensitive stream with per-character DOM positions.
+  // Markdown and sanitizer can split payload across arbitrary inline elements.
+  const stream = [];
+  const positions = [];
+  for (const node of nodes) {
+    const value = node.nodeValue || '';
+    for (let i = 0; i < value.length; i++) {
+      if (/\s/.test(value[i])) continue;
+      stream.push(value[i]);
+      positions.push([node, i]);
+    }
+  }
+  const compact = stream.join('');
+  const expected = payload.replace(/\s/g, '');
+  let offset = compact.lastIndexOf(expected);
+  if (offset < 0) return false;
+  let from = offset, to = offset + expected.length;
+  // Remove literal delimiters too, if the HTML renderer kept them as text.
+  const startTag = START.replace(/\s/g, '');
+  const endTag = END.replace(/\s/g, '');
+  if (compact.slice(Math.max(0, from - startTag.length), from) === startTag) from -= startTag.length;
+  if (compact.slice(to, to + endTag.length) === endTag) to += endTag.length;
+  const first = positions[from], last = positions[to - 1];
+  if (!first || !last) return false;
+  const range = target.ownerDocument.createRange();
+  range.setStart(first[0], first[1]);
+  range.setEnd(last[0], last[1] + 1);
+  range.deleteContents();
+  return true;
+}
+
 function element(name, className = '', label = '') {
   const e = document.createElement(name);
   if (className) e.className = className;
@@ -131,7 +187,7 @@ export function mountTheater({ doc = document, context = () => getHostContext(wi
     if (destroyed) return;
     bind();
     const chat = hostChat(), identity = scope();
-    if (!identity || !Array.isArray(chat)) return;
+    if (!Array.isArray(chat)) return;
     const nodes = doc.querySelectorAll('#chat .mes[mesid]');
     for (const node of nodes) {
       const id = Number(node.getAttribute('mesid'));
@@ -145,8 +201,8 @@ export function mountTheater({ doc = document, context = () => getHostContext(wi
       const mark = source.lastIndexOf(START);
       if (mark < 0) { old?.remove(); continue; }
       const token = hash(source.slice(mark));
-      const unique = hash(identity + ':' + id + ':' + token);
-      if (old?.dataset.key === unique) continue;
+      const unique = hash((identity || 'current-chat-session') + ':' + id + ':' + token);
+      if (old?.dataset.key === unique) { hideRawTheater(target, source); continue; }
       old?.remove();
       let data = memory.get(token);
       if (!data) {
@@ -164,6 +220,7 @@ export function mountTheater({ doc = document, context = () => getHostContext(wi
       heading.append(star, headingText, kind);
       panel.append(heading);
       renderActivity(panel, data, 'cap_theater_1:' + unique);
+      hideRawTheater(target, source);
       target.append(panel);
     }
   }
@@ -172,11 +229,16 @@ export function mountTheater({ doc = document, context = () => getHostContext(wi
     timer = window.setTimeout(() => { timer = 0; scan(); }, 180);
   }
   observer = new MutationObserver(mutations => {
-    if (mutations.some(m => [...m.addedNodes].some(n => n.nodeType === 1 && (n.matches?.('.mes, .mes_text, #chat') || n.querySelector?.('.mes'))))) schedule();
+    if (mutations.some(m => {
+      const element = m.target?.nodeType === 1 ? m.target : m.target?.parentElement;
+      if (element?.closest?.('.cap-theater-panel')) return false;
+      if (m.type === 'characterData') return Boolean(element?.closest?.('#chat .mes_text'));
+      return [...m.addedNodes].some(n => n.nodeType === 1 && (n.matches?.('.mes, .mes_text, #chat') || n.closest?.('#chat .mes_text') || n.querySelector?.('.mes, .mes_text')));
+    })) schedule();
   });
   const chatRoot = doc.querySelector('#chat');
-  if (chatRoot) observer.observe(chatRoot, { childList: true, subtree: true });
-  else observer.observe(doc.body, { childList: true, subtree: true });
+  if (chatRoot) observer.observe(chatRoot, { childList: true, characterData: true, subtree: true });
+  else observer.observe(doc.body, { childList: true, characterData: true, subtree: true });
   bind(); schedule();
   return { refresh: schedule, destroy() {
     destroyed = true; window.clearTimeout(timer); observer?.disconnect();
