@@ -3827,3 +3827,8 @@ body[data-cap-look="dark"] #capricorn-hub > nav:has(.cap-settings:not([hidden]))
 
 #capricorn-hub .cap-settings.cap-settings-paged:not([hidden]) { min-height:0; flex:1 1 0%; }
 #capricorn-hub .cap-settings-view:not([hidden]) { min-height:0; overflow-y:auto; }
+
+/* RC15: avoid overlapping live glass surfaces; preserve material filters. */
+body[data-cap-player-open="true"] #capricorn-hub > .cap-island { visibility:hidden !important; pointer-events:none !important; }
+body[data-cap-look="light"] .cap-full-player.cap-player-layout[data-size] { --glass-bg: rgba(255,255,255,.86); --cap-glass-work-bg: rgba(255,255,255,.86); }
+body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size] { --glass-bg: rgba(24,24,26,.86); --cap-glass-work-bg: rgba(24,24,26,.86); }

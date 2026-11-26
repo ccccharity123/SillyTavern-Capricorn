@@ -152,7 +152,7 @@ let queue=[],queueIndex=-1,queueRevision=0,queuePlaylistName="",playMode=db.sett
 function validUrl(u){try{let x=new URL(String(u||''));return ['https:','http:'].includes(x.protocol)?x.href:''}catch{return ''}}
 function durationText(v){if(!Number.isFinite(v))return '00:00';return String(Math.floor(v/60)).padStart(2,'0')+':'+String(Math.floor(v%60)).padStart(2,'0')}
 function audioTracks(){return db.playlists[selected]?.songs||[]}
-let mediaKey='';
+let mediaKey='', mediaDiagnostic='尚未注册';
 function updatePosition(){try{const duration=audio.duration;if(!mediaSession)return;if(Number.isFinite(duration)&&duration>0)mediaSession.setPositionState({duration,position:Math.max(0,Math.min(duration,audio.currentTime||0)),playbackRate:audio.playbackRate||1});else mediaSession.setPositionState()}catch{}}
 function updateMedia(){
  if(!mediaSession)return;
@@ -163,7 +163,7 @@ function updateMedia(){
    try{mediaSession.setPositionState?.()}catch{}
    return;
  }
- const cover=validUrl(playing.coverUrl);
+ const cover=validUrl(playing.coverUrl).replace(/^http:/,'https:');
  const key=JSON.stringify([playing.title,playing.artist,cover]);
  if(key!==mediaKey&&mediaMetadataCtor){
    try{
@@ -174,13 +174,13 @@ function updateMedia(){
        title:String(playing.title||'声屿'),artist:String(playing.artist||'未知歌手'),
        album:'声屿 · Sound Isle',artwork
      });
-     mediaKey=key;
+     mediaKey=key;mediaDiagnostic='元数据已提交';
    }catch(error){
      // Bad remote artwork and older WebViews must not abort media updates.
      try{
        mediaSession.metadata=new mediaMetadataCtor({title:String(playing.title||'声屿'),artist:String(playing.artist||''),album:'声屿'});
        mediaKey=key;
-     }catch{mediaKey=''}
+     }catch(e){mediaKey='';mediaDiagnostic='元数据失败：'+e.name;}
    }
  }
  try{mediaSession.playbackState=audio.paused?'paused':'playing'}catch{}
@@ -411,7 +411,7 @@ async function playQueued(index,resumeAt=0,preferOnline=false){
  }else if(!ok&&!manual)throw Error('请启用网易云并填写访问密钥');if(!alive())return;if(!ok)throw Error('未能加载完整音源，请查看播放诊断');resolving=false;rememberPlay(t);storePlayback();updateMedia();render();trace('播放成功：'+actualQuality+(volumeCapability()?'':' · 当前音源请使用系统音量键'));
  }catch(e){if(!alive())return;resolving=false;audioError=e.name==='NotAllowedError'?'系统要求再次点击播放':e.message;render();trace(audioError)}
 }
-function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'系统音频会话：'+(systemAudioSession?.type||'不支持'),'系统音频状态：'+(systemAudioSession?.state||'未知'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'后台播放优先：'+String(isAppleMobile&&backgroundPriority()),'音频通道：'+(activeAudio===nativeAudio?'HTMLAudioElement':'Web Audio'),'系统媒体构造器：'+(mediaMetadataCtor?'支持':'不支持'),'音量引擎：'+volumeBackend(),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
+function diagnostic(){return ['声屿 2.7.5','系统媒体会话：'+(mediaSession?'支持':'不支持'),'系统音频会话：'+(systemAudioSession?.type||'不支持'),'系统音频状态：'+(systemAudioSession?.state||'未知'),'页面状态：'+D.visibilityState,'聊天：'+chatId(),'跟随状态：'+String(observedStory)+' / '+String(pendingScope),'后台播放优先：'+String(isAppleMobile&&backgroundPriority()),'音频通道：'+(activeAudio===nativeAudio?'HTMLAudioElement':'Web Audio'),'媒体元数据：'+mediaDiagnostic,'系统媒体构造器：'+(mediaMetadataCtor?'支持':'不支持'),'音量引擎：'+volumeBackend(),'音频上下文：'+(audioContext?.state||'未创建'),'歌曲：'+(playing?.title||'无'),'网易云ID：'+(playing?.neteaseId||'无'),'封面：'+coverState,'音质：'+actualQuality,'readyState：'+audio.readyState,'networkState：'+audio.networkState,'媒体错误：'+(audio.error?.code||0),'状态：'+audioError,...playbackLog].join('\n')}
 function nextTrack(direction=1){if(!queue.length){let tracks=audioTracks();if(!tracks.length)return;queue=tracks.slice();queueRevision++;queueIndex=0;queuePlaylistName=db.playlists[selected]?.name||'声屿';return playQueued(0)}let i=queueIndex;if(playMode==='shuffle'&&queue.length>1){let n=Math.floor(Math.random()*(queue.length-1));i=n>=i?n+1:n}else i=(i+direction+queue.length)%queue.length;playQueued(i)}
 async function toggleAudio(){
   if(resolving){stopPlaybackWork();clearAudio();trace('已取消加载，再点播放重试');render();return;}

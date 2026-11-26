@@ -159,6 +159,8 @@ shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
   if (dead) return;
   currentIslandCover = coverUrl || '';
   refreshIslandArtwork();
+  const playbackChanged=island.dataset.playing !== String(playing);
+  const bilingualChanged=island.dataset.bilingual !== String(!!(playing && translation));
   island.dataset.playing = playing ? 'true' : 'false';
   island.title = playing ? `${title || '正在播放'} · 点击展开声屿` : '声屿（点击打开播放器）';
   const translated = playing ? (translation || '') : '';
@@ -168,13 +170,13 @@ shared.onIslandUpdate = ({ playing, text, title, coverUrl, translation }) => {
   if (playing && text) {
     if (islandLyric.textContent !== text) {
       islandLyric.classList.remove('is-swap');
-      void islandLyric.offsetWidth;
+      // Avoid forced synchronous layout on every lyric change.
       islandLyric.textContent = text;
       islandLyric.classList.add('is-swap');
     }
   }
-  cleanupMobile?.fit?.();
-  launcher?.onPlayback(playing);
+  if(playbackChanged || bilingualChanged) cleanupMobile?.fit?.();
+  if(playbackChanged) launcher?.onPlayback(playing);
 };
 
 const libraryNav = D.createElement('div');

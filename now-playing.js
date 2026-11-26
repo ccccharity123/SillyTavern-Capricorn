@@ -295,6 +295,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       closingAnim = null;
       panel.classList.remove('is-closing');
       panel.hidden = true;
+      D.body.removeAttribute('data-cap-player-open');
       panel.style.transform = '';
       if (composerObserver) composerObserver.disconnect();
       observedComposer = null;
@@ -485,12 +486,14 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
     colorProbe.removeAttribute('src');
     colorProbe=null;
   }
+  const defaultCover = new URL('./sound-isle-cover.png', import.meta.url).href;
   img.onload=()=>{
     img.classList.add('is-loaded');
     if (glowImg && img.src) { glowImg.src = img.src; glowImg.hidden = false; }
   };
   img.onerror=()=>{
     img.classList.remove('is-loaded');
+    if(img.src !== defaultCover){img.hidden=false;img.src=defaultCover;return;}
     img.hidden=true;
     img.alt='封面加载失败';
     if (glowImg) { glowImg.hidden = true; glowImg.removeAttribute('src'); }
@@ -697,10 +700,12 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       if(!dead&&task.active()){lyricStatus='error';drawLyrics();}
     }
   }
+  let lastTimePaint=0;
   function updateTime(){
     if(D.hidden)return;
     emitIsland();
     if(panel.hidden)return;
+    const now=Date.now();if(!dragging && now-lastTimePaint<180)return;lastTimePaint=now;
     const time=audio.currentTime||0,duration=Number.isFinite(audio.duration)?audio.duration:0;
     if(Number(seek.max)!==duration)seek.max=duration;
     if(!dragging)seek.value=time;
@@ -789,6 +794,8 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
         const url=new URL(track?.coverUrl);
         if(url.protocol==='https:'||url.protocol==='http:'){img.hidden=false;img.src=url.href;coverUrl=url.href;}
       }catch{}
+      if(!coverUrl){img.hidden=false;img.src=defaultCover;}
+      if(img.complete && img.naturalWidth)img.onload();
     }
     syncBackdrop();
     if(tab==='queue')drawQueue();
@@ -940,6 +947,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       const island = D.querySelector('#capricorn-hub .cap-island');
       openedAt=Date.now();
       panel.hidden = false;
+      D.body.dataset.capPlayerOpen='true';
       fitViewport();
       manualScrollUntil = 0;
       showTab(tab || (size === 'large' ? 'lyrics' : ''));
@@ -972,6 +980,7 @@ export function mountNowPlaying({ D, W, audio, shared, state, toggle, next, play
       for(const event of events)audio.removeEventListener(event,event==='timeupdate'?onTime:refresh);
       img.onload=img.onerror=null;
       img.removeAttribute('src');
+      D.body.removeAttribute('data-cap-player-open');
       panel.remove();
     }
   };
