@@ -1,7 +1,8 @@
+import { stripTheater } from './theater-payload.js';
 import { hasOwn, lastItem } from './compat.js';
 export const normalize=s=>String(s??'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}]/gu,'');
 export function fuzzy(text,q){const t=normalize(text);return String(q??'').trim().split(/\s+/).every(w=>{const n=normalize(w);if(!n||t.includes(n))return true;if(n.length<4)return false;let i=0;for(const c of t)if(c===n[i])i++;return i===n.length;});}
-export function table(text){const m=[...String(text).matchAll(/<(table|摩羯留痕)\s*>\s*([\s\S]*?)<\/\1\s*>/g)].pop();if(!m)return null;try{const v=JSON.parse(m[2].trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));return v&&typeof v==='object'&&!Array.isArray(v)?v:null;}catch{return null;}}
+export function table(text){const m=[...stripTheater(text).matchAll(/<(table|摩羯留痕)\s*>\s*([\s\S]*?)<\/\1\s*>/g)].pop();if(!m)return null;try{const v=JSON.parse(m[2].trim().replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,''));return v&&typeof v==='object'&&!Array.isArray(v)?v:null;}catch{return null;}}
 const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const string = value => typeof value === 'string' ? value.trim() : '';
 const exactName = value => string(value).normalize('NFKC');

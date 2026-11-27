@@ -1,3 +1,4 @@
+import { stripTheater } from './theater-payload.js';
 import { createPlaybackCheckpoint } from './music-checkpoint.js';
 import { createBgmIndex } from './bgm-index.js';
 import { commitMusicBackup } from './backup.js';
@@ -615,7 +616,7 @@ async function batchMetadata(){
  }finally{metadataBatchRunning=false;if(task.active()){status('封面批量匹配完成：成功 '+ok+' 首，跳过 '+skip+' 首');render()}}
 }
 function trackId(title,artist){return (title+'|'+artist).trim().toLocaleLowerCase().replace(/\s+/g,' ')}
-function parseBgm(body){const re=/<bgm(?:\s[^>]*)?>([\s\S]*?)<\/bgm>/gi,out=[];for(const m of String(body||'').matchAll(re)){let line=m[1].replace(/<[^>]*>/g,'').trim().split('\n')[0].trim();let parts=line.split(/\s+[-—–－]\s+/);if(parts.length<2)continue;let artist=parts.pop().trim(),title=parts.join(' - ').trim();if(title&&artist&&title.length<150&&artist.length<150)out.push({id:trackId(title,artist),title,artist})}return out}
+function parseBgm(body){const re=/<bgm(?:\s[^>]*)?>([\s\S]*?)<\/bgm>/gi,out=[];for(const m of stripTheater(body).matchAll(re)){let line=m[1].replace(/<[^>]*>/g,'').trim().split('\n')[0].trim();let parts=line.split(/\s+[-—–－]\s+/);if(parts.length<2)continue;let artist=parts.pop().trim(),title=parts.join(' - ').trim();if(title&&artist&&title.length<150&&artist.length<150)out.push({id:trackId(title,artist),title,artist})}return out}
 function addSong(pl,track,source,knownIds){
   if(!pl||!track||(knownIds?knownIds.has(track.id):pl.songs.some(song=>song.id===track.id)))return false;
   pl.songs.push({...track,source:source||null,added:Date.now()});

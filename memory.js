@@ -1,3 +1,4 @@
+import { stripTheater } from './theater-payload.js';
 import { hasOwn } from './compat.js';
 import { icon } from './icons.js';
 import { uiAlert, uiConfirm, uiPrompt, uiToast } from './ui-dialog.js';
@@ -288,7 +289,7 @@ export async function startMemory(shared) {
     return swipe?messages.filter(message=>message.message_id!==excludeFloor):messages;
   }
   function getMessages(){return messageCatalog.snapshot().messages();}
-  function extract(str,{start,end}=config()){let best=null,pos=-1;for(const [a,b] of [[start,end],['<summary>','</summary>'],['<摩羯纪要>','</摩羯纪要>']]){if(!a||!b)continue;const i=str.lastIndexOf(a),j=str.indexOf(b,i+a.length);if(i>=0&&j>=0&&i>pos){pos=i;best=str.slice(i+a.length,j).trim();}}return best;}
+  function extract(str,{start,end}=config()){str=stripTheater(str);let best=null,pos=-1;for(const [a,b] of [[start,end],['<summary>','</summary>'],['<摩羯纪要>','</摩羯纪要>']]){if(!a||!b)continue;const i=str.lastIndexOf(a),j=str.indexOf(b,i+a.length);if(i>=0&&j>=0&&i>pos){pos=i;best=str.slice(i+a.length,j).trim();}}return best;}
   // 剧情日期解析：支持年月日、月日、中文上午/中午/下午、起止范围和跨日。
   // 缺少年份时仅使用用户在设置中确认的剧情年份，不以现实年份填充。
   function storyYear(){const y=Number(config().storyYear||0);return y>=1000&&y<=9999?y:null;}

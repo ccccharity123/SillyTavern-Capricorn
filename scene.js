@@ -1,6 +1,8 @@
+import { withoutDirectorNotes } from './context-clean.js';
+import { stripTheater } from './theater-payload.js';
 import { lastItem } from './compat.js';
 // Use a bounded slice of visible story text. Scene hints never become archive facts.
-const clean = value => String(value ?? '')
+const clean = (value, isUser) => stripTheater(isUser ? value : withoutDirectorNotes(String(value ?? '')))
   .replace(/<(summary|table|bgm|摩羯纪要|摩羯留痕)(?:\s[^>]*)?>[\s\S]*?<\/\1\s*>/gi, '')
   .trim();
 const normalize = text => text.normalize('NFKC').toLowerCase();
@@ -12,7 +14,7 @@ export function sceneQuery(chat, docs) {
   for (let i = chat.length - 1; i >= 0 && recent.length < 4; i--) {
     const message = chat[i];
     if (message.is_system || message.is_hidden) continue;
-    const text = clean(message.mes ?? message.message);
+    const text = clean(message.mes ?? message.message, message.is_user);
     if (text) recent.unshift({ text, user: !!message.is_user });
   }
   const latest = lastItem(recent);

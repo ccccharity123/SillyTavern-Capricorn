@@ -1,248 +1,222 @@
-/* 摩羯座小剧场：只读取助手正文中的独立结构；没有任何剧情写入或消息发送。 */
+/* Capricorn theater lifecycle. Assistant messages and Tavern state are read-only. */
 import { getHostContext, getChatIdentity } from './host-context.js';
+import { inspectTheater } from './theater-parser.js';
+import { START } from './theater-payload.js';
+import { hideRawTheater } from './theater-raw-dom.js';
+import { renderLegacy } from './theater-legacy.js';
+import { renderTheater } from './theater-renderer.js';
+import { fingerprint, messageKeys, theaterStorage } from './theater-storage.js';
+import { theaterTheme } from './theater-theme.js';
+import { diagnostics, messages } from './theater-diagnostics.js';
+import { node } from './theater-dom.js';
 
-const START = '<cap-theater>', END = '</cap-theater>';
-const memory = new Map();
-const MAX_CACHE = 100;
+export { parseTheater } from './theater-parser.js';
 
-function hash(value) {
-  let n = 2166136261;
-  for (let i = 0; i < value.length; i++) n = Math.imul(n ^ value.charCodeAt(i), 16777619);
-  return (n >>> 0).toString(36);
-}
-function short(value, n = 160) { return String(value ?? '').slice(0, n); }
-function normalize(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const type = ['flip', 'reveal', 'slide'].includes(raw.type) ? raw.type : null;
-  if (!type) return null;
-  const title = short(raw.title || '今日小剧场', 65);
-  const note = short(raw.note || '', 180);
-  if (type === 'slide') {
-    if (!Array.isArray(raw.steps)) return null;
-    const steps = raw.steps.slice(0, 8).map(x => ({
-      title: short(x?.title, 80), text: short(x?.text, 320), symbol: short(x?.symbol || '✦', 4),
-    })).filter(x => x.title || x.text);
-    return steps.length >= 2 ? { type, title, note, steps } : null;
-  }
-  if (!Array.isArray(raw.items)) return null;
-  const items = raw.items.slice(0, 8).map(x => ({
-    front: short(x?.front || x?.label || '翻开', 90), back: short(x?.back || x?.text || '', 350),
-  })).filter(x => x.back);
-  return items.length ? { type, title, note, items } : null;
-}
-export function parseTheater(source) {
-  const str = String(source ?? '');
-  const i = str.lastIndexOf(START);
-  if (i < 0) return null;
-  const j = str.indexOf(END, i + START.length);
-  if (j < 0 || j - i > 14000) return null;
-  try { return normalize(JSON.parse(str.slice(i + START.length, j).trim())); }
-  catch { return null; }
-}
-// Hide the JSON payload that SillyTavern has already rendered as plain text.
-// DOMPurify may strip unknown <cap-theater> tags, leaving the JSON visible.
-// Work on text nodes, not innerHTML, to avoid disturbing user themes/formatting.
-function hideRawTheater(target, source) {
-  const start = source.lastIndexOf(START);
-  if (start < 0) return false;
-  const end = source.indexOf(END, start + START.length);
-  if (end < 0) return false;
-  const payload = source.slice(start + START.length, end).trim();
-  if (!payload || payload.length > 14000) return false;
-
-  // Some ST renderers preserve custom elements, others unwrap them.
-  const wrappers = target.querySelectorAll('cap-theater');
-  if (wrappers.length) {
-    wrappers.forEach(node => node.remove());
-    return true;
-  }
-
-  const walker = target.ownerDocument.createTreeWalker(target, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  let textNode;
-  while ((textNode = walker.nextNode())) {
-    if (textNode.parentElement?.closest('.cap-theater-panel,script,style')) continue;
-    nodes.push(textNode);
-  }
-  // Build a whitespace-insensitive stream with per-character DOM positions.
-  // Markdown and sanitizer can split payload across arbitrary inline elements.
-  const stream = [];
-  const positions = [];
-  for (const node of nodes) {
-    const value = node.nodeValue || '';
-    for (let i = 0; i < value.length; i++) {
-      if (/\s/.test(value[i])) continue;
-      stream.push(value[i]);
-      positions.push([node, i]);
-    }
-  }
-  const compact = stream.join('');
-  const expected = payload.replace(/\s/g, '');
-  let offset = compact.lastIndexOf(expected);
-  if (offset < 0) return false;
-  let from = offset, to = offset + expected.length;
-  // Remove literal delimiters too, if the HTML renderer kept them as text.
-  const startTag = START.replace(/\s/g, '');
-  const endTag = END.replace(/\s/g, '');
-  if (compact.slice(Math.max(0, from - startTag.length), from) === startTag) from -= startTag.length;
-  if (compact.slice(to, to + endTag.length) === endTag) to += endTag.length;
-  const first = positions[from], last = positions[to - 1];
-  if (!first || !last) return false;
-  const range = target.ownerDocument.createRange();
-  range.setStart(first[0], first[1]);
-  range.setEnd(last[0], last[1] + 1);
-  range.deleteContents();
-  return true;
-}
-
-function element(name, className = '', label = '') {
-  const e = document.createElement(name);
-  if (className) e.className = className;
-  if (label) e.textContent = label;
-  return e;
-}
-function load(key) {
-  try { return JSON.parse(window.localStorage.getItem(key) || '{}'); } catch { return {}; }
-}
-function store(key, state) {
-  try { window.localStorage.setItem(key, JSON.stringify(state)); } catch { /* private mode */ }
-}
-function renderActivity(frame, data, key) {
-  const state = load(key);
-  const body = element('div', 'cap-theater-body');
-  const note = data.note && element('p', 'cap-theater-note', data.note);
-  if (note) body.append(note);
-  if (data.type === 'flip' || data.type === 'reveal') {
-    const grid = element('div', `cap-theater-grid cap-theater-${data.type}`);
-    data.items.forEach((item, index) => {
-      const button = element('button', 'cap-theater-card');
-      button.type = 'button';
-      button.setAttribute('aria-pressed', state[index] ? 'true' : 'false');
-      const front = element('span', 'cap-theater-front', item.front);
-      const back = element('span', 'cap-theater-back', item.back);
-      const show = () => {
-        button.classList.toggle('cap-theater-uncovered', Boolean(state[index]));
-        button.setAttribute('aria-pressed', state[index] ? 'true' : 'false');
-        front.hidden = Boolean(state[index]);
-        back.hidden = !state[index];
-      };
-      button.append(front, back);
-      button.addEventListener('click', () => {
-        state[index] = data.type === 'reveal' ? true : !state[index];
-        store(key, state); show();
-      });
-      show(); grid.append(button);
-    });
-    body.append(grid);
-  } else {
-    const scene = element('div', 'cap-theater-slide-scene');
-    const symbol = element('div', 'cap-theater-slide-symbol');
-    const title = element('strong', 'cap-theater-slide-title');
-    const text = element('p', 'cap-theater-slide-text');
-    const stepCount = element('span', 'cap-theater-step-count');
-    const range = element('input', 'cap-theater-range');
-    range.type = 'range'; range.min = '0'; range.max = String(data.steps.length - 1);
-    range.step = '1'; range.setAttribute('aria-label', '拖动探索小剧场');
-    const prev = element('button', 'cap-theater-step-button', '‹');
-    const next = element('button', 'cap-theater-step-button', '›');
-    prev.type = next.type = 'button';
-    const controls = element('div', 'cap-theater-slide-controls');
-    const setIndex = x => {
-      const index = Math.max(0, Math.min(data.steps.length - 1, Number(x) || 0));
-      state.index = index; store(key, state);
-      const step = data.steps[index];
-      symbol.textContent = step.symbol; title.textContent = step.title; text.textContent = step.text;
-      range.value = String(index); stepCount.textContent = `${index + 1} / ${data.steps.length}`;
-      prev.disabled = index === 0; next.disabled = index === data.steps.length - 1;
-    };
-    range.addEventListener('input', () => setIndex(range.value));
-    prev.addEventListener('click', () => setIndex((state.index ?? 0) - 1));
-    next.addEventListener('click', () => setIndex((state.index ?? 0) + 1));
-    scene.append(symbol, title, text); controls.append(prev, range, next, stepCount);
-    body.append(scene, controls); setIndex(state.index || 0);
-  }
-  const foot = element('div', 'cap-theater-foot', '独立趣味片段 · 不影响正文与人物状态');
-  body.append(foot);
-  frame.append(body);
-}
+const kinds = { flip: '翻牌', reveal: '揭示', slide: '滑动探索' };
+const lifecycleEvents = [
+  'CHAT_CHANGED', 'MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED',
+  'MESSAGE_SWIPE_DELETED', 'MESSAGE_UPDATED', 'GENERATION_ENDED',
+];
 
 export function mountTheater({ doc = document, context = () => getHostContext(window), scope = () => getChatIdentity(context()).scope } = {}) {
-  let destroyed = false, timer = 0, observer, events, eventTypes;
+  const host = doc.defaultView;
+  const diagnostic = diagnostics(host);
+  const mark = diagnostic.mark;
+  const storage = theaterStorage(host, mark);
+  const theme = theaterTheme(host);
   const listeners = [];
-  const hostChat = () => context()?.chat || [];
-  function bind() {
-    const c = context(), source = c?.eventSource, types = c?.eventTypes || c?.event_types;
-    if (source === events) return;
+  const mounted = new Map();
+  const inspected = new WeakMap();
+  const deletions = new Set();
+  let destroyed = false, timer = 0, events, eventTypes, root, snapshot, ephemeralChat = 0;
+  let bound = false, absenceReported = false;
+
+  function bind(c) {
+    const source = c?.eventSource;
+    const types = c?.eventTypes || c?.event_types;
+    if (bound && source === events && types === eventTypes) return;
+    bound = true;
     for (const unbind of listeners.splice(0)) unbind();
-    events = source; eventTypes = types;
-    if (!source?.on || !types) return;
-    for (const name of ['CHAT_CHANGED', 'MESSAGE_RECEIVED', 'MESSAGE_EDITED', 'MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_SWIPE_DELETED', 'MESSAGE_UPDATED', 'GENERATION_ENDED']) {
+    events = source;
+    eventTypes = types;
+    if (!source?.on || !types || !(source.off || source.removeListener)) {
+      mark('binding');
+      return;
+    }
+    for (const name of lifecycleEvents) {
       if (!types[name]) continue;
-      const listener = () => schedule();
+      const listener = () => {
+        if (name === 'MESSAGE_DELETED' && scope()) deletions.add(scope());
+        if (name === 'CHAT_CHANGED') {
+          mounted.forEach(record => record.panel.remove());
+          mounted.clear();
+          ephemeralChat++;
+          snapshot = undefined;
+        }
+        schedule();
+      };
       source.on(types[name], listener);
-      listeners.push(() => (source.off || source.removeListener)?.call(source, types[name], listener));
+      listeners.push(() => (source.off || source.removeListener).call(source, types[name], listener));
     }
   }
-  function scan() {
-    if (destroyed) return;
-    bind();
-    const chat = hostChat(), identity = scope();
-    if (!Array.isArray(chat)) return;
-    const nodes = doc.querySelectorAll('#chat .mes[mesid]');
-    for (const node of nodes) {
-      const id = Number(node.getAttribute('mesid'));
-      const message = chat[id];
-      const target = node.querySelector('.mes_text');
-      const old = node.querySelector(':scope .cap-theater-panel');
-      if (!message || message.is_user || message.is_system || !target) {
-        old?.remove(); continue;
+
+  function attach(target, message, source, record, key, persistence, identity) {
+    const data = record.data;
+    const panel = node(target, 'details', 'cap-theater-panel');
+    panel.dataset.key = key;
+    panel.dataset.storyTheme = data?.theme || 'cozy';
+    if (data?.version === 2) panel.classList.add('ct-v2');
+    theme.apply(panel);
+    const heading = node(panel, 'summary', 'cap-theater-heading');
+    heading.append(node(heading, 'span', 'cap-theater-star', '✧'),
+      node(heading, 'span', 'cap-theater-heading-text', data?.title || '幕间小剧场'),
+      node(heading, 'span', 'cap-theater-kind', data?.version === 2 ? '' : kinds[data?.type] || '读取提示'));
+    panel.append(heading);
+    const renderedText = new WeakMap();
+    const isCurrent = () => !destroyed && panel.isConnected && scope() === identity &&
+      (context()?.chat?.[Number(panel.closest('.mes')?.getAttribute('mesid'))] === message) &&
+      String(message.mes ?? message.message ?? '') === source;
+    function removeBody() { panel.querySelector('.cap-theater-body')?.remove(); }
+    function render() {
+      removeBody();
+      try {
+        if (!data) panel.append(node(panel, 'p', 'cap-theater-body', messages[record.status]));
+        else if (data.version === 2) renderTheater(panel, data, persistence, theme, mark, isCurrent);
+        else {
+          renderLegacy(panel, data, persistence.load(),
+            value => {
+              if (isCurrent() && !persistence.save(value)) showStorageIssue();
+            },
+            () => {
+              if (!isCurrent()) return;
+              const ok = persistence.reset();
+              render();
+              if (!ok) showStorageIssue();
+            });
+          if (persistence.failed()) showStorageIssue();
+        }
+      } catch {
+        mark('render');
+        removeBody();
+        panel.append(node(panel, 'p', 'cap-theater-body', messages.render));
       }
-      const source = String(message.mes ?? message.message ?? '');
-      const mark = source.lastIndexOf(START);
-      if (mark < 0) { old?.remove(); continue; }
-      const token = hash(source.slice(mark));
-      const unique = hash((identity || 'current-chat-session') + ':' + id + ':' + token);
-      if (old?.dataset.key === unique) { hideRawTheater(target, source); continue; }
-      old?.remove();
-      let data = memory.get(token);
-      if (!data) {
-        data = parseTheater(source);
-        if (!data) continue;
-        memory.set(token, data);
-        if (memory.size > MAX_CACHE) memory.delete(memory.keys().next().value);
-      }
-      const panel = element('details', 'cap-theater-panel');
-      panel.dataset.key = unique;
-      const heading = element('summary', 'cap-theater-heading');
-      const star = element('span', 'cap-theater-star', '✧');
-      const headingText = element('span', 'cap-theater-heading-text', data.title);
-      const kind = element('span', 'cap-theater-kind', { flip: '翻牌', reveal: '揭示', slide: '探索' }[data.type]);
-      heading.append(star, headingText, kind);
-      panel.append(heading);
-      renderActivity(panel, data, 'cap_theater_1:' + unique);
-      hideRawTheater(target, source);
-      target.append(panel);
     }
+    function showStorageIssue() {
+      if (!panel.querySelector('.ct-storage-issue')) panel.querySelector('.cap-theater-body')?.append(
+        node(panel, 'p', 'ct-storage-issue', messages.storage));
+    }
+    panel.addEventListener('toggle', () => {
+      if (!panel.open) removeBody();
+      else if (isCurrent() && !panel.querySelector('.cap-theater-body')) render();
+    });
+    function hideRaw() {
+      if (renderedText.get(target) === target.textContent) return;
+      hideRawTheater(target, record.payload);
+      renderedText.set(target, target.textContent);
+    }
+    hideRaw();
+    target.append(panel);
+    return { panel, key, hideRaw, message, source };
   }
-  function schedule() {
-    if (destroyed || timer) return;
-    timer = window.setTimeout(() => { timer = 0; scan(); }, 180);
-  }
-  observer = new MutationObserver(mutations => {
-    if (mutations.some(m => {
-      const element = m.target?.nodeType === 1 ? m.target : m.target?.parentElement;
-      if (element?.closest?.('.cap-theater-panel')) return false;
-      if (m.type === 'characterData') return Boolean(element?.closest?.('#chat .mes_text'));
-      return [...m.addedNodes].some(n => n.nodeType === 1 && (n.matches?.('.mes, .mes_text, #chat') || n.closest?.('#chat .mes_text') || n.querySelector?.('.mes, .mes_text')));
+
+  const observer = new host.MutationObserver(mutations => {
+    if (mutations.some(mutation => {
+      const element = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
+      if (element?.closest('.cap-theater-panel')) return false;
+      if (element?.closest('#chat .mes_text')) {
+        return mutation.type === 'characterData' ||
+          [...mutation.addedNodes, ...mutation.removedNodes].some(n => !n.classList?.contains('cap-theater-panel'));
+      }
+      return [...mutation.addedNodes, ...mutation.removedNodes].some(n =>
+        n.matches?.('#chat, .mes, .mes_text') || n.querySelector?.('#chat, .mes, .mes_text'));
     })) schedule();
   });
-  const chatRoot = doc.querySelector('#chat');
-  if (chatRoot) observer.observe(chatRoot, { childList: true, characterData: true, subtree: true });
-  else observer.observe(doc.body, { childList: true, characterData: true, subtree: true });
-  bind(); schedule();
-  return { refresh: schedule, destroy() {
-    destroyed = true; window.clearTimeout(timer); observer?.disconnect();
-    for (const unbind of listeners.splice(0)) unbind();
-    doc.querySelectorAll('.cap-theater-panel').forEach(n => n.remove());
-  } };
+
+  function scan() {
+    if (destroyed) return;
+    const c = context(), identity = scope(), chat = c?.chat;
+    bind(c);
+    const nextRoot = doc.querySelector('#chat');
+    if (nextRoot !== root) {
+      root = nextRoot;
+      observer.disconnect();
+      observer.observe(doc.body, { childList: true, subtree: true });
+      if (root) observer.observe(root, { childList: true, characterData: true, subtree: true });
+    }
+    if (!Array.isArray(chat) || !root) return;
+    if (snapshot && snapshot.identity !== identity && snapshot.chat === chat &&
+        snapshot.first === chat[0] && snapshot.last === chat[chat.length - 1]) {
+      mounted.forEach(record => record.panel.remove());
+      mounted.clear();
+      return;
+    }
+    if (!snapshot || snapshot.chat !== chat || snapshot.identity !== identity) ephemeralChat++;
+    snapshot = { identity, chat, first: chat[0], last: chat[chat.length - 1] };
+    const prefix = 'cap_theater_2:' + encodeURIComponent(identity || 'session-' + ephemeralChat) + ':';
+    let keys;
+    if (deletions.delete(identity)) {
+      keys = messageKeys(chat);
+      storage.prune(prefix, new Set(keys));
+    }
+    const live = new Set();
+    for (const floor of root.querySelectorAll('.mes[mesid]')) {
+      const index = Number(floor.getAttribute('mesid'));
+      const message = chat[index];
+      const target = floor.querySelector('.mes_text');
+      if (!message || message.is_user || message.is_system || !target) continue;
+      const source = String(message.mes ?? message.message ?? '');
+      if (!source.includes(START)) continue;
+      live.add(target);
+      let parsed = inspected.get(message);
+      if (!parsed || parsed.source !== source) {
+        parsed = { source, ...inspectTheater(source) };
+        inspected.set(message, parsed);
+        if (parsed.status !== 'ok') mark(parsed.status);
+      }
+      const old = mounted.get(target);
+      keys ||= messageKeys(chat);
+      const variant = fingerprint(parsed.fingerprint ?? source);
+      const key = prefix + keys[index] + ':' + variant;
+      if (old?.key === key && old.message === message && old.source === source && old.panel.parentNode === target) {
+        old.hideRaw();
+        continue;
+      }
+      old?.panel.remove();
+      const legacy = identity && parsed.data && !parsed.data.version
+        ? 'cap_theater_1:' + fingerprint(identity + ':' + index + ':' + fingerprint(source.slice(source.lastIndexOf(START))))
+        : undefined;
+      mounted.set(target, attach(target, message, source, parsed, key, storage.access(key, !!identity, legacy), identity));
+    }
+    for (const [target, record] of mounted) {
+      if (live.has(target)) continue;
+      record.panel.remove();
+      mounted.delete(target);
+    }
+    if (!live.size && !absenceReported) {
+      absenceReported = true;
+      mark('absent');
+    }
+  }
+
+  function schedule() {
+    if (destroyed || timer) return;
+    timer = host.setTimeout(() => {
+      timer = 0;
+      try { scan(); } catch { mark('render'); }
+    }, 90);
+  }
+  observer.observe(doc.body, { childList: true, subtree: true });
+  scan();
+  return {
+    refresh: schedule,
+    diagnostics: diagnostic.read,
+    destroy() {
+      destroyed = true;
+      host.clearTimeout(timer);
+      observer.disconnect();
+      for (const unbind of listeners.splice(0)) unbind();
+      mounted.forEach(record => record.panel.remove());
+      mounted.clear();
+    },
+  };
 }
