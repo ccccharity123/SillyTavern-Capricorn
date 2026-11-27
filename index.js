@@ -23,7 +23,6 @@ import { mountLauncher } from './ui-launcher.js';
 import { mountSelects, nativeSelectsEnabled, refreshSelect, setNativeSelects } from './ui-select.js';
 import { popover } from './ui-popover.js';
 import { mountSettings } from './ui-settings.js';
-import { mountTheater } from './theater.js';
 import { viewport } from './viewport.js';
 import { mountMemoryDock } from './ui-memory-dock.js';
 import { attachSegmentSlider, prefersReducedMotion } from './ui-motion.js';
@@ -47,7 +46,7 @@ let nativeControlsCleanup;
 const selectAdapters = [];
 let settingsUi;
 let refreshUnifiedStatus = null;
-let theater, memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, cleanupUnifiedRegex, spotlight, memory, music, timer, dead = false, tab = '';
+let memoryDock, appearanceApi, cloud, cleanupMobile, launcher, cleanupNetease, cleanupUnifiedRegex, spotlight, memory, music, timer, dead = false, tab = '';
 let memoryStartup;
 let preparingGeneration = 0;
 let changingModule = false;
@@ -590,7 +589,6 @@ W.__capricornExtension = {
     dead = true;
     if (W.capricornPrepareGeneration === prepareGeneration) delete W.capricornPrepareGeneration;
     generation.destroy();
-    theater?.destroy();
     stopIslandArtwork();
     if (memoryViewFrame != null) cancelAnimationFrame(memoryViewFrame);
     ++resonanceEpoch;
@@ -665,7 +663,6 @@ function onGlobalKeyDown(event) {
 async function boot() {
 D.body.dataset.capricornTab = '';
 generation.bind();
-try { theater = mountTheater({ doc: D, context, scope }); } catch (error) { console.warn('[Capricorn] 幕间小剧场启动失败', error); }
 memoryStartup = flags.memory ? startMemory(shared).then(module => {
   if (dead) module.destroy();
   else memory = module;

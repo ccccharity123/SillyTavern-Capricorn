@@ -1,11 +1,10 @@
 /* Prompt-only history cleanup. The interceptor owns the array, not its message objects. */
-import { START, theaterBlock } from './theater-payload.js';
 
 const director = '<director>';
 const directorEnd = '</director>';
 const supportedTypes = new Set([undefined, 'normal', 'continue', 'regenerate', 'swipe']);
 const tagOrCode = /<cap-theater>|<director>|<(?:table|summary|bgm|status(?:[_-]?(?:bar|block))?|forum|摩羯纪要|摩羯留痕)(?=[\s>])[^>]*>|`+|~{3,}/g;
-const nestedDirectorTag = /<\/?(?:director|cap-theater|table|summary|bgm|status(?:[_-]?bar)?|forum)\s*>/;
+const nestedDirectorTag = /<\/?(?:director|table|summary|bgm|status(?:[_-]?bar)?|forum)\s*>/;
 
 function isAssistant(message) {
   return message && !message.is_user && !message.is_system &&
@@ -66,13 +65,6 @@ function structures(text) {
       scan.lastIndex = codeEnd(text, start, token);
       continue;
     }
-    if (token === START) {
-      const block = theaterBlock(text, start);
-      if (block.incomplete || !completeObject(block.payload)) break;
-      blocks.push({ kind: 'theater', start, end: block.end });
-      scan.lastIndex = block.end;
-      continue;
-    }
     const kind = token.slice(1, -1).trim().split(/\s/, 1)[0];
     const closing = kind === 'director' ? directorEnd : '</' + kind + '>';
     const isTable = kind === 'table' || kind === '摩羯留痕';
@@ -124,7 +116,7 @@ export function cleanPromptHistory(chat, options) {
     for (let j = blocks.length - 1; j >= 0; j--) {
       const block = blocks[j];
       const discard = block.kind === 'director' ? directors++ >= keepDirectors
-        : block.kind === 'theater' || stripTablesBeyond > 0 && assistants > stripTablesBeyond;
+        : stripTablesBeyond > 0 && assistants > stripTablesBeyond;
       if (!protectedPrefix && discard) remove.push(block);
     }
     if (remove.length) {
