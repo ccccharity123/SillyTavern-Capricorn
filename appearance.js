@@ -11,6 +11,7 @@ import { refreshSelect } from './ui-select.js';
 import { uiConfirm, uiToast } from './ui-dialog.js';
 import { compileThemeCss, NOTE_SCOPE, PLAYER_SCOPE, readThemeCss } from './theme-css.js';
 import { mountThemeLibrary, normalizeSnapshot, PLAYER_CSS_KEYS } from './theme-library.js';
+import { mountNoteThemeLibrary } from './note-theme-library.js';
 
 export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   const D = root.ownerDocument, W = D.defaultView, key = 'capricorn_appearance_v1';
@@ -42,6 +43,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   let bgImageUrl = '';
   let disposed = false;
   let themeLibrary;
+  let noteThemeLibrary;
   let fontRevision = 0;
 
   const NOTE_PRESETS = {
@@ -682,6 +684,23 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
   const remote=button('加载 URL 主题',async()=>{remote.disabled=true;try{const u=new URL(urlField.value);if(u.protocol!=='https:'||u.username||u.password)throw Error('仅支持 HTTPS 主题地址');const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),15000);try{const r=await fetch(u.href,{credentials:'omit',redirect:'error',signal:controller.signal});if(!r.ok)throw Error('主题请求失败 '+r.status);const text=await readThemeCss(r);preview(text);p.playerThemeUrl=u.href;}finally{clearTimeout(timer);}}catch(e){msg.textContent=e.message;}finally{remote.disabled=false;}});
   cssEditor.append(urlField,toolsRow,file);
   bindCss(noteBox,'data-css',['side','note','custom'],NOTE_PRESETS,'data-preset','data-save','data-reset','data-status');
+  if (noteBox) {
+    const noteInputs = Object.fromEntries(['side','note','custom'].map(k => [k, noteBox.querySelector('[data-css="' + k + '"]')]));
+    noteThemeLibrary = mountNoteThemeLibrary({
+      D, W, host: noteBox.querySelector('.cap-css-editor'),
+      getSnapshot: () => Object.fromEntries(['side','note','custom'].map(k => [k, noteInputs[k].value])),
+      applySnapshot(snapshot) {
+        const keys = ['side','note','custom'];
+        const draft = { ...p, ...Object.fromEntries(keys.map(k => [k, snapshot[k] || ''])) };
+        for (const k of keys) compile(k, draft[k]);
+        apply(draft, keys);
+        persist(key, draft);
+        p = draft;
+        for (const k of keys) noteInputs[k].value = draft[k];
+        if (noteStatus) noteStatus.textContent = '已应用主题';
+      }
+    });
+  }
   const backgroundBox = D.createElement('section');
   backgroundBox.className = 'cap-appearance';
   backgroundBox.dataset.capSettingsSection = 'background';
@@ -822,6 +841,7 @@ export function mountAppearance(settings, root, themeSelect, memoryRoot) {
     destroy() {
       disposed = true;
       themeLibrary?.destroy();
+      noteThemeLibrary?.destroy();
       for (const { image } of imageChecks.values()) image.onload = image.onerror = null;
       imageChecks.clear();
       activeSheets.clear();

@@ -3865,3 +3865,64 @@ body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size] { --gla
   body > .cap-recall .cap-recall-controls { gap: 6px; }
   body > .cap-recall article { min-height: 0; }
 }
+
+/* 拾忆主题库：限定在拾忆的现有 CSS 编辑器内，不更改宿主菜单。 */
+#shiyi-dock .cap-note-theme-library {
+  margin: 10px 0;
+  padding: 8px 10px 12px;
+  border: 1px solid var(--note-line);
+  border-radius: 12px;
+  color: var(--note-fg);
+  background: var(--note-card);
+}
+#shiyi-dock .cap-note-theme-library > summary {
+  padding: 6px 0;
+  cursor: pointer;
+  font-weight: 650;
+}
+#shiyi-dock .cap-note-theme-content,
+#shiyi-dock .cap-note-theme-controls {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+#shiyi-dock .cap-note-theme-controls label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+#shiyi-dock .cap-note-theme-controls input,
+#shiyi-dock .cap-note-theme-controls select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--note-line);
+  border-radius: 9px;
+  background: var(--note-bg);
+  color: var(--note-fg);
+  padding: 8px;
+  font: inherit;
+}
+#shiyi-dock .cap-note-theme-library .cap-css-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+#shiyi-dock .cap-note-theme-library .cap-css-actions button {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+#shiyi-dock .cap-note-theme-library .cap-css-status {
+  font-size: 12px;
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
