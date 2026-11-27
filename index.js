@@ -946,8 +946,14 @@ function mountNativeControls(){
   const panel=D.createElement('div'); panel.id='capricorn-native-settings'; panel.className='inline-drawer';
   panel.innerHTML='<div class="inline-drawer-toggle inline-drawer-header"><b>摩羯座 · Capricorn</b><div class="inline-drawer-icon down">' + icon('down') + '</div></div><div class="inline-drawer-content" style="display:none"><p>统一设置与数据管理 · 拾忆和声屿共用一个控制中心。</p></div>';
   const body=panel.querySelector('.inline-drawer-content');
-  const menu=D.createElement('div');menu.id='capricorn-native-menu';
-  const entry=D.createElement('button');entry.type='button';entry.className='menu_button';entry.textContent='摩羯座设置中心';entry.onclick=()=>openHub('settings');menu.append(entry);
+  // Android hosts compress nested menu wrappers into a narrow column.
+  const menu=D.createElement('button');
+  menu.id='capricorn-native-menu';
+  menu.type='button';
+  menu.className='menu_button';
+  menu.textContent='摩羯座设置';
+  menu.setAttribute('aria-label','打开摩羯座设置中心');
+  menu.onclick=()=>openHub('settings');
   mountPresetControls(body,W,D);
   const cleanupRegex=mountGlobalRegexControl(body,W,D);
   const open=D.createElement('button');open.className='menu_button';open.textContent='打开统一设置';open.onclick=()=>openHub('settings');body.append(open);

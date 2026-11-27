@@ -3832,3 +3832,36 @@ body[data-cap-look="dark"] #capricorn-hub > nav:has(.cap-settings:not([hidden]))
 body[data-cap-player-open="true"] #capricorn-hub > .cap-island { visibility:hidden !important; pointer-events:none !important; }
 body[data-cap-look="light"] .cap-full-player.cap-player-layout[data-size] { --glass-bg: rgba(255,255,255,.86); --cap-glass-work-bg: rgba(255,255,255,.86); }
 body[data-cap-look="dark"] .cap-full-player.cap-player-layout[data-size] { --glass-bg: rgba(24,24,26,.86); --cap-glass-work-bg: rgba(24,24,26,.86); }
+
+/* Compact native extension menu entry on Android SillyTavern. */
+#extensionsMenu > #capricorn-native-menu {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 8px 12px !important;
+  line-height: 1.45 !important;
+  font-size: 14px !important;
+}
+@media (max-width: 600px) {
+  body > .cap-recall {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483646 !important;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  body > .cap-recall .cap-recall-controls { gap: 6px; }
+  body > .cap-recall article { min-height: 0; }
+}

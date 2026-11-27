@@ -80,7 +80,7 @@ export function createRecall({ D, W, scope, memory, music, shared }) {
     cover.removeAttribute('src');
     cover.hidden = true;
     if (!r) {
-      el('p', '没有符合筛选条件的有效记忆', body, 'cap-recall-empty');
+      el('p', rows.length ? '没有符合当前筛选条件的剧情记录。' : '暂无已归档的剧情摘要。请先在「拾忆」中执行「全量检测 / 补录历史」，完成后重新打开回响。', body, 'cap-recall-empty');
       schedule();
       return;
     }
@@ -289,7 +289,9 @@ export function createRecall({ D, W, scope, memory, music, shared }) {
     run.onclick = () => { auto = !auto; syncRunButton(); schedule(); };
 
     D.addEventListener('keydown', keyboard);
-    selects = mountSelects(panel);
+    // Android WebViews sometimes reject enhanced select controls; leave native controls usable.
+    try { selects = mountSelects(panel); }
+    catch (error) { console.warn('[Capricorn] 回响使用原生筛选器', error); selects = null; }
     await refresh();
   }
   return {
