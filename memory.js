@@ -1,4 +1,4 @@
-import { stripTheater } from './theater-payload.js';
+import { stripTheater } from './legacy-content.js';
 import { hasOwn } from './compat.js';
 import { icon } from './icons.js';
 import { uiAlert, uiConfirm, uiPrompt, uiToast } from './ui-dialog.js';

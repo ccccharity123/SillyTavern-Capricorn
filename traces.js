@@ -1,4 +1,4 @@
-import { stripTheater } from './theater-payload.js';
+import { stripTheater } from './legacy-content.js';
 import { hasOwn, lastItem } from './compat.js';
 export const normalize=s=>String(s??'').normalize('NFKC').toLowerCase().replace(/[\s\p{P}]/gu,'');
 export function fuzzy(text,q){const t=normalize(text);return String(q??'').trim().split(/\s+/).every(w=>{const n=normalize(w);if(!n||t.includes(n))return true;if(n.length<4)return false;let i=0;for(const c of t)if(c===n[i])i++;return i===n.length;});}

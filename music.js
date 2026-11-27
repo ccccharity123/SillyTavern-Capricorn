@@ -1,4 +1,4 @@
-import { stripTheater } from './theater-payload.js';
+import { stripTheater } from './legacy-content.js';
 import { createPlaybackCheckpoint } from './music-checkpoint.js';
 import { createBgmIndex } from './bgm-index.js';
 import { commitMusicBackup } from './backup.js';

@@ -1,5 +1,5 @@
 import { withoutDirectorNotes } from './context-clean.js';
-import { stripTheater } from './theater-payload.js';
+import { stripTheater } from './legacy-content.js';
 import { lastItem } from './compat.js';
 // Use a bounded slice of visible story text. Scene hints never become archive facts.
 const clean = (value, isUser) => stripTheater(isUser ? value : withoutDirectorNotes(String(value ?? '')))
