@@ -1,3 +1,4 @@
+import { cleanGenerationHistory } from './context-clean.js';
 import { createPresetGate } from './preset.js';
 
 export function createGenerationLifecycle({ context, scope, flags, ready, memory, disableMemory, report, refresh }) {
@@ -94,6 +95,7 @@ export function createGenerationLifecycle({ context, scope, flags, ready, memory
         gate.apply(host.chatCompletionSettings, flags);
         livePreset = true;
       }
+      cleanGenerationHistory(chat, host.chat, type);
       report({ type, result, enabled });
     } catch (error) {
       abort?.(true);
