@@ -406,7 +406,14 @@ export async function startMemory(shared) {
     });
   }
   const characterKey=()=>chatIdentity().owner.replace(/^character:/,'');
-  const bookName=()=>`拾忆｜角色｜${hash(characterKey())}`;
+  // Keep the stable card identity for ownership; use its visible card name only for the worldbook title.
+  const oldBookName=()=>`拾忆｜角色｜${hash(characterKey())}`;
+  const bookName=()=>{
+    const c=context(), characterId=c.characterId??c.character_id;
+    if(c.groupId!=null&&c.groupId!=='')return oldBookName();
+    const name=String(c.characters?.[characterId]?.name||c.name2||'').trim();
+    return name ? name+'记忆' : oldBookName();
+  };
   const check=id=>{if(state.disposed||identity()!==id)throw Error('聊天已切换，请重试');};
   const ordered=rows=>Object.entries(rows).sort((a,b)=>a[1].sourceMessage-b[1].sourceMessage);
   const numbered=rows=>Object.fromEntries(ordered(rows).map(([k,r],i)=>[k,{...r,title:!r.title||/^剧情摘要\s*\d+$/.test(r.title)?`剧情摘要 ${i+1}`:r.title}]));
@@ -442,16 +449,25 @@ export async function startMemory(shared) {
     for(const entry of entries.filter(matches)){
       for(const [key,row] of Object.entries(entry.extra.shiyi_rows||{}))importRow(key,row);
     }
+    // Migrate all recognized historic projection names, even after archiveVersion=2.
+    // Preserve old books for rollback, and only copy records owned by this card and chat.
     const previous=data.book||api('getChatWorldbookName','current');
-    if(data.archiveVersion!==2&&previous!==name&&typeof previous==='string'&&previous.startsWith('拾忆｜')&&names.includes(previous)){
+    const legacyNames=new Set([oldBookName(),previous].filter(
+      book=>typeof book==='string'&&book!==name&&book.startsWith('拾忆｜')&&names.includes(book)));
+    for(const oldName of legacyNames){
       let old=[];
-      try { old=await readWorldbook(api,check,previous,id); }
+      try { old=await readWorldbook(api,check,oldName,id); }
       catch(error){ if(!missingWorldbook(error))throw error; }
       for(const entry of old){
-        const key=entry.extra?.shiyi_key;
-        if(typeof key!=='string')continue;
-        importRow(key,{title:entry.name,content:entry.content,sourceMessage:entry.extra.shiyi_message_id,
-          sourceHash:key.split(':').slice(1).join(':'),storyTime:parseStoryTime(entry.content)});
+        if(matches(entry)){
+          for(const [key,row] of Object.entries(entry.extra?.shiyi_rows||{}))importRow(key,row);
+        }
+        if(data.archiveVersion!==2){
+          const key=entry.extra?.shiyi_key;
+          if(typeof key!=='string'||(entry.extra?.shiyi_owner&&entry.extra.shiyi_owner!==owner))continue;
+          importRow(key,{title:entry.name,content:entry.content,sourceMessage:entry.extra.shiyi_message_id,
+            sourceHash:key.split(':').slice(1).join(':'),storyTime:parseStoryTime(entry.content)});
+        }
       }
     }
     return {name,owner,names,entries,owns,matches,rows,imported};
@@ -473,6 +489,7 @@ export async function startMemory(shared) {
     // Keep manually edited worldbook text and keep it out of automatic injection until reviewed.
     const conflict=entries.some(e=>matches(e)&&!intact(e));
     if(conflict)notice('拾忆世界书存在手动修改，已保留原内容；请在世界书中核对。');
+    if(entries.length&&!entries.some(owns))throw Error('同名世界书已存在且不属于拾忆，请先处理名称冲突：'+name);
     const existing=entries.find(e=>owns(e)&&e.extra.shiyi_chat===id&&intact(e));
     const enable=!!content;
     let projection=existing;
