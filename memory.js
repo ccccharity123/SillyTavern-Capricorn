@@ -26,6 +26,9 @@ import {table,traces,fuzzy} from './traces.js';
 import { createDossier } from './dossier.js';
 import { memoryBackupSnapshot, restoreMemoryBackup } from './backup.js';
 import { viewpointName, speakingCharacter, recallViewpoint } from './viewpoint.js';
+// A previously linked 拾忆 book can be removed outside the extension while its mount remains.
+// Only an explicit not-found result is safe to treat as a stale reference.
+const missingWorldbook = error => /未能找到世界书|找不到世界书|世界书不存在|worldbook[^\\n]{0,80}(?:not found|does not exist)|(?:not found|does not exist)[^\\n]{0,80}worldbook/i.test(String(error?.message ?? error));
 const isManagedEntry=e=>typeof e.extra?.shiyi_key==='string'||
   (typeof e.extra?.shiyi_owner==='string'&&typeof e.extra?.shiyi_chat==='string');
 
@@ -48,7 +51,14 @@ async function syncWorldbookMounts(api,check,id,target){
   const remove=new Set();
   for(const name of new Set([...global,local])){
     if(typeof name!=='string'||!name.startsWith('拾忆｜')||name===target)continue;
-    const entries=await readWorldbook(api,check,name,id);
+    let entries;
+    try { entries=await readWorldbook(api,check,name,id); }
+    catch (error) {
+      if (!missingWorldbook(error)) throw error;
+      // Only prune dangling 拾忆 mounts; never remove or modify unrelated worldbooks.
+      remove.add(name);
+      continue;
+    }
     const managed=entries.filter(isManagedEntry);
     if(!managed.length)continue;
     if(managed.some(e=>e.enabled)){
@@ -410,9 +420,18 @@ export async function startMemory(shared) {
     const owns=e=>e.extra?.shiyi_owner===owner&&typeof e.extra?.shiyi_chat==='string';
     const matches=e=>owns(e)&&(e.extra.shiyi_chat===id||e.extra.shiyi_chat===legacyScope||
       (!e.extra.shiyi_chat.startsWith('[')&&e.extra.shiyi_chat.split('::').slice(1).join('::')===chatId));
-    const names=api('getWorldbookNames');
-    if(!Array.isArray(names))throw Error('无法读取世界书列表');
-    const entries=names.includes(name)?await readWorldbook(api,check,name,id):[];
+    const listedNames=api('getWorldbookNames');
+    if(!Array.isArray(listedNames))throw Error('无法读取世界书列表');
+    const names=[...listedNames];
+    let entries=[];
+    if(names.includes(name)){
+      try { entries=await readWorldbook(api,check,name,id); }
+      catch(error){
+        if(!missingWorldbook(error))throw error;
+        // The host may still list a deleted book; allow controlled recreation below.
+        names.splice(names.indexOf(name),1);
+      }
+    }
     const rows={...data.records};
     let imported=false;
     function importRow(key,row){
@@ -425,7 +444,9 @@ export async function startMemory(shared) {
     }
     const previous=data.book||api('getChatWorldbookName','current');
     if(data.archiveVersion!==2&&previous!==name&&typeof previous==='string'&&previous.startsWith('拾忆｜')&&names.includes(previous)){
-      const old=await readWorldbook(api,check,previous,id);
+      let old=[];
+      try { old=await readWorldbook(api,check,previous,id); }
+      catch(error){ if(!missingWorldbook(error))throw error; }
       for(const entry of old){
         const key=entry.extra?.shiyi_key;
         if(typeof key!=='string')continue;
@@ -456,7 +477,25 @@ export async function startMemory(shared) {
     const enable=!!content;
     let projection=existing;
     if(content&&!projection){
-      if(!names.includes(name)&&!await api('createWorldbook',name,[]))throw Error('世界书创建失败');
+      if(!names.includes(name)){
+        // getWorldbookNames may be stale, so probe existence before creating.
+        let exists=false;
+        try { await readWorldbook(api,check,name,id); exists=true; }
+        catch(error){ if(!missingWorldbook(error))throw error; }
+        if(!exists){
+          if(!await api('createWorldbook',name,[]))throw Error('世界书创建未成功，请检查酒馆世界书列表');
+          check(id);
+          // A few hosts update their worldbook index asynchronously after creation.
+          let ready=false;
+          for(let attempt=0;attempt<3;attempt++){
+            try { await readWorldbook(api,check,name,id); ready=true; break; }
+            catch(error){ if(!missingWorldbook(error))throw error; }
+            if(attempt<2)await new Promise(resolve=>setTimeout(resolve,150*(attempt+1)));
+            check(id);
+          }
+          if(!ready)throw Error('世界书已请求创建，但宿主尚未能读取，请稍后重试；不会重复创建条目');
+        }
+      }
       check(id);
       if(entries.length&&!entries.some(owns))throw Error('拾忆世界书名称冲突，请检查');
       const result=await api('createWorldbookEntries',name,[{name:chatLabel(),content,enabled:false,strategy:{type:'constant',keys:[]},probability:100,extra:{shiyi_owner:owner,shiyi_chat:id,shiyi_rows:active}}]);
